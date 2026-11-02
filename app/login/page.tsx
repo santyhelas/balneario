@@ -107,7 +107,7 @@ export default function LoginPage() {
     <main className="flex min-h-dvh items-center justify-center p-4">
       <div className="w-full max-w-sm rounded-2xl border border-line bg-surface p-6 shadow-sm">
         <div className="mb-6 flex flex-col items-center gap-2 text-center">
-          <img src="/icon.svg" alt="" className="h-14 w-14" />
+          <img src="/logo.png" alt="" className="h-20 w-20" />
           <h1 className="text-xl font-bold">Gestión del balneario</h1>
           <p className="text-sm text-muted">
             {mode === "ingresar" ? "Ingresá con tu usuario" : mode === "crear" ? "Crear la cuenta del propietario" : "Recuperar acceso"}

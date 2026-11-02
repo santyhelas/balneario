@@ -6,7 +6,7 @@ export const metadata: Metadata = {
   description: "Gestión integral del balneario: reservas, mapa, caja y clientes.",
   applicationName: "Balneario",
   icons: {
-    icon: [{ url: "/icon.svg", type: "image/svg+xml" }, { url: "/icon-192.png", sizes: "192x192", type: "image/png" }],
+    icon: [{ url: "/favicon.ico", sizes: "any" }, { url: "/icon-192.png", sizes: "192x192", type: "image/png" }],
     apple: [{ url: "/apple-touch-icon.png", sizes: "180x180" }],
   },
   // iPhone: al agregarla a la pantalla de inicio se abre a pantalla completa, como una app.

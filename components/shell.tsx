@@ -51,7 +51,7 @@ const THEME_ICON: Record<ThemePref, string> = { claro: ICON_SUN, oscuro: ICON_MO
 /** Logo del balneario (el que se cargó en Configuración, o el ícono por defecto). */
 export function BrandLogo({ ws, className }: { ws: Workspace; className?: string }) {
   // eslint-disable-next-line @next/next/no-img-element
-  return <img src={ws.logo_data || "/icon.svg"} alt="" className={cx("shrink-0 rounded-xl object-cover", className)} />;
+  return <img src={ws.logo_data || "/logo.png"} alt="" className={cx("shrink-0 rounded-xl object-cover", className)} />;
 }
 
 function Avatar({ src, name, className }: { src: string | null; name: string; className?: string }) {
