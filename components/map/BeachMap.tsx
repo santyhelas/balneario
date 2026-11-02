@@ -59,7 +59,10 @@ export function BeachMap({
   onMove,
   onFeatureChange,
   overlay,
+  tentColor = null,
 }: {
+  /** Color de lona elegido (null = a rayas según el estado). */
+  tentColor?: string | null;
   width: number;
   height: number;
   seaSide: "top" | "bottom" | "left" | "right";
@@ -421,11 +424,11 @@ export function BeachMap({
               >
                 <g transform={`rotate(${Number(s.rotation) || 0})`}>
                   {s.kind === "carpa"
-                    ? <TentIcon color={color} selected={selSpace === s.space_id} dashed={s.state === "desactivada"} />
-                    : <UmbrellaIcon color={color} selected={selSpace === s.space_id} dashed={s.state === "desactivada"} />}
+                    ? <TentIcon color={color} selected={selSpace === s.space_id} dashed={s.state === "desactivada"} fill={tentColor} />
+                    : <UmbrellaIcon color={color} selected={selSpace === s.space_id} dashed={s.state === "desactivada"} fill={tentColor} />}
                 </g>
-                <rect x={-26} y={-16} width={52} height={32} rx={8} fill="var(--surface)" opacity={0.95} stroke={color} strokeWidth={2} />
-                <text y={1.5} textAnchor="middle" dominantBaseline="middle" fontSize={22} fontWeight={800} fill="var(--fg)">{s.code}</text>
+                <rect x={-26} y={-16} width={52} height={32} rx={8} fill={tentColor ? color : "var(--surface)"} opacity={0.95} stroke={tentColor ? "#ffffff" : color} strokeWidth={2} />
+                <text y={1.5} textAnchor="middle" dominantBaseline="middle" fontSize={22} fontWeight={800} fill={tentColor ? "#ffffff" : "var(--fg)"}>{s.code}</text>
               </g>
             );
           })}

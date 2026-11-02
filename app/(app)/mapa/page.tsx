@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { getSupabase } from "@/lib/supabase/client";
 import { unwrap, useLoader } from "@/lib/data";
 import { friendlyError } from "@/lib/errors";
@@ -57,6 +57,37 @@ export default function MapaPage() {
     [ws.id],
     0,
   );
+
+  // Color de las carpas: se lee aparte para que el plano funcione aunque falte la actualización 0015.
+  const [tentColor, setTentColor] = useState<string | null>(null);
+  const [tentColorReady, setTentColorReady] = useState(false);
+  const [tentSaving, setTentSaving] = useState(false);
+  const colorTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    let alive = true;
+    sb.from("workspaces").select("tent_color").eq("id", ws.id).single().then(({ data: row, error: err }) => {
+      if (!alive) return;
+      if (!err) { setTentColor((row as { tent_color: string | null }).tent_color); setTentColorReady(true); }
+    });
+    return () => { alive = false; };
+  }, [sb, ws.id]);
+
+  async function saveTentColor(c: string | null) {
+    const prev = tentColor;
+    setTentColor(c);
+    setTentSaving(true);
+    const cur = await sb.from("workspaces").select("version").eq("id", ws.id).single();
+    const { data: upd, error: err } = cur.error
+      ? { data: null, error: cur.error }
+      : await sb.from("workspaces").update({ tent_color: c, version: (cur.data as { version: number }).version + 1 }).eq("id", ws.id).select("id");
+    setTentSaving(false);
+    if (err || !upd?.length) {
+      setTentColor(prev);
+      setMessage({ tone: "danger", text: err ? friendlyError(err) : "No se pudo guardar el color. Volvé a intentarlo." });
+      return;
+    }
+    await reloadWorkspace();
+  }
 
   async function applyLayout() {
     setLayoutBusy(true);
@@ -186,6 +217,38 @@ export default function MapaPage() {
           <span className="text-xs text-muted">Tocá un elemento para editarlo; arrastralo para moverlo.</span>
         </div>
       )}
+      {editMode && isAdmin && (
+        <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-line bg-surface p-2 text-sm">
+          <span className="px-1 font-medium">Color de carpas y sombrillas:</span>
+          {tentColorReady ? (
+            <>
+              <Button variant={tentColor === null ? "primary" : "secondary"} className="py-1.5" disabled={tentSaving} onClick={() => saveTentColor(null)}>A rayas según el estado</Button>
+              <Button variant={tentColor?.toLowerCase() === "#ffffff" ? "primary" : "secondary"} className="py-1.5" disabled={tentSaving} onClick={() => saveTentColor("#ffffff")}>Blancas</Button>
+              <label className="flex items-center gap-2 rounded-lg border border-line px-2 py-1">
+                <span>Otro color</span>
+                <input
+                  type="color"
+                  aria-label="Elegir color de las carpas"
+                  className="h-7 w-10 cursor-pointer rounded border-0 bg-transparent p-0"
+                  value={tentColor ?? "#ffffff"}
+                  disabled={tentSaving}
+                  onChange={(e) => {
+                    const c = e.target.value;
+                    setTentColor(c);
+                    // Mientras se arrastra en el selector se ve al instante; se guarda al soltar.
+                    if (colorTimer.current) clearTimeout(colorTimer.current);
+                    colorTimer.current = setTimeout(() => saveTentColor(c), 700);
+                  }}
+                />
+              </label>
+              {tentSaving && <Spinner />}
+              <span className="text-xs text-muted">Con un color elegido, el estado se ve en el borde y en el número.</span>
+            </>
+          ) : (
+            <span className="text-xs text-muted">Para elegir el color hay que aplicar la actualización 0015 de la base de datos.</span>
+          )}
+        </div>
+      )}
 
       <div className="relative">
         {data ? (
@@ -201,6 +264,7 @@ export default function MapaPage() {
             onMove={moveSpace}
             onFeatureChange={(id, g) => updateFeature(id, g)}
             overlay={<WindCompass seaSide={ws.sea_side} />}
+            tentColor={tentColor}
           />
         ) : (
           <div className="flex aspect-[4/3] items-center justify-center rounded-2xl bg-surface-2 text-muted">

@@ -593,6 +593,13 @@ select t.ok((select layer from public.map_features where label = 'Kiosco') > (se
 update public.map_features set layer = -5, version = version + 1 where label = 'Kiosco';
 select t.ok((select layer from public.map_features where label = 'Kiosco') = -5, 'Capas: se puede enviar al fondo');
 
+-- 19. Color de carpas
+update public.workspaces set tent_color = '#ffffff', version = version + 1;
+select t.ok((select tent_color from public.workspaces) = '#ffffff', 'Carpas: se pueden poner blancas');
+select t.throws($$update public.workspaces set tent_color = 'red; drop', version = version + 1$$, 'check', 'Carpas: solo acepta colores válidos');
+update public.workspaces set tent_color = null, version = version + 1;
+select t.ok((select tent_color is null from public.workspaces), 'Carpas: se vuelve a rayas según el estado');
+
 reset role;
 \o
 -- Resultado ----------------------------------------------------------
