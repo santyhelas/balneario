@@ -48,9 +48,13 @@ export default function DisponibilidadPage() {
 
   const rows = useMemo(() => {
     if (!q.data) return [];
-    const term = search.trim().toLowerCase();
+    const term = norm(search.trim());
+    const bySpace0 = new Map<string, Item[]>();
+    q.data.items.forEach((it) => bySpace0.set(it.space_id, [...(bySpace0.get(it.space_id) ?? []), it]));
+    // Busca por número de espacio o por nombre / apellido del cliente (sin importar tildes ni mayúsculas).
     const spaces = q.data.spaces
-      .filter((s) => (kind === "todas" || s.kind === kind) && (!term || s.code.toLowerCase().includes(term)))
+      .filter((s) => (kind === "todas" || s.kind === kind) &&
+        (!term || norm(s.code).includes(term) || (bySpace0.get(s.id) ?? []).some((it) => matchesName(it, term))))
       .sort((a, b) => a.kind.localeCompare(b.kind) || a.code.localeCompare(b.code, "es", { numeric: true }));
     const bySpace = new Map<string, Item[]>();
     q.data.items.forEach((it) => bySpace.set(it.space_id, [...(bySpace.get(it.space_id) ?? []), it]));
@@ -66,6 +70,8 @@ export default function DisponibilidadPage() {
       return { space: s, blocks, busy, freeCount: days.length - busy.size };
     });
   }, [q.data, kind, search, days, from, to]);
+  const nameTerm = norm(search.trim());
+  const searchingName = !!nameTerm && rows.some((r) => r.blocks.some((b) => matchesName(b.item, nameTerm)));
 
   return (
     <>
@@ -82,7 +88,7 @@ export default function DisponibilidadPage() {
             ))}
           </div>
         </Field>
-        <Field label="Buscar N°"><Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Ej: 17" className="w-24" /></Field>
+        <Field label="Buscar"><Input type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="N° de carpa, nombre o apellido" className="w-64" /></Field>
         <Button variant="secondary" onClick={() => shift(-span)} aria-label="Período anterior">←</Button>
         <Button variant="secondary" onClick={() => { setFrom(today); setToInput(addDays(today, span - 1)); }} disabled={from === today}>Hoy</Button>
         <Button variant="secondary" onClick={() => shift(span)} aria-label="Período siguiente">→</Button>
@@ -114,7 +120,7 @@ export default function DisponibilidadPage() {
                 );
               })}
             </div>
-            {rows.length === 0 && <p className="p-4 text-sm text-muted">No hay espacios con ese filtro.</p>}
+            {rows.length === 0 && <p className="p-4 text-sm text-muted">{search.trim() ? `No hay carpas ni clientes que coincidan con "${search.trim()}" entre el ${formatDate(from)} y el ${formatDate(to)}. Si buscás un cliente, probá con otras fechas.` : "No hay espacios con ese filtro."}</p>}
             {rows.map(({ space, blocks, busy }, ri) => (
               <div key={space.id}>
               {kind === "todas" && (ri === 0 || rows[ri - 1].space.kind !== space.kind) && (
@@ -144,7 +150,7 @@ export default function DisponibilidadPage() {
                     return (
                       <Link key={k} href={`/reservas/${it.reservation_id}`} style={common}
                         className={cx("m-1 truncate rounded px-1.5 text-sm font-semibold leading-[2.5rem] hover:opacity-90",
-                          it.is_courtesy ? "bg-violet-600 text-white" : TAKEN, it.is_relocation && "border-2 border-dashed border-surface")}
+                          it.is_courtesy ? "bg-violet-600 text-white" : TAKEN, searchingName && (matchesName(it, nameTerm) ? "ring-4 ring-amber-400" : "opacity-40"), it.is_relocation && "border-2 border-dashed border-surface")}
                         title={`#${it.reservation_number} ${it.customer_name} · ${formatDate(it.start_date)} al ${formatDate(it.end_date)}${it.is_relocation ? " · reserva con cambio de ubicación" : ""} (estadía ${formatDate(it.reservation_start)} al ${formatDate(it.reservation_end)})`}>
                         {it.customer_name}
                       </Link>
@@ -164,6 +170,14 @@ export default function DisponibilidadPage() {
       )}
     </>
   );
+}
+
+function norm(t: string) {
+  return t.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+}
+
+function matchesName(it: Item, term: string) {
+  return it.item_type === "tramo" && !!it.customer_name && norm(it.customer_name).includes(term);
 }
 
 function Legend({ cls, label }: { cls: string; label: string }) {
