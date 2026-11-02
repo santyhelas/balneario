@@ -10,8 +10,8 @@ set client_min_messages = warning;
 create schema t;
 create table t.results (n serial, name text, ok boolean, detail text);
 create table t.ctx (k text primary key, v text);
-grant usage on schema t to authenticated, anon;
-grant all on t.results, t.ctx, t.results_n_seq to authenticated, anon;
+grant usage on schema t to authenticated, anon, service_role;
+grant all on t.results, t.ctx, t.results_n_seq to authenticated, anon, service_role;
 
 create function t.ok(cond boolean, name text, detail text default null) returns void
 language plpgsql as $$
@@ -38,7 +38,7 @@ create function t.uid(k text) returns uuid language sql stable as $$ select v::u
 create function t.space(code text) returns uuid language sql stable as $$
   select id from public.spaces where workspace_id = t.uid('ws') and spaces.code = $1
 $$;
-grant execute on all functions in schema t to authenticated, anon;
+grant execute on all functions in schema t to authenticated, anon, service_role;
 
 -- Usuarios
 insert into auth.users values
@@ -546,6 +546,38 @@ select t.throws(format($$select public.create_backup(%L, 'manual')$$, t.get('ws'
 update public.workspaces set name = 'X', version = version + 1;
 select t.ok((select name from public.workspaces) = 'Balneario Eólico', 'Permisos: un operador no cambia el nombre del balneario');
 select set_config('request.jwt.claims', '{"sub":"11111111-1111-1111-1111-111111111111","email":"duenio@test.com"}', false);
+
+-- =====================================================================
+-- 16. Usuarios para ingresar
+-- =====================================================================
+select t.ok(public.set_my_username('  Santi ') = 'santi', 'Usuario: se guarda en minúsculas y sin espacios');
+select t.throws($$select public.set_my_username('a')$$, 'entre 3 y 30', 'Usuario: mínimo 3 caracteres');
+select t.throws($$select public.set_my_username('juan perez')$$, 'entre 3 y 30', 'Usuario: sin espacios');
+select t.ok(public.my_username() = 'santi', 'Usuario: se consulta el propio');
+select t.throws($$select public.login_email_for('santi')$$, 'permission denied', 'Seguridad: el navegador no puede averiguar el correo de un usuario');
+select t.throws($$select count(*) from public.user_logins$$, 'permission denied', 'Seguridad: la tabla de usuarios no se lee desde el navegador');
+select t.ok((select count(*) from public.workspace_users(t.uid('ws')) where username = 'santi' and is_me) = 1, 'Usuarios: lista con el usuario de ingreso');
+select t.throws(format($$select public.set_member_role(%L, %L, 'propietario')$$, t.get('ws'), '33333333-3333-3333-3333-333333333333'), 'Rol inválido', 'Usuarios: no se puede nombrar otro propietario');
+select public.set_member_role(t.uid('ws'), '33333333-3333-3333-3333-333333333333', 'administrador');
+select t.ok((select role from public.workspace_members where user_id = '33333333-3333-3333-3333-333333333333') = 'administrador', 'Usuarios: el propietario cambia roles');
+select public.set_member_role(t.uid('ws'), '33333333-3333-3333-3333-333333333333', 'operador');
+select t.throws(format($$select public.remove_member(%L, %L)$$, t.get('ws'), '11111111-1111-1111-1111-111111111111'), 'No podés quitarte', 'Usuarios: nadie se quita el acceso a sí mismo');
+reset role;
+insert into auth.users values ('44444444-4444-4444-4444-444444444444', 'maria@usuarios.balneario.invalid');
+set role service_role;
+select t.ok(public.login_email_for('SANTI') = 'duenio@test.com', 'Servidor: encuentra el correo por usuario (sin importar mayúsculas)');
+select t.ok(public.setup_done(), 'Servidor: sabe que el balneario ya fue creado');
+select public.register_login('44444444-4444-4444-4444-444444444444', 'Maria', 'maria@usuarios.balneario.invalid', t.uid('ws'), 'operador');
+select t.ok((select role from public.workspace_members where user_id = '44444444-4444-4444-4444-444444444444') = 'operador', 'Servidor: crea un usuario con acceso al balneario');
+select t.throws($$select public.register_login('44444444-4444-4444-4444-444444444444', 'otra', 'x@y.z')$$, 'duplicate', 'Servidor: una cuenta tiene un solo usuario');
+reset role;
+set role authenticated;
+select t.ok((select email is null from public.workspace_users(t.uid('ws')) where username = 'maria'), 'Usuarios: no se muestra el correo técnico');
+select set_config('request.jwt.claims', '{"sub":"44444444-4444-4444-4444-444444444444","email":"maria@usuarios.balneario.invalid"}', false);
+select t.throws($$select public.set_my_username('santi')$$, 'ya está en uso', 'Usuario: no se repite');
+select set_config('request.jwt.claims', '{"sub":"11111111-1111-1111-1111-111111111111","email":"duenio@test.com"}', false);
+select public.remove_member(t.uid('ws'), '44444444-4444-4444-4444-444444444444');
+select t.ok(not exists (select 1 from public.workspace_members where user_id = '44444444-4444-4444-4444-444444444444'), 'Usuarios: se quita el acceso');
 
 reset role;
 \o

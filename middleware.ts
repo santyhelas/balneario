@@ -1,10 +1,11 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
+import { REMEMBER_COOKIE, applyRemember } from "@/lib/remember";
 
 type CookieToSet = { name: string; value: string; options: CookieOptions };
 import { NextResponse, type NextRequest } from "next/server";
 
 // Rutas que se pueden ver sin haber iniciado sesión.
-const PUBLIC_PATHS = ["/login", "/auth/callback", "/auth/restablecer"];
+const PUBLIC_PATHS = ["/login", "/auth/callback", "/auth/restablecer", "/auth/ingresar", "/auth/registrar"];
 
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({ request });
@@ -20,7 +21,8 @@ export async function middleware(request: NextRequest) {
         setAll(cookiesToSet: CookieToSet[]) {
           cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
           response = NextResponse.next({ request });
-          cookiesToSet.forEach(({ name, value, options }) => response.cookies.set(name, value, options));
+          const remember = request.cookies.get(REMEMBER_COOKIE)?.value !== "0";
+          cookiesToSet.forEach(({ name, value, options }) => response.cookies.set(name, value, applyRemember(options, remember)));
         },
       },
     },

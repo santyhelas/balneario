@@ -9,6 +9,7 @@ import { useStatus } from "@/components/status";
 import { BrandLogo, PageHeader, SyncNotice } from "@/components/shell";
 import { Alert, Badge, Button, Card, Field, Select, Spinner, TextField } from "@/components/ui";
 import { LinkedAccountsCard } from "@/components/linked-accounts";
+import { MyUsernameField, UsersCard } from "@/components/users";
 
 type WsRow = { name: string; subtitle: string | null; logo_data: string | null; legal_id: string | null; phone: string | null; address: string | null; latitude: number | null; longitude: number | null; version: number };
 type Member = { user_id: string; role: string; email: string | null; created_at: string };
@@ -32,17 +33,7 @@ export default function ConfiguracionPage() {
           <div className="flex flex-col gap-4">
             <ProfileCard />
             <LinkedAccountsCard />
-            <Card title="Usuarios con acceso">
-              <ul className="divide-y divide-line text-sm">
-                {q.data.members.map((m) => (
-                  <li key={m.user_id} className="flex items-center justify-between gap-2 py-2">
-                    <span className="truncate">{m.email ?? m.user_id}</span>
-                    <Badge tone={m.role === "propietario" ? "info" : "muted"}>{m.role}</Badge>
-                  </li>
-                ))}
-              </ul>
-              <p className="mt-2 text-xs text-muted">Solo estas cuentas pueden ver y modificar los datos. Cualquier otra persona que inicie sesión no tiene acceso.</p>
-            </Card>
+            <UsersCard />
           </div>
         </div>
       )}
@@ -208,6 +199,7 @@ function ProfileCard() {
   return (
     <Card title="Mi perfil">
       <form onSubmit={save} className="flex flex-col gap-3">
+        <MyUsernameField />
         <TextField label="Nombre para mostrar" value={name} onChange={(e) => setName(e.target.value)} maxLength={80} placeholder={email ?? ""} />
         <ImagePicker label="Foto de perfil" value={avatar} onChange={setAvatar} round maxSide={256} maxBytes={150_000} />
         <p className="text-xs text-muted">Cuenta: {email}</p>

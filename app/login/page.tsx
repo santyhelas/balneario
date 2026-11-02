@@ -1,160 +1,212 @@
 "use client";
 import { useEffect, useState, type FormEvent } from "react";
-import { getSupabase } from "@/lib/supabase/client";
+import { getSupabase, setRememberPreference } from "@/lib/supabase/client";
 import { friendlyError } from "@/lib/errors";
-import { Alert, Button, TextField } from "@/components/ui";
+import { Alert, Button, Field, Input, TextField } from "@/components/ui";
+import { GoogleG } from "@/components/google";
 
 type Mode = "ingresar" | "crear" | "recuperar";
 
+async function post(url: string, body: unknown): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    const data = (await res.json().catch(() => ({}))) as { error?: string };
+    return res.ok ? { ok: true } : { ok: false, error: data.error ?? "No se pudo completar la operación." };
+  } catch {
+    return { ok: false, error: "No hay conexión con el servidor. Revisá internet." };
+  }
+}
+
 export default function LoginPage() {
   const [mode, setMode] = useState<Mode>("ingresar");
-  const [email, setEmail] = useState("");
+  const [usuario, setUsuario] = useState("");
   const [password, setPassword] = useState("");
+  const [password2, setPassword2] = useState("");
+  const [email, setEmail] = useState("");
+  const [remember, setRemember] = useState(true);
+  const [showPw, setShowPw] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
+  const [canRegister, setCanRegister] = useState(false);
 
   useEffect(() => {
     const p = new URLSearchParams(window.location.search);
     if (p.get("error") === "enlace") setError("El enlace venció o ya fue usado. Pedí uno nuevo.");
+    fetch("/auth/registrar").then((r) => r.json()).then((d: { abierto?: boolean }) => setCanRegister(!!d.abierto)).catch(() => undefined);
   }, []);
+
+  function go(m: Mode) {
+    setMode(m);
+    setError(null);
+    setInfo(null);
+    setPassword("");
+    setPassword2("");
+  }
 
   async function google() {
     setBusy(true);
     setError(null);
-    // Antes de salir hacia Google, verificar que esté activado (si no, Supabase muestra una página técnica).
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/auth/v1/settings`, {
-        headers: { apikey: process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY! },
-      });
-      const settings = (await res.json()) as { external?: { google?: boolean } };
-      if (!settings.external?.google) {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/auth/v1/settings`, { headers: { apikey: process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY! } });
+      const s = (await res.json()) as { external?: { google?: boolean } };
+      if (!s.external?.google) {
         setBusy(false);
-        setError("El inicio con Google todavía no está activado en el servidor. Por ahora entrá con correo y contraseña; cuando se active, vas a poder vincular Google desde Configuración.");
-        return;
+        return setError("El ingreso con Google todavía no está activado en el servidor. Por ahora ingresá con tu usuario y contraseña.");
       }
     } catch {
       setBusy(false);
-      setError("No hay conexión con el servidor. Revisá internet.");
-      return;
+      return setError("No hay conexión con el servidor. Revisá internet.");
     }
-    const { error } = await getSupabase().auth.signInWithOAuth({
-      provider: "google",
-      options: { redirectTo: `${window.location.origin}/auth/callback` },
-    });
+    setRememberPreference(remember);
+    const { error } = await getSupabase().auth.signInWithOAuth({ provider: "google", options: { redirectTo: `${window.location.origin}/auth/callback` } });
     if (error) {
       setBusy(false);
-      setError(
-        /provider is not enabled|unsupported provider/i.test(error.message)
-          ? "El inicio con Google todavía no está activado. Por ahora usá correo y contraseña."
-          : friendlyError(error),
-      );
+      setError(friendlyError(error));
     }
   }
 
   async function submit(e: FormEvent) {
     e.preventDefault();
-    setBusy(true);
     setError(null);
     setInfo(null);
-    const sb = getSupabase();
-    try {
-      if (mode === "ingresar") {
-        const { error } = await sb.auth.signInWithPassword({ email, password });
-        if (error) throw error;
-        window.location.assign("/");
-        return;
+    if (mode === "ingresar") {
+      setBusy(true);
+      const r = await post("/auth/ingresar", { usuario, password, recordar: remember });
+      if (!r.ok) {
+        setBusy(false);
+        return setError(r.error!);
       }
-      if (mode === "crear") {
-        if (password.length < 8) throw new Error("La contraseña debe tener al menos 8 caracteres.");
-        const { data, error } = await sb.auth.signUp({
-          email,
-          password,
-          options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
-        });
-        if (error) throw error;
-        if (data.session) {
-          window.location.assign("/");
-          return;
-        }
-        setInfo("Te enviamos un correo para confirmar la cuenta. Abrí el enlace y vas a entrar directamente.");
-      }
-      if (mode === "recuperar") {
-        const { error } = await sb.auth.resetPasswordForEmail(email, {
-          redirectTo: `${window.location.origin}/auth/callback?next=/auth/restablecer`,
-        });
-        if (error) throw error;
-        setInfo("Si el correo está registrado, vas a recibir un enlace para elegir una contraseña nueva.");
-      }
-    } catch (err) {
-      setError(friendlyError(err));
-    } finally {
-      setBusy(false);
+      window.location.assign("/");
+      return;
     }
+    if (mode === "crear") {
+      if (password.length < 8) return setError("La contraseña debe tener al menos 8 caracteres.");
+      if (password !== password2) return setError("Las contraseñas no coinciden. Escribila igual en los dos campos.");
+      setBusy(true);
+      const r = await post("/auth/registrar", { usuario, password, password2 });
+      if (!r.ok) {
+        setBusy(false);
+        return setError(r.error!);
+      }
+      window.location.assign("/");
+      return;
+    }
+    setBusy(true);
+    const { error } = await getSupabase().auth.resetPasswordForEmail(email.trim(), {
+      redirectTo: `${window.location.origin}/auth/callback?next=/auth/restablecer`,
+    });
+    setBusy(false);
+    if (error) return setError(friendlyError(error));
+    setInfo("Si ese correo está registrado, vas a recibir un enlace para elegir una contraseña nueva.");
   }
+
+  const mismatch = mode === "crear" && password2.length > 0 && password !== password2;
 
   return (
     <main className="flex min-h-dvh items-center justify-center p-4">
       <div className="w-full max-w-sm rounded-2xl border border-line bg-surface p-6 shadow-sm">
-        <div className="mb-6 flex items-center gap-3">
-          <img src="/icon.svg" alt="" className="h-10 w-10" />
-          <div>
-            <h1 className="text-lg font-semibold">Gestión del balneario</h1>
-            <p className="text-sm text-muted">
-              {mode === "ingresar" ? "Iniciá sesión para continuar" : mode === "crear" ? "Crear cuenta" : "Recuperar acceso"}
-            </p>
-          </div>
+        <div className="mb-6 flex flex-col items-center gap-2 text-center">
+          <img src="/icon.svg" alt="" className="h-14 w-14" />
+          <h1 className="text-xl font-bold">Gestión del balneario</h1>
+          <p className="text-sm text-muted">
+            {mode === "ingresar" ? "Ingresá con tu usuario" : mode === "crear" ? "Crear la cuenta del propietario" : "Recuperar acceso"}
+          </p>
         </div>
 
-        {mode !== "recuperar" && (
-          <>
-            <Button variant="secondary" className="w-full" onClick={google} disabled={busy}>
-              <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden>
-                <path fill="#EA4335" d="M12 10.2v3.9h5.5c-.2 1.3-1.6 3.8-5.5 3.8-3.3 0-6-2.7-6-6.1s2.7-6.1 6-6.1c1.9 0 3.1.8 3.8 1.5l2.6-2.5C16.8 3.2 14.6 2.2 12 2.2 6.6 2.2 2.3 6.6 2.3 12S6.6 21.8 12 21.8c5.8 0 9.6-4.1 9.6-9.8 0-.7-.1-1.2-.2-1.8H12z" />
-              </svg>
-              Continuar con Google
-            </Button>
-            <div className="my-4 flex items-center gap-3 text-xs text-muted">
-              <span className="h-px flex-1 bg-line" /> o con correo <span className="h-px flex-1 bg-line" />
-            </div>
-          </>
-        )}
-
         <form onSubmit={submit} className="flex flex-col gap-3">
-          <TextField label="Correo electrónico" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
-          {mode !== "recuperar" && (
-            <TextField
-              label="Contraseña"
-              type="password"
-              autoComplete={mode === "crear" ? "new-password" : "current-password"}
-              required
-              minLength={mode === "crear" ? 8 : undefined}
-              hint={mode === "crear" ? "Mínimo 8 caracteres." : undefined}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
+          {mode === "recuperar" ? (
+            <>
+              <TextField label="Correo de tu cuenta" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
+              <p className="text-xs text-muted">Solo funciona si tu cuenta tiene un correo. Si ingresás con usuario, pedile al propietario que te ponga una contraseña nueva desde Configuración → Usuarios.</p>
+            </>
+          ) : (
+            <>
+              <TextField
+                label="Usuario"
+                autoComplete="username"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
+                required
+                value={usuario}
+                onChange={(e) => setUsuario(e.target.value)}
+                hint={mode === "crear" ? "Entre 3 y 30 caracteres, sin espacios. Ej: santi" : undefined}
+              />
+              <Field label="Contraseña" htmlFor="pw">
+                <div className="relative">
+                  <Input
+                    id="pw"
+                    type={showPw ? "text" : "password"}
+                    autoComplete={mode === "crear" ? "new-password" : "current-password"}
+                    required
+                    minLength={mode === "crear" ? 8 : undefined}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="pr-20"
+                  />
+                  <button type="button" onClick={() => setShowPw((v) => !v)} className="absolute inset-y-0 right-2 my-auto h-8 rounded px-2 text-xs font-medium text-accent">
+                    {showPw ? "Ocultar" : "Mostrar"}
+                  </button>
+                </div>
+              </Field>
+              {mode === "crear" && (
+                <TextField
+                  label="Repetí la contraseña"
+                  type={showPw ? "text" : "password"}
+                  autoComplete="new-password"
+                  required
+                  value={password2}
+                  onChange={(e) => setPassword2(e.target.value)}
+                  error={mismatch ? "No coincide con la contraseña." : null}
+                  hint="Mínimo 8 caracteres."
+                />
+              )}
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} className="h-4 w-4" />
+                Mantener la sesión iniciada
+              </label>
+            </>
           )}
           {error && <Alert tone="danger">{error}</Alert>}
           {info && <Alert tone="ok">{info}</Alert>}
-          <Button type="submit" loading={busy} className="w-full">
+          <Button type="submit" loading={busy} className="w-full py-2.5" disabled={mismatch}>
             {mode === "ingresar" ? "Ingresar" : mode === "crear" ? "Crear cuenta" : "Enviar enlace"}
           </Button>
         </form>
 
-        <div className="mt-4 flex flex-col items-center gap-1 text-sm">
+        {mode === "ingresar" && (
+          <>
+            <div className="my-5 flex items-center gap-3 text-xs text-muted">
+              <span className="h-px flex-1 bg-line" /> o ingresá con <span className="h-px flex-1 bg-line" />
+            </div>
+            <div className="flex justify-center">
+              <button
+                type="button"
+                onClick={google}
+                disabled={busy}
+                title="Continuar con Google"
+                aria-label="Continuar con Google"
+                className="flex h-14 w-14 items-center justify-center rounded-xl border border-line bg-white shadow-sm transition hover:shadow-md disabled:opacity-50"
+              >
+                <GoogleG />
+              </button>
+            </div>
+          </>
+        )}
+
+        <div className="mt-5 flex flex-col items-center gap-1 text-sm">
           {mode === "ingresar" ? (
             <>
-              <button className="text-accent hover:underline" onClick={() => { setMode("recuperar"); setError(null); setInfo(null); }}>
-                Olvidé mi contraseña
-              </button>
-              <button className="text-muted hover:underline" onClick={() => { setMode("crear"); setError(null); setInfo(null); }}>
-                Crear una cuenta nueva
-              </button>
+              <button className="text-accent hover:underline" onClick={() => go("recuperar")}>Olvidé mi contraseña</button>
+              {canRegister ? (
+                <button className="text-muted hover:underline" onClick={() => go("crear")}>Crear una cuenta nueva</button>
+              ) : (
+                <p className="text-center text-xs text-muted">¿No tenés usuario? Pedíselo al propietario del balneario.</p>
+              )}
             </>
           ) : (
-            <button className="text-accent hover:underline" onClick={() => { setMode("ingresar"); setError(null); setInfo(null); }}>
-              Volver a iniciar sesión
-            </button>
+            <button className="text-accent hover:underline" onClick={() => go("ingresar")}>Volver a ingresar</button>
           )}
         </div>
       </div>
