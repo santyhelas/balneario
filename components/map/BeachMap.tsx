@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as RPointerEvent, type ReactNode } from "react";
-import { STATE_COLOR, TENT_H, TENT_W, TentIcon, UMBRELLA_R, UmbrellaIcon, type SpaceState } from "./icons";
+import { SpaceNumber, STATE_COLOR, TENT_H, TENT_W, TentIcon, UMBRELLA_R, UmbrellaIcon, type SpaceState, type TentStyle } from "./icons";
 import { cx } from "@/components/ui";
 
 export type MapSpace = {
@@ -59,10 +59,10 @@ export function BeachMap({
   onMove,
   onFeatureChange,
   overlay,
-  tentColor = null,
+  design = null,
 }: {
-  /** Color de lona elegido (null = a rayas según el estado). */
-  tentColor?: string | null;
+  /** Diseño de carpas y sombrillas (null = el clásico, a rayas según el estado). */
+  design?: TentStyle | null;
   width: number;
   height: number;
   seaSide: "top" | "bottom" | "left" | "right";
@@ -424,11 +424,10 @@ export function BeachMap({
               >
                 <g transform={`rotate(${Number(s.rotation) || 0})`}>
                   {s.kind === "carpa"
-                    ? <TentIcon color={color} selected={selSpace === s.space_id} dashed={s.state === "desactivada"} fill={tentColor} />
-                    : <UmbrellaIcon color={color} selected={selSpace === s.space_id} dashed={s.state === "desactivada"} fill={tentColor} />}
+                    ? <TentIcon color={color} selected={selSpace === s.space_id} dashed={s.state === "desactivada"} design={design} />
+                    : <UmbrellaIcon color={color} selected={selSpace === s.space_id} dashed={s.state === "desactivada"} design={design} />}
                 </g>
-                <rect x={-26} y={-16} width={52} height={32} rx={8} fill={tentColor ? color : "var(--surface)"} opacity={0.95} stroke={tentColor ? "#ffffff" : color} strokeWidth={2} />
-                <text y={1.5} textAnchor="middle" dominantBaseline="middle" fontSize={22} fontWeight={800} fill={tentColor ? "#ffffff" : "var(--fg)"}>{s.code}</text>
+                <SpaceNumber code={s.code} color={color} design={design} />
               </g>
             );
           })}

@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { getSupabase } from "@/lib/supabase/client";
 import { unwrap, useLoader } from "@/lib/data";
 import { friendlyError } from "@/lib/errors";
@@ -10,7 +10,8 @@ import { PageHeader, SyncNotice } from "@/components/shell";
 import { Alert, Badge, Button, Card, ConfirmDialog, Field, Input, Modal, Select, Spinner, Textarea, TextField } from "@/components/ui";
 import { BeachMap, FEATURE_KIND_LABEL, type MapFeature, type MapSpace, type Selection } from "@/components/map/BeachMap";
 import { WeatherStrip, WindCompass } from "@/components/weather";
-import { STATE_COLOR, STATE_LABEL, type SpaceState } from "@/components/map/icons";
+import { DEFAULT_TENT_STYLE, normalizeTentStyle, STATE_COLOR, STATE_LABEL, type SpaceState, type TentStyle } from "@/components/map/icons";
+import { TentDesigner } from "@/components/map/TentDesigner";
 
 type DayStatus = MapSpace & {
   rotation: number;
@@ -58,35 +59,34 @@ export default function MapaPage() {
     0,
   );
 
-  // Color de las carpas: se lee aparte para que el plano funcione aunque falte la actualización 0015.
-  const [tentColor, setTentColor] = useState<string | null>(null);
-  const [tentColorReady, setTentColorReady] = useState(false);
-  const [tentSaving, setTentSaving] = useState(false);
-  const colorTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Diseño de las carpas: se lee aparte para que el plano funcione aunque falte la actualización 0015.
+  const [design, setDesign] = useState<TentStyle | null>(null);
+  const [designReady, setDesignReady] = useState(false);
+  const [designOpen, setDesignOpen] = useState(false);
   useEffect(() => {
     let alive = true;
-    sb.from("workspaces").select("tent_color").eq("id", ws.id).single().then(({ data: row, error: err }) => {
-      if (!alive) return;
-      if (!err) { setTentColor((row as { tent_color: string | null }).tent_color); setTentColorReady(true); }
+    sb.from("workspaces").select("tent_style").eq("id", ws.id).single().then(({ data: row, error: err }) => {
+      if (!alive || err) return;
+      const raw = (row as { tent_style: unknown }).tent_style;
+      setDesign(raw ? normalizeTentStyle(raw) : null);
+      setDesignReady(true);
     });
     return () => { alive = false; };
   }, [sb, ws.id]);
 
-  async function saveTentColor(c: string | null) {
-    const prev = tentColor;
-    setTentColor(c);
-    setTentSaving(true);
+  async function saveDesign(next: TentStyle | null): Promise<boolean> {
     const cur = await sb.from("workspaces").select("version").eq("id", ws.id).single();
     const { data: upd, error: err } = cur.error
       ? { data: null, error: cur.error }
-      : await sb.from("workspaces").update({ tent_color: c, version: (cur.data as { version: number }).version + 1 }).eq("id", ws.id).select("id");
-    setTentSaving(false);
+      : await sb.from("workspaces").update({ tent_style: next, version: (cur.data as { version: number }).version + 1 }).eq("id", ws.id).select("id");
     if (err || !upd?.length) {
-      setTentColor(prev);
-      setMessage({ tone: "danger", text: err ? friendlyError(err) : "No se pudo guardar el color. Volvé a intentarlo." });
-      return;
+      setMessage({ tone: "danger", text: err ? friendlyError(err) : "No se pudo guardar el diseño. Volvé a intentarlo." });
+      return false;
     }
+    setDesign(next);
+    setMessage({ tone: "ok", text: "Listo: se guardó el diseño de las carpas y sombrillas." });
     await reloadWorkspace();
+    return true;
   }
 
   async function applyLayout() {
@@ -214,39 +214,16 @@ export default function MapaPage() {
           <Button variant="secondary" className="py-1.5" onClick={() => addFeature("instalacion", "Nueva instalación", 260, 160, "#f08c1a")}>Instalación</Button>
           <Button variant="secondary" className="py-1.5" onClick={() => addFeature("area_comun", "Área común", 300, 200, "#d9b77e")}>Área común</Button>
           <Button variant="secondary" className="py-1.5" onClick={() => addFeature("sector", "Sector", 600, 400, "#0b6a87")}>Sector</Button>
+          {isAdmin && (
+            <Button variant="secondary" className="py-1.5" disabled={!designReady} onClick={() => setDesignOpen(true)}
+              title={designReady ? undefined : "Falta aplicar la actualización 0015 de la base de datos"}>
+              🎨 Diseño de carpas
+            </Button>
+          )}
           <span className="text-xs text-muted">Tocá un elemento para editarlo; arrastralo para moverlo.</span>
         </div>
       )}
-      {editMode && isAdmin && (
-        <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-line bg-surface p-2 text-sm">
-          <span className="px-1 font-medium">Color de carpas y sombrillas:</span>
-          {tentColorReady ? (
-            <>
-              <Button variant={tentColor === null ? "primary" : "secondary"} className="py-1.5" disabled={tentSaving} onClick={() => saveTentColor(null)}>A rayas según el estado</Button>
-              <Button variant={tentColor?.toLowerCase() === "#ffffff" ? "primary" : "secondary"} className="py-1.5" disabled={tentSaving} onClick={() => saveTentColor("#ffffff")}>Blancas</Button>
-              <label className="flex items-center gap-2 rounded-lg border border-line px-2 py-1">
-                <span>Otro color</span>
-                <input
-                  type="color"
-                  aria-label="Elegir color de las carpas"
-                  className="h-7 w-10 cursor-pointer rounded border-0 bg-transparent p-0"
-                  value={tentColor ?? "#ffffff"}
-                  disabled={tentSaving}
-                  onChange={(e) => {
-                    const c = e.target.value;
-                    setTentColor(c);
-                    // Mientras se arrastra en el selector se ve al instante; se guarda al soltar.
-                    if (colorTimer.current) clearTimeout(colorTimer.current);
-                    colorTimer.current = setTimeout(() => saveTentColor(c), 700);
-                  }}
-                />
-              </label>
-              {tentSaving && <Spinner />}
-              <span className="text-xs text-muted">Con un color elegido, el estado se ve en el borde y en el número.</span>
-            </>
-          ) : (
-            <span className="text-xs text-muted">Para elegir el color hay que aplicar la actualización 0015 de la base de datos.</span>
-          )}
+
         </div>
       )}
 
@@ -264,7 +241,7 @@ export default function MapaPage() {
             onMove={moveSpace}
             onFeatureChange={(id, g) => updateFeature(id, g)}
             overlay={<WindCompass seaSide={ws.sea_side} />}
-            tentColor={tentColor}
+            design={design}
           />
         ) : (
           <div className="flex aspect-[4/3] items-center justify-center rounded-2xl bg-surface-2 text-muted">
@@ -290,6 +267,9 @@ export default function MapaPage() {
         onConfirm={applyLayout}
         onCancel={() => setLayoutConfirm(false)}
       />
+      {isAdmin && designReady && (
+        <TentDesigner open={designOpen} value={design ?? DEFAULT_TENT_STYLE} onClose={() => setDesignOpen(false)} onSave={saveDesign} />
+      )}
       {isAdmin && <AddSpaceModal open={adding} onClose={() => setAdding(false)} onDone={(id) => { setAdding(false); reload(); setSel({ type: "space", id }); }} mapW={ws.map_width} mapH={ws.map_height} />}
     </>
   );

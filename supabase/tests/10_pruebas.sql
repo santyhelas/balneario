@@ -593,12 +593,14 @@ select t.ok((select layer from public.map_features where label = 'Kiosco') > (se
 update public.map_features set layer = -5, version = version + 1 where label = 'Kiosco';
 select t.ok((select layer from public.map_features where label = 'Kiosco') = -5, 'Capas: se puede enviar al fondo');
 
--- 19. Color de carpas
-update public.workspaces set tent_color = '#ffffff', version = version + 1;
-select t.ok((select tent_color from public.workspaces) = '#ffffff', 'Carpas: se pueden poner blancas');
-select t.throws($$update public.workspaces set tent_color = 'red; drop', version = version + 1$$, 'check', 'Carpas: solo acepta colores válidos');
-update public.workspaces set tent_color = null, version = version + 1;
-select t.ok((select tent_color is null from public.workspaces), 'Carpas: se vuelve a rayas según el estado');
+-- 19. Diseño de carpas
+update public.workspaces set tent_style = '{"pattern":"liso","fill":"#ffffff","accent":"estado","border":"estado","borderWidth":3,"numberBg":"ninguno","numberText":"#111111","stateDot":false}', version = version + 1;
+select t.ok((select tent_style->>'fill' from public.workspaces) = '#ffffff', 'Carpas: se pueden poner blancas con número negro');
+select t.throws($$update public.workspaces set tent_style = '{"pattern":"liso","fill":"red;x","accent":"estado","border":"estado","borderWidth":3,"numberBg":"ninguno","numberText":"#111111","stateDot":false}', version = version + 1$$, 'check', 'Carpas: solo acepta colores válidos');
+select t.throws($$update public.workspaces set tent_style = '{"pattern":"tigre","fill":"#ffffff","accent":"estado","border":"estado","borderWidth":3,"numberBg":"ninguno","numberText":"#111111","stateDot":false}', version = version + 1$$, 'check', 'Carpas: solo acepta dibujos conocidos');
+select t.throws($$update public.workspaces set tent_style = '{"pattern":"liso","fill":"#ffffff","accent":"estado","border":"estado","borderWidth":3,"numberBg":"ninguno","numberText":"#111111","stateDot":false,"x":1}', version = version + 1$$, 'check', 'Carpas: no acepta datos extra');
+update public.workspaces set tent_style = null, version = version + 1;
+select t.ok((select tent_style is null from public.workspaces), 'Carpas: se vuelve al diseño clásico');
 
 reset role;
 \o
