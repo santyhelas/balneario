@@ -217,7 +217,7 @@ export default function MapaPage() {
           {isAdmin && (
             <Button variant="secondary" className="py-1.5" disabled={!designReady} onClick={() => setDesignOpen(true)}
               title={designReady ? undefined : "Falta aplicar la actualización 0015 de la base de datos"}>
-              🎨 Diseño de carpas
+              Diseño de carpas
             </Button>
           )}
           <span className="text-xs text-muted">Tocá un elemento para editarlo; arrastralo para moverlo.</span>

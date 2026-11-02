@@ -116,7 +116,7 @@ export default function DisponibilidadPage() {
               <div key={space.id}>
               {kind === "todas" && (ri === 0 || rows[ri - 1].space.kind !== space.kind) && (
                 <div className="border-b border-line bg-surface-2 py-1.5 text-sm font-bold" style={{ width: LABEL_W + days.length * COL }}>
-                  <span className="sticky left-0 px-3">{space.kind === "carpa" ? "⛺ Carpas" : "⛱️ Sombrillas"} ({rows.filter((r) => r.space.kind === space.kind).length})</span>
+                  <span className="sticky left-0 px-3">{space.kind === "carpa" ? "Carpas" : "Sombrillas"} ({rows.filter((r) => r.space.kind === space.kind).length})</span>
                 </div>
               )}
               <div className="flex border-b border-line">
@@ -136,7 +136,7 @@ export default function DisponibilidadPage() {
                     const it = b.item;
                     const common = { gridColumn: `${b.start + 1} / span ${b.len}`, gridRow: 1 } as const;
                     if (it.item_type === "mantenimiento") {
-                      return <div key={k} style={common} className="m-1 truncate rounded bg-zinc-500 px-1.5 text-sm leading-[2.5rem] text-white" title={`Mantenimiento: ${it.label} (${formatDate(it.start_date)} al ${formatDate(it.end_date)})`}>🔧 {it.label}</div>;
+                      return <div key={k} style={common} className="m-1 truncate rounded bg-zinc-500 px-1.5 text-sm leading-[2.5rem] text-white" title={`Mantenimiento: ${it.label} (${formatDate(it.start_date)} al ${formatDate(it.end_date)})`}>{it.label}</div>;
                     }
                     return (
                       <Link key={k} href={`/reservas/${it.reservation_id}`} style={common}
