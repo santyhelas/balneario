@@ -118,8 +118,16 @@ export function Shell({ children }: { children: ReactNode }) {
         </Link>
         <div className="mx-4 mb-2 flex items-center justify-between border-y border-line py-2 text-xs">
           <span className="text-muted">{carpa?.total_activos ?? "–"} Carpas · {sombrilla?.total_activos ?? "–"} Sombrillas</span>
-          <span className="font-mono font-semibold text-ok">{(carpa?.total_activos ?? 0) + (sombrilla?.total_activos ?? 0)} Activas</span>
         </div>
+        {carpa && sombrilla && (
+          <div className="mx-4 mb-2 -mt-1 flex items-center justify-between pb-2 text-xs" title="Situación de hoy (carpas y sombrillas juntas)">
+            <span className="text-muted">Hoy</span>
+            <span className="flex gap-3 font-mono font-semibold">
+              <span className="text-danger">{carpa.ocupados + sombrilla.ocupados} ocupadas</span>
+              <span className="text-ok">{carpa.disponibles + sombrilla.disponibles} libres</span>
+            </span>
+          </div>
+        )}
         <nav className="flex-1 overflow-y-auto px-2 pb-2" aria-label="Secciones">
           {NAV.map((item, i) => {
             const active = isActive(item.href);
