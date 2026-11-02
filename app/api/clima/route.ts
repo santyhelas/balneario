@@ -13,6 +13,40 @@ type Series = {
   };
 };
 
+type MetBody = { properties: { meta: { updated_at: string }; timeseries: Series[] } };
+
+// La página consulta cada 2 minutos. MET Norway pide no volver a preguntar antes de la hora
+// que indica en "Expires" y usar "If-Modified-Since": así se obtiene el dato nuevo apenas lo
+// publican, sin que bloqueen el acceso por consultas de más.
+const cache = new Map<string, { body: MetBody; expires: number; lastModified: string | null }>();
+
+async function getForecast(url: string): Promise<MetBody> {
+  const hit = cache.get(url);
+  if (hit && Date.now() < hit.expires) return hit.body;
+  const headers: Record<string, string> = { "User-Agent": "BalnearioGestion/1.0 github.com/santyhelas/balneario", Accept: "application/json" };
+  if (hit?.lastModified) headers["If-Modified-Since"] = hit.lastModified;
+  let res: Response;
+  try {
+    res = await fetch(url, { headers, cache: "no-store", signal: AbortSignal.timeout(10_000) });
+  } catch {
+    if (hit) return hit.body; // sin conexión: se muestra el último dato con su hora real
+    throw new Error("El servicio del clima no responde en este momento.");
+  }
+  const expiresHeader = Date.parse(res.headers.get("expires") ?? "");
+  const expires = Number.isFinite(expiresHeader) ? Math.max(expiresHeader, Date.now() + 60_000) : Date.now() + 120_000;
+  if (res.status === 304 && hit) {
+    hit.expires = expires;
+    return hit.body;
+  }
+  if (!res.ok) {
+    if (hit) return hit.body;
+    throw new Error(`El servicio del clima respondió con error ${res.status}.`);
+  }
+  const body = (await res.json()) as MetBody;
+  cache.set(url, { body, expires, lastModified: res.headers.get("last-modified") });
+  return body;
+}
+
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const lat = Number(searchParams.get("lat"));
@@ -21,17 +55,12 @@ export async function GET(req: Request) {
     return json({ error: "Ubicación inválida. Cargala en Configuración." }, 400);
   }
   const url = `https://api.met.no/weatherapi/locationforecast/2.0/complete?lat=${lat.toFixed(4)}&lon=${lon.toFixed(4)}`;
-  let res: Response;
+  let body: MetBody;
   try {
-    res = await fetch(url, {
-      headers: { "User-Agent": "BalnearioGestion/1.0 github.com/santyhelas/balneario", Accept: "application/json" },
-      next: { revalidate: 600 },
-    });
-  } catch {
-    return json({ error: "El servicio del clima no responde en este momento." }, 502);
+    body = await getForecast(url);
+  } catch (e) {
+    return json({ error: e instanceof Error ? e.message : "El servicio del clima no responde en este momento." }, 502);
   }
-  if (!res.ok) return json({ error: `El servicio del clima respondió con error ${res.status}.` }, 502);
-  const body = (await res.json()) as { properties: { meta: { updated_at: string }; timeseries: Series[] } };
   const series = body.properties?.timeseries ?? [];
   if (series.length === 0) return json({ error: "El servicio del clima no devolvió datos." }, 502);
 

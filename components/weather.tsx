@@ -43,7 +43,7 @@ export function WeatherProvider({ children }: { children: ReactNode }) {
     if (noLocation) return;
     let cancelled = false;
     setLoading(true);
-    fetch(`/api/clima?lat=${lat}&lon=${lon}`)
+    fetch(`/api/clima?lat=${lat}&lon=${lon}`, { cache: "no-store" })
       .then(async (r) => {
         const body = await r.json().catch(() => ({}));
         if (!r.ok) throw new Error((body as { error?: string }).error ?? "No se pudo obtener el clima.");
@@ -56,7 +56,7 @@ export function WeatherProvider({ children }: { children: ReactNode }) {
   }, [lat, lon, noLocation, tick]);
 
   useEffect(() => {
-    const id = window.setInterval(() => { if (document.visibilityState === "visible") setTick((t) => t + 1); }, 10 * 60_000);
+    const id = window.setInterval(() => { if (document.visibilityState === "visible") setTick((t) => t + 1); }, 2 * 60_000);
     return () => window.clearInterval(id);
   }, []);
 
@@ -229,7 +229,7 @@ export function WeatherStrip({ className }: { className?: string }) {
           </Metric>
         )}
         <div className="ml-auto flex flex-col justify-center text-right text-[11px] text-muted">
-          <span className={cx(stale && "text-danger")}>{stale ? "No se pudo actualizar · " : ""}Pronóstico de las {hhmm(d.actualizado, ws.timezone)}{ageMin > 180 ? " (viejo)" : ""}</span>
+          <span className={cx(stale && "text-danger")}>{stale ? "No se pudo actualizar · " : ""}Pronóstico de las {hhmm(d.actualizado, ws.timezone)}{ageMin > 180 ? " (viejo)" : ""}{w.fetchedAt ? ` · revisado ${hhmm(w.fetchedAt.toISOString(), ws.timezone)}` : ""}</span>
           <a href="https://www.met.no/en" target="_blank" rel="noopener noreferrer" className="hover:underline">Datos: MET Norway (CC BY 4.0)</a>
         </div>
       </div>
