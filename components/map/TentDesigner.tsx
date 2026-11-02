@@ -12,7 +12,6 @@ import {
   TENT_W,
   TentIcon,
   UmbrellaIcon,
-  styleShowsState,
   type SpaceState,
   type TentPattern,
   type TentStyle,
@@ -110,9 +109,7 @@ export function TentDesigner({
             <input type="checkbox" checked={st.stateDot} onChange={(e) => set("stateDot", e.target.checked)} className="h-4 w-4" />
             Mostrar un punto de color con el estado en la esquina
           </label>
-          {!styleShowsState(st) && (
-            <Alert tone="info">Con estos colores no se distingue si una carpa está libre u ocupada, así que se agrega el punto de estado en la esquina.</Alert>
-          )}
+          <Alert tone="info">Con cualquier diseño, cada carpa y sombrilla lleva un marco grueso del color del estado: verde libre, rojo ocupada, naranja reservada para otra fecha. Si elegís el borde "Según el estado", el marco es el mismo borde.</Alert>
         </div>
 
         <div className="lg:sticky lg:top-0 lg:self-start">
@@ -184,7 +181,7 @@ function ColorRow({ label, value, onChange, options, children }: { label: string
 /** Carpita chica para los botones (usa el color de "ocupada" como ejemplo de estado). */
 function MiniTent({ style }: { style: TentStyle }) {
   return (
-    <svg viewBox="-50 -48 100 92" className="h-6 w-7 shrink-0">
+    <svg viewBox="-56 -52 112 100" className="h-6 w-7 shrink-0">
       <defs><clipPath id="tent-clip"><rect x={-TENT_W / 2} y={-TENT_H / 2} width={TENT_W} height={TENT_H} rx={8} /></clipPath></defs>
       <TentIcon color={STATE_COLOR.ocupada} selected={false} dashed={false} design={style} />
     </svg>

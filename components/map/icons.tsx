@@ -158,7 +158,12 @@ export function TentIcon({ color, selected, dashed, design }: { color: string; s
   const flap = `M ${-w / 2 + 6} ${-h / 2} L ${-w / 2 + 14} ${-h / 2 - 9} L ${w / 2 - 14} ${-h / 2 - 9} L ${w / 2 - 6} ${-h / 2} Z`;
   return (
     <g>
-      {selected && <rect x={-w / 2 - 7} y={-h / 2 - 7} width={w + 14} height={h + 14} rx={12} fill="none" stroke="var(--accent)" strokeWidth={4} />}
+      {selected && <rect x={-w / 2 - 14} y={-h / 2 - 14} width={w + 28} height={h + 28} rx={16} fill="none" stroke="var(--accent)" strokeWidth={4} />}
+      {/* Marco del color del estado: siempre visible, con cualquier diseño */}
+      {st.border !== "estado" && (
+        <rect x={-w / 2 - 6} y={-h / 2 - 6} width={w + 12} height={h + 12} rx={11} fill="none" stroke={color} strokeWidth={6}
+          strokeDasharray={dashed ? "8 6" : undefined} />
+      )}
       {/* sombra */}
       <rect x={-w / 2 + 3} y={-h / 2 + 4} width={w} height={h} rx={7} fill="rgba(0,0,0,0.12)" />
       {/* #tent-clip se define una sola vez en el <defs> del mapa */}
@@ -175,9 +180,9 @@ export function TentIcon({ color, selected, dashed, design }: { color: string; s
       <path d={flap} fill="#000" opacity={0.12} />
       {border && (
         <rect x={-w / 2} y={-h / 2} width={w} height={h} rx={7} fill="none" stroke={border}
-          strokeWidth={dashed ? 2.5 : BORDER_W[st.borderWidth]} strokeDasharray={dashed ? "6 5" : undefined} />
+          strokeWidth={st.border === "estado" ? Math.max(6, BORDER_W[st.borderWidth]) : dashed ? 2.5 : BORDER_W[st.borderWidth]} strokeDasharray={dashed ? "6 5" : undefined} />
       )}
-      {(st.stateDot || !styleShowsState(st)) && <StateDot x={w / 2 - 10} y={-h / 2 + 10} color={color} />}
+      {st.stateDot && <StateDot x={w / 2 - 12} y={-h / 2 + 12} color={color} />}
     </g>
   );
 }
@@ -198,7 +203,8 @@ export function UmbrellaIcon({ color, selected, dashed, design }: { color: strin
   const op = st.accent === "estado" ? 0.9 : 1;
   return (
     <g>
-      {selected && <circle r={r + 8} fill="none" stroke="var(--accent)" strokeWidth={4} />}
+      {selected && <circle r={r + 14} fill="none" stroke="var(--accent)" strokeWidth={4} />}
+      {st.border !== "estado" && <circle r={r + 6} fill="none" stroke={color} strokeWidth={6} strokeDasharray={dashed ? "8 6" : undefined} />}
       <circle cx={3} cy={4} r={r} fill="rgba(0,0,0,0.12)" />
       <circle r={r} fill={fill} />
       <g opacity={op}>
@@ -223,15 +229,15 @@ export function UmbrellaIcon({ color, selected, dashed, design }: { color: strin
         const a = (i / 8) * Math.PI * 2;
         return <line key={i} x1={0} y1={0} x2={Math.cos(a) * r} y2={Math.sin(a) * r} stroke="rgba(0,0,0,0.12)" strokeWidth={1} />;
       })}
-      {border && <circle r={r} fill="none" stroke={border} strokeWidth={dashed ? 2.5 : BORDER_W[st.borderWidth]} strokeDasharray={dashed ? "6 5" : undefined} />}
+      {border && <circle r={r} fill="none" stroke={border} strokeWidth={st.border === "estado" ? Math.max(6, BORDER_W[st.borderWidth]) : dashed ? 2.5 : BORDER_W[st.borderWidth]} strokeDasharray={dashed ? "6 5" : undefined} />}
       <circle r={4} fill="#fbfaf6" stroke="rgba(0,0,0,0.35)" strokeWidth={1.2} />
-      {(st.stateDot || !styleShowsState(st)) && <StateDot x={r * 0.7} y={-r * 0.7} color={color} />}
+      {st.stateDot && <StateDot x={r * 0.7} y={-r * 0.7} color={color} />}
     </g>
   );
 }
 
 function StateDot({ x, y, color }: { x: number; y: number; color: string }) {
-  return <circle cx={x} cy={y} r={8} fill={color} stroke="#ffffff" strokeWidth={2.5} />;
+  return <circle cx={x} cy={y} r={12} fill={color} stroke="#ffffff" strokeWidth={3} />;
 }
 
 /** Número del espacio, encima del dibujo (no gira con la carpa). */
