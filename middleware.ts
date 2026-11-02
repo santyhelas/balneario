@@ -5,7 +5,7 @@ type CookieToSet = { name: string; value: string; options: CookieOptions };
 import { NextResponse, type NextRequest } from "next/server";
 
 // Rutas que se pueden ver sin haber iniciado sesión.
-const PUBLIC_PATHS = ["/login", "/auth/callback", "/auth/restablecer", "/auth/ingresar", "/auth/registrar", "/windguru-widget"];
+const PUBLIC_PATHS = ["/login", "/auth/callback", "/auth/restablecer", "/auth/ingresar", "/auth/registrar"];
 
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({ request });

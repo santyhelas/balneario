@@ -9,7 +9,7 @@ import { useWorkspace } from "@/components/workspace";
 import { PageHeader, SyncNotice } from "@/components/shell";
 import { Alert, Badge, Button, Card, ConfirmDialog, Field, Input, Modal, Select, Spinner, Textarea, TextField } from "@/components/ui";
 import { BeachMap, FEATURE_KIND_LABEL, type MapFeature, type MapSpace, type Selection } from "@/components/map/BeachMap";
-import { SunCompass, WindguruWidget } from "@/components/weather";
+import { WeatherStrip, WindCompass } from "@/components/weather";
 import { STATE_COLOR, STATE_LABEL, type SpaceState } from "@/components/map/icons";
 
 type DayStatus = MapSpace & {
@@ -151,12 +151,7 @@ export default function MapaPage() {
       />
       <SyncNotice error={error} stale={stale} updatedAt={updatedAt} onRetry={reload} />
 
-      <details className="group mb-3">
-        <summary className="cursor-pointer list-none rounded-xl border border-line bg-surface px-3 py-2 text-sm font-medium hover:bg-surface-2">
-          <span className="mr-1 inline-block transition group-open:rotate-90">▸</span> Pronóstico de Windguru (viento, temperatura y lluvia)
-        </summary>
-        <WindguruWidget className="mt-2" />
-      </details>
+      <WeatherStrip className="mb-3" />
 
       <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
         <div className="flex flex-wrap items-end gap-2">
@@ -205,7 +200,7 @@ export default function MapaPage() {
             onSelect={setSel}
             onMove={moveSpace}
             onFeatureChange={(id, g) => updateFeature(id, g)}
-            overlay={<SunCompass seaSide={ws.sea_side} />}
+            overlay={<WindCompass seaSide={ws.sea_side} />}
           />
         ) : (
           <div className="flex aspect-[4/3] items-center justify-center rounded-2xl bg-surface-2 text-muted">
