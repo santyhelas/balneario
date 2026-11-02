@@ -10,6 +10,8 @@ const NAV = [
   { href: "/", label: "Panel", icon: "M3 12l9-8 9 8M5 10v10h5v-6h4v6h5V10" },
   { href: "/mapa", label: "Mapa", icon: "M9 4L3 6v14l6-2 6 2 6-2V4l-6 2-6-2zM9 4v14M15 6v14" },
   { href: "/caja", label: "Caja", icon: "M3 7h18v12H3zM3 11h18M7 15h3" },
+  { href: "/reservas", label: "Reservas", icon: "M8 3v3M16 3v3M4 8h16M5 5h14v15H5zM9 13h2M13 13h2M9 16h2" },
+  { href: "/tarifas", label: "Tarifario", icon: "M20 12l-8 8-9-9V3h8l9 9zM7.5 7.5h.01" },
   { href: "/clientes", label: "Clientes", icon: "M16 19v-1a4 4 0 00-4-4H7a4 4 0 00-4 4v1M9.5 10a3.5 3.5 0 100-7 3.5 3.5 0 000 7zM21 19v-1a4 4 0 00-3-3.9M16 3.1a3.5 3.5 0 010 6.8" },
 ];
 

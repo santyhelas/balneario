@@ -17,8 +17,11 @@ type Summary = {
   ingresan_hoy: ResItem[];
   finalizan_hoy: ResItem[];
   clientes_con_deuda: number;
-  ingresos_hoy: { efectivo: number; transferencia: number; tarjeta: number; total: number };
+  ingresos_hoy: { efectivo: number; otros_medios: number; total: number };
   gastos_hoy: number;
+  ingresos_mes: number;
+  saldo_pendiente_total: number;
+  efectivo_en_caja: number | null;
   caja: { estado: "sin_abrir" | "abierta" | "cerrada"; session_id?: string };
   caja_anterior_sin_cerrar: { session_id: string; fecha: string } | null;
 };
@@ -85,13 +88,17 @@ export default function DashboardPage() {
 
           {/* Indicadores */}
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <Stat label="Ocupación de carpas" value={pct(carpa)} note={carpa ? `${carpa.ocupados} de ${carpa.total_activos}` : undefined} />
+            <Stat label="Ocupación de sombrillas" value={pct(sombrilla)} note={sombrilla ? `${sombrilla.ocupados} de ${sombrilla.total_activos}` : undefined} />
+            <Stat label="Saldo pendiente de cobro" value={formatMoney(data.saldo_pendiente_total)} tone={Number(data.saldo_pendiente_total) > 0 ? "warn" : undefined} note={`${data.clientes_con_deuda} ${data.clientes_con_deuda === 1 ? "cliente" : "clientes"} con deuda`} />
+            <Stat label="Efectivo en caja" value={data.efectivo_en_caja === null ? "—" : formatMoney(data.efectivo_en_caja)} note={data.efectivo_en_caja === null ? "Caja cerrada o sin abrir" : "Esperado según movimientos"} />
             <Stat label="Carpas ocupadas" value={carpa ? `${carpa.ocupados} / ${carpa.total_activos}` : "0"} note={carpa?.cortesias ? `${carpa.cortesias} por cortesía` : undefined} />
             <Stat label="Carpas disponibles" value={String(carpa?.disponibles ?? 0)} />
             <Stat label="Sombrillas ocupadas" value={sombrilla ? `${sombrilla.ocupados} / ${sombrilla.total_activos}` : "0"} note={sombrilla?.cortesias ? `${sombrilla.cortesias} por cortesía` : undefined} />
             <Stat label="Sombrillas disponibles" value={String(sombrilla?.disponibles ?? 0)} />
             <Stat label="En mantenimiento" value={String((carpa?.mantenimiento ?? 0) + (sombrilla?.mantenimiento ?? 0))} />
-            <Stat label="Clientes con deuda" value={String(data.clientes_con_deuda)} tone={data.clientes_con_deuda > 0 ? "warn" : undefined} />
-            <Stat label="Cobrado hoy" value={formatMoney(data.ingresos_hoy.total)} note={`Efectivo ${formatMoney(data.ingresos_hoy.efectivo)} · Transf. ${formatMoney(data.ingresos_hoy.transferencia)} · Tarjeta ${formatMoney(data.ingresos_hoy.tarjeta)}`} />
+            <Stat label="Cobrado hoy" value={formatMoney(data.ingresos_hoy.total)} note={`Efectivo ${formatMoney(data.ingresos_hoy.efectivo)} · Otros medios ${formatMoney(data.ingresos_hoy.otros_medios)}`} />
+            <Stat label="Cobrado en el mes" value={formatMoney(data.ingresos_mes)} />
             <Stat label="Gastos de hoy" value={formatMoney(data.gastos_hoy)} />
           </div>
 
@@ -117,6 +124,11 @@ export default function DashboardPage() {
       <CloseCashModal open={closing !== null} summary={closing} onClose={() => setClosing(null)} onDone={() => { setClosing(null); reload(); }} />
     </>
   );
+}
+
+function pct(c: Counts | undefined): string {
+  if (!c || c.total_activos === 0) return "0%";
+  return `${Math.round((c.ocupados / c.total_activos) * 100)}%`;
 }
 
 function Stat({ label, value, note, tone }: { label: string; value: string; note?: string; tone?: "warn" }) {

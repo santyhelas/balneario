@@ -272,15 +272,84 @@ select t.ok((select state from public.map_day_status(t.uid('ws'), t.get('d0')::d
 select t.throws(format($$select public.register_payment(%L, %L, 100, 'efectivo', gen_random_uuid())$$, t.get('ws'), t.get('resCort')),
   'supera el saldo', 'Cortesía: no admite cobros');
 
--- Operador no puede aplicar descuento manual
+-- Operador: no anula pagos
 select set_config('request.jwt.claims', '{"sub":"33333333-3333-3333-3333-333333333333","email":"operador@test.com"}', false);
-select t.throws(format($$select public.create_reservation(%L, gen_random_uuid(), %L, %L, %L,
-  jsonb_build_array(jsonb_build_object('space_id', %L, 'start_date', %L, 'end_date', %L)),
-  '[{"amount":10000}]'::jsonb, '[{"kind":"manual","amount":1000,"reason":"amigo"}]'::jsonb)$$,
-  t.get('ws'), t.get('luis'), t.get('d0')::date + 40, t.get('d0')::date + 40, t.space('50'), t.get('d0')::date + 40, t.get('d0')::date + 40),
-  'Solo un administrador', 'Permisos: un operador no aplica descuentos manuales');
 select t.throws(format($$select public.void_payment(%L, %L, gen_random_uuid(), 'x')$$, t.get('ws'), t.get('p2')),
   'No tenés permiso', 'Permisos: un operador no anula pagos');
+select t.throws(format($$select public.create_reservation(%L, gen_random_uuid(), %L, '2027-06-01', '2027-06-01',
+  jsonb_build_array(jsonb_build_object('space_id', %L, 'start_date', '2027-06-01', 'end_date', '2027-06-01')), '[{"amount":1}]'::jsonb)$$,
+  t.get('ws'), t.get('luis'), t.space('50')),
+  'No tenés permiso', 'Permisos: un operador no carga importes a mano (usa el cálculo de tarifas)');
+
+-- =====================================================================
+-- 7b. Tarifario y cálculo de precio en la base
+-- =====================================================================
+select set_config('request.jwt.claims', '{"sub":"11111111-1111-1111-1111-111111111111","email":"duenio@test.com"}', false);
+select public.set_rate(t.uid('ws'), 'carpa', 2027, 1, 1::smallint, 10000);
+select public.set_rate(t.uid('ws'), 'carpa', 2027, 1, 2::smallint, 12000);
+select public.set_rate(t.uid('ws'), 'carpa', 2027, 2, 1::smallint, 11000);
+select public.set_rate(t.uid('ws'), 'sombrilla', 2027, 1, 1::smallint, 6000);
+select t.ok((select season from public.rates where year = 2027 and month = 1 limit 1) = '2026/2027', 'Tarifas: enero 2027 pertenece a la temporada 2026/2027');
+select t.throws(format($$select public.set_rate(%L, 'carpa', 2027, 1, 1::smallint, 9000, 99)$$, t.get('ws')),
+  'otro dispositivo', 'Tarifas: no se pisa un precio editado desde otro dispositivo');
+
+select t.set('seg70', jsonb_build_array(jsonb_build_object('space_id', t.space('70'), 'start_date', '2027-01-13', 'end_date', '2027-01-17'))::text);
+select t.set('q1', public.quote_reservation(t.uid('ws'), '2027-01-13', '2027-01-17', t.get('seg70')::jsonb)::text);
+select t.ok((t.get('q1')::jsonb ->> 'precio_base')::numeric = 54000,
+  'Precio: 13 al 17/01 cruza quincenas → 3 × 10.000 + 2 × 12.000 = 54.000');
+select t.ok(jsonb_array_length(t.get('q1')::jsonb -> 'charges') = 2, 'Precio: un renglón por quincena');
+select t.ok((t.get('q1')::jsonb ->> 'total')::numeric = 51300, 'Paquete: 5 días → 5% (54.000 − 2.700 = 51.300)');
+
+insert into public.agreements (workspace_id, name, percent, valid_from, valid_to) values (t.uid('ws'), 'Hotel Prueba', 30, '2027-01-01', '2027-02-28');
+select t.set('hotel', (select id::text from public.agreements where name = 'Hotel Prueba'));
+select t.set('q2', public.quote_reservation(t.uid('ws'), '2027-01-13', '2027-01-17', t.get('seg70')::jsonb,
+  jsonb_build_object('agreement_id', t.get('hotel'), 'cash', true, 'manual', jsonb_build_object('type','monto','value',1000,'reason','Cliente de años')))::text);
+select t.ok((t.get('q2')::jsonb ->> 'total')::numeric = 31319,
+  'Cascada: 54.000 → paquete 51.300 → convenio 30% 35.910 → efectivo 10% 32.319 → manual −1.000 = 31.319');
+select t.ok((select string_agg(d ->> 'kind', '>') from jsonb_array_elements(t.get('q2')::jsonb -> 'discounts') d) = 'paquete>convenio>efectivo>manual',
+  'Cascada: orden paquete → convenio → efectivo → manual');
+select t.throws(format($$select public.quote_reservation(%L, '2027-03-02', '2027-03-03', %L::jsonb, jsonb_build_object('agreement_id', %L))$$,
+  t.get('ws'), jsonb_build_array(jsonb_build_object('space_id', t.space('70'), 'start_date', '2027-03-02', 'end_date', '2027-03-03')), t.get('hotel')),
+  'no está vigente', 'Convenio: fuera de sus fechas de vigencia no se aplica');
+select t.ok((public.quote_reservation(t.uid('ws'), '2027-01-10', '2027-01-19',
+  jsonb_build_array(jsonb_build_object('space_id', t.space('70'), 'start_date', '2027-01-10', 'end_date', '2027-01-19'))) -> 'discounts' -> 0 ->> 'percent')::numeric = 8,
+  'Paquete: 10 días toma el escalón de 7 días (8%)');
+select t.ok((public.quote_reservation(t.uid('ws'), '2027-03-01', '2027-03-02',
+  jsonb_build_array(jsonb_build_object('space_id', t.space('70'), 'start_date', '2027-03-01', 'end_date', '2027-03-02'))) ->> 'ok')::boolean = false,
+  'Precio: avisa cuando falta la tarifa de una quincena');
+
+-- Alta con precio calculado en la base, pago en Mercado Pago
+select t.set('resP', (public.create_reservation_v2(t.uid('ws'), gen_random_uuid(), t.uid('luis'), '2027-01-13', '2027-01-17',
+  t.get('seg70')::jsonb, jsonb_build_object('agreement_id', t.get('hotel'), 'cash', true),
+  null, jsonb_build_object('amount', 10000, 'method', 'mercado_pago', 'idempotency_key', gen_random_uuid())) ->> 'reservation_id'));
+select t.ok((select total_amount from public.reservations where id = t.uid('resP')) = 32319, 'Alta: el total lo calcula la base (32.319)');
+select t.ok((select count(*) from public.reservation_discounts where reservation_id = t.uid('resP')) = 3, 'Alta: quedan registrados los 3 descuentos aplicados');
+select t.ok((select due_amount from public.reservation_balances where reservation_id = t.uid('resP')) = 22319, 'Alta: seña por Mercado Pago, saldo 22.319');
+select public.set_rate(t.uid('ws'), 'carpa', 2027, 1, 1::smallint, 99999, (select version from public.rates where space_kind = 'carpa' and year = 2027 and month = 1 and half = 1));
+select t.ok((select total_amount from public.reservations where id = t.uid('resP')) = 32319, 'Fotografía: cambiar la tarifa no altera reservas ya hechas');
+select t.throws(format($$select public.create_reservation_v2(%L, gen_random_uuid(), %L, '2027-03-01', '2027-03-02', %L::jsonb)$$,
+  t.get('ws'), t.get('luis'), jsonb_build_array(jsonb_build_object('space_id', t.space('71'), 'start_date', '2027-03-01', 'end_date', '2027-03-02'))),
+  'Faltan tarifas', 'Alta: sin tarifa cargada no se reserva (salvo precio manual)');
+select t.ok((public.create_reservation_v2(t.uid('ws'), gen_random_uuid(), t.uid('luis'), '2027-03-01', '2027-03-02',
+  jsonb_build_array(jsonb_build_object('space_id', t.space('71'), 'start_date', '2027-03-01', 'end_date', '2027-03-02')),
+  '{"manual_base": 25000}'::jsonb) ->> 'reservation_id') is not null, 'Alta: el administrador puede fijar un precio manual');
+select t.throws(format($$select public.create_reservation_v2(%L, gen_random_uuid(), %L, '2027-01-20', '2027-01-21', %L::jsonb, '{"courtesy": true}'::jsonb)$$,
+  t.get('ws'), t.get('marta'), jsonb_build_array(jsonb_build_object('space_id', t.space('72'), 'start_date', '2027-01-20', 'end_date', '2027-01-21'))),
+  'beneficiario', 'Cortesía: pide el familiar beneficiario');
+
+-- Copias de tarifas
+select t.ok((public.copy_rates(t.uid('ws'), 2027, 1, null, 2027, 12, null, 10) ->> 'copiados')::int = 3, 'Copiar mes: enero → diciembre (3 precios)');
+select t.ok((select daily_price from public.rates where year = 2027 and month = 12 and half = 2 and space_kind = 'carpa') = 13200, 'Copiar con ajuste: 12.000 + 10% = 13.200');
+select t.ok((public.copy_rates(t.uid('ws'), 2027, 1, null, 2027, 12, null, 10) ->> 'omitidos')::int = 3, 'Copiar: no pisa precios existentes salvo que se pida');
+select t.ok((public.copy_season(t.uid('ws'), '2026/2027', '2027/2028', 0) ->> 'copiados')::int = 4, 'Copiar temporada 2026/2027 → 2027/2028');
+
+-- Operador: no edita tarifas ni aplica descuentos manuales
+select set_config('request.jwt.claims', '{"sub":"33333333-3333-3333-3333-333333333333","email":"operador@test.com"}', false);
+select t.throws(format($$select public.set_rate(%L, 'carpa', 2027, 2, 2::smallint, 1)$$, t.get('ws')), 'No tenés permiso', 'Permisos: un operador no cambia tarifas');
+select t.throws(format($$select public.create_reservation_v2(%L, gen_random_uuid(), %L, '2027-01-22', '2027-01-22', %L::jsonb,
+  '{"manual": {"type": "monto", "value": 500, "reason": "amigo"}}'::jsonb)$$,
+  t.get('ws'), t.get('luis'), jsonb_build_array(jsonb_build_object('space_id', t.space('73'), 'start_date', '2027-01-22', 'end_date', '2027-01-22'))),
+  'Solo un administrador', 'Permisos: un operador no aplica descuentos manuales');
 select set_config('request.jwt.claims', '{"sub":"11111111-1111-1111-1111-111111111111","email":"duenio@test.com"}', false);
 
 -- =====================================================================
@@ -298,7 +367,8 @@ select t.set('resC', (public.create_reservation(
 select t.throws(format($$select public.relocate_reservation(%L, %L, %L, %L, 99)$$, t.get('resC'), t.space('20'), t.get('c1')::date + 2, t.get('c1')::date + 2),
   'otro dispositivo', 'Cambio de carpa: versión desactualizada se rechaza');
 
--- Cambio por un solo día (día 3) a C20
+-- Cambio por un solo día (día 3) a la 20
+select t.set('nres', (select count(*) from public.reservations)::text);
 select t.set('chg1', (public.relocate_reservation(t.uid('resC'), t.space('20'), t.get('c1')::date + 2, t.get('c1')::date + 2,
   (select version from public.reservations where id = t.uid('resC'))) ->> 'change_id'));
 select t.ok((select string_agg(sp.code || ':' || (s.start_date - t.get('c1')::date + 1) || '-' || (s.end_date - t.get('c1')::date + 1), ',' order by s.start_date)
@@ -307,7 +377,7 @@ select t.ok((select string_agg(sp.code || ':' || (s.start_date - t.get('c1')::da
   'Cambio por un día: C12 días 1-2, C20 día 3, vuelve a C12 desde el día 4');
 select t.ok((select state from public.map_day_status(t.uid('ws'), t.get('c1')::date + 2) where code = '12') <> 'ocupada',
   'Cambio por un día: C12 queda libre ese día');
-select t.ok((select count(*) from public.reservations where customer_id = t.uid('luis') and status = 'confirmada') = 2,
+select t.ok((select count(*) from public.reservations)::text = t.get('nres'),
   'Cambio por un día: no se crea otra reserva');
 select t.ok((select paid_amount from public.reservation_balances where reservation_id = t.uid('resC')) = 300000,
   'Cambio de carpa: los pagos se conservan');

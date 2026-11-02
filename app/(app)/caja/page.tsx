@@ -8,6 +8,7 @@ import { useWorkspace } from "@/components/workspace";
 import { PageHeader, SyncNotice } from "@/components/shell";
 import { Alert, Button, Card, ConfirmDialog, EmptyState, Field, Input, Modal, Select, Spinner, Textarea, TextField } from "@/components/ui";
 import { CloseCashModal, OpenCashModal, type CashSummary } from "@/components/cash";
+import { METHOD_LABEL, PAYMENT_METHODS } from "@/lib/methods";
 
 type Session = { id: string; business_date: string; opening_cash: number; closed_at: string | null; expected_cash: number | null; counted_cash: number | null; difference: number | null };
 type Movement = { id: string; direction: "entrada" | "salida"; method: string; amount: number; category: string; concept: string; created_at: string; expense_id: string | null };
@@ -23,7 +24,7 @@ type PageData = {
   expenses: Record<string, ExpenseRow>;
 };
 
-const METHOD: Record<string, string> = { efectivo: "Efectivo", transferencia: "Transferencia", tarjeta: "Tarjeta" };
+const METHOD = METHOD_LABEL;
 const CATEGORY: Record<string, string> = {
   cobro: "Cobro",
   devolucion: "Devolución",
@@ -128,8 +129,8 @@ export default function CajaPage() {
             </dl>
           </Card>
           <Card title="Otros medios (no son efectivo en caja)" className="lg:col-span-2">
-            <div className="grid grid-cols-2 gap-3 text-sm">
-              {(["transferencia", "tarjeta"] as const).map((m) => (
+            <div className="grid grid-cols-2 gap-3 text-sm md:grid-cols-4">
+              {Object.keys(summary.por_medio).filter((m) => m !== "efectivo" && (m !== "tarjeta" || summary.por_medio[m].entradas > 0 || summary.por_medio[m].salidas > 0)).map((m) => (
                 <div key={m} className="rounded-lg bg-surface-2 p-3">
                   <div className="font-medium">{METHOD[m]}</div>
                   <div className="tabular mt-1 text-muted">Entradas {formatMoney(summary.por_medio[m].entradas)}</div>
@@ -221,9 +222,7 @@ function MethodSelect({ value, onChange }: { value: string; onChange: (v: string
   return (
     <Field label="Medio de pago">
       <Select value={value} onChange={(e) => onChange(e.target.value)}>
-        <option value="efectivo">Efectivo</option>
-        <option value="transferencia">Transferencia</option>
-        <option value="tarjeta">Tarjeta</option>
+        {PAYMENT_METHODS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
       </Select>
     </Field>
   );

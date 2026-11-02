@@ -11,6 +11,7 @@ export type Customer = {
   last_name: string;
   phone: string | null;
   email: string | null;
+  locality: string | null;
   other_contact: string | null;
   notes: string | null;
   version: number;
@@ -28,17 +29,21 @@ export function CustomerForm({
   customer,
   onClose,
   onSaved,
+  initialName,
 }: {
   open: boolean;
   customer: Customer | null;
   onClose: () => void;
   onSaved: (c: Customer) => void;
+  /** Texto inicial para el nombre (alta rápida desde Nueva reserva). */
+  initialName?: string;
 }) {
   const { ws } = useWorkspace();
   const [first, setFirst] = useState("");
   const [last, setLast] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
+  const [locality, setLocality] = useState("");
   const [other, setOther] = useState("");
   const [notes, setNotes] = useState("");
   const [similar, setSimilar] = useState<Similar[]>([]);
@@ -48,16 +53,18 @@ export function CustomerForm({
 
   useEffect(() => {
     if (!open) return;
-    setFirst(customer?.first_name ?? "");
-    setLast(customer?.last_name ?? "");
+    const [f0, ...rest] = (initialName ?? "").trim().split(/\s+/);
+    setFirst(customer?.first_name ?? f0 ?? "");
+    setLast(customer?.last_name ?? rest.join(" "));
     setPhone(customer?.phone ?? "");
     setEmail(customer?.email ?? "");
+    setLocality(customer?.locality ?? "");
     setOther(customer?.other_contact ?? "");
     setNotes(customer?.notes ?? "");
     setSimilar([]);
     setConfirmedDup(false);
     setError(null);
-  }, [open, customer]);
+  }, [open, customer, initialName]);
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -81,6 +88,7 @@ export function CustomerForm({
         last_name: last.trim(),
         phone: phone.trim() || null,
         email: email.trim() || null,
+        locality: locality.trim() || null,
         other_contact: other.trim() || null,
         notes: notes.trim() || null,
       };
@@ -109,7 +117,10 @@ export function CustomerForm({
           <TextField label="Apellido" maxLength={80} value={last} onChange={(e) => { setLast(e.target.value); setConfirmedDup(false); setSimilar([]); }} />
         </div>
         <TextField label="Teléfono" type="tel" maxLength={40} value={phone} onChange={(e) => { setPhone(e.target.value); setConfirmedDup(false); setSimilar([]); }} />
-        <TextField label="Correo (opcional)" type="email" maxLength={150} value={email} onChange={(e) => setEmail(e.target.value)} />
+        <div className="grid grid-cols-2 gap-3">
+          <TextField label="Correo (opcional)" type="email" maxLength={150} value={email} onChange={(e) => setEmail(e.target.value)} />
+          <TextField label="Localidad (opcional)" maxLength={80} value={locality} onChange={(e) => setLocality(e.target.value)} />
+        </div>
         <TextField label="Otro contacto (opcional)" maxLength={200} value={other} onChange={(e) => setOther(e.target.value)} placeholder="Ej: Instagram, teléfono de un familiar" />
         <Field label="Observaciones"><Textarea maxLength={2000} value={notes} onChange={(e) => setNotes(e.target.value)} /></Field>
 
@@ -142,7 +153,7 @@ export async function searchCustomers(workspaceId: string, q: string, limit = 50
   if (term) {
     const digits = term.replace(/\D/g, "");
     const safe = term.replace(/[%,()*]/g, " ").trim();
-    const parts = [`first_name.ilike.%${safe}%`, `last_name.ilike.%${safe}%`];
+    const parts = [`first_name.ilike.%${safe}%`, `last_name.ilike.%${safe}%`, `locality.ilike.%${safe}%`];
     if (digits.length >= 3) parts.push(`phone_digits.ilike.%${digits}%`);
     // "Ana Pérez" → también buscar nombre y apellido combinados
     const words = safe.split(/\s+/).filter(Boolean);

@@ -10,7 +10,7 @@ export type CashSummary = {
   business_date: string;
   opening_cash: number;
   opened_at: string;
-  por_medio: Record<"efectivo" | "transferencia" | "tarjeta", { entradas: number; salidas: number }>;
+  por_medio: Record<string, { entradas: number; salidas: number }>;
   efectivo_esperado: number;
   closed_at: string | null;
   counted_cash: number | null;
@@ -100,7 +100,7 @@ export function CloseCashModal({ open, summary, onClose, onDone }: { open: boole
         <form onSubmit={submit} className="flex flex-col gap-3">
           <div className="rounded-lg bg-surface-2 p-3 text-sm">
             <div className="flex justify-between"><span className="text-muted">Efectivo esperado</span><strong className="tabular">{formatMoney(summary.efectivo_esperado)}</strong></div>
-            <p className="mt-1 text-xs text-muted">Apertura + cobros en efectivo − salidas en efectivo. Transferencias y tarjeta no se cuentan.</p>
+            <p className="mt-1 text-xs text-muted">Apertura + cobros en efectivo − salidas en efectivo. Transferencias, tarjetas y Mercado Pago no se cuentan.</p>
           </div>
           <TextField label="Efectivo contado" inputMode="decimal" placeholder="Ej: 220.000" value={counted} onChange={(e) => setCounted(e.target.value)} required />
           {diff !== null && (

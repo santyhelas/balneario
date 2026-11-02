@@ -39,7 +39,7 @@ export default function ClientesPage() {
     <>
       <PageHeader
         title="Clientes"
-        subtitle="Buscá por nombre, apellido o teléfono"
+        subtitle="Buscá por nombre, apellido, teléfono o localidad"
         actions={<Button onClick={() => { setEditing(null); setFormOpen(true); }}>Nuevo cliente</Button>}
       />
       <SyncNotice error={list.error} stale={list.stale} updatedAt={list.updatedAt} onRetry={list.reload} />
@@ -120,6 +120,7 @@ function CustomerDetail({ customer, onEdit }: { customer: Customer; onEdit: () =
       <dl className="mb-4 grid grid-cols-2 gap-2 text-sm">
         <div><dt className="text-xs text-muted">Teléfono</dt><dd>{customer.phone ?? "—"}</dd></div>
         <div><dt className="text-xs text-muted">Correo</dt><dd className="truncate">{customer.email ?? "—"}</dd></div>
+        <div><dt className="text-xs text-muted">Localidad</dt><dd>{customer.locality ?? "—"}</dd></div>
         {customer.other_contact && <div className="col-span-2"><dt className="text-xs text-muted">Otro contacto</dt><dd>{customer.other_contact}</dd></div>}
         {customer.notes && <div className="col-span-2"><dt className="text-xs text-muted">Observaciones</dt><dd className="whitespace-pre-wrap">{customer.notes}</dd></div>}
       </dl>
