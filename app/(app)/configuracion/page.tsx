@@ -10,6 +10,7 @@ import { BrandLogo, PageHeader, SyncNotice } from "@/components/shell";
 import { Alert, Badge, Button, Card, Field, Select, Spinner, TextField } from "@/components/ui";
 import { LinkedAccountsCard } from "@/components/linked-accounts";
 import { MyUsernameField, UsersCard } from "@/components/users";
+import { WindguruSettingsCard } from "@/components/windguru-settings";
 
 type WsRow = { name: string; subtitle: string | null; logo_data: string | null; legal_id: string | null; phone: string | null; address: string | null; latitude: number | null; longitude: number | null; version: number };
 type Member = { user_id: string; role: string; email: string | null; created_at: string };
@@ -29,7 +30,10 @@ export default function ConfiguracionPage() {
       <SyncNotice error={q.error} stale={q.stale} updatedAt={q.updatedAt} onRetry={q.reload} />
       {!q.data ? (q.loading && <div className="flex items-center gap-2 text-muted"><Spinner small /> Cargando…</div>) : (
         <div className="grid gap-4 lg:grid-cols-2">
+          <div className="flex flex-col gap-4">
           <BalnearioCard key={q.data.row.version} row={q.data.row} editable={isAdmin} onSaved={async () => { await reloadWorkspace(); q.reload(); }} onConflict={q.reload} />
+            <WindguruSettingsCard />
+          </div>
           <div className="flex flex-col gap-4">
             <ProfileCard />
             <LinkedAccountsCard />

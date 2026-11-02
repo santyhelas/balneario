@@ -8,7 +8,7 @@ import { useStatus, type ResItem, type Notice } from "@/components/status";
 import { Icon, NAV } from "@/components/shell";
 import { Alert, Button, Spinner, cx } from "@/components/ui";
 import { CloseCashModal, OpenCashModal, type CashSummary } from "@/components/cash";
-import { WeatherStrip } from "@/components/weather";
+import { WindguruWidget } from "@/components/weather";
 
 type Tone = "accent" | "ok" | "danger" | "warn" | "orange" | "neutral";
 const TONE: Record<Tone, { box: string; label: string; value: string }> = {
@@ -94,8 +94,6 @@ export default function DashboardPage() {
         </div>
       </section>
 
-      <WeatherStrip />
-
       {/* Avisos prioritarios */}
       {data.caja_anterior_sin_cerrar && (
         <Alert tone="danger" className="flex flex-wrap items-center justify-between gap-2">
@@ -153,6 +151,8 @@ export default function DashboardPage() {
           <NoticeList notices={st.notices.filter((n) => n.tone !== "info")} />
         </section>
       </div>
+
+      <WindguruWidget />
 
       <div className="grid gap-4 lg:grid-cols-2">
         <ResCard title={`Inician hoy (${data.ingresan_hoy.length})`} tone="accent" items={data.ingresan_hoy} empty="No hay ingresos previstos para hoy." right={formatDate(data.fecha)} />

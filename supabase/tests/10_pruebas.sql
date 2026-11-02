@@ -579,6 +579,12 @@ select set_config('request.jwt.claims', '{"sub":"11111111-1111-1111-1111-1111111
 select public.remove_member(t.uid('ws'), '44444444-4444-4444-4444-444444444444');
 select t.ok(not exists (select 1 from public.workspace_members where user_id = '44444444-4444-4444-4444-444444444444'), 'Usuarios: se quita el acceso');
 
+-- 17. Windguru
+update public.workspaces set windguru_params = 's=48572&m=3&lng=es', version = version + 1;
+select t.ok((select windguru_params from public.workspaces) = 's=48572&m=3&lng=es', 'Windguru: se guarda el spot');
+select t.throws($$update public.workspaces set windguru_params = 's=1&x=<script>', version = version + 1$$, 'check', 'Windguru: no acepta caracteres peligrosos');
+select t.throws($$update public.workspaces set windguru_params = 'm=3', version = version + 1$$, 'check', 'Windguru: exige el número de spot');
+
 reset role;
 \o
 -- Resultado ----------------------------------------------------------
