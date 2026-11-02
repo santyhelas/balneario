@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { getSupabase } from "@/lib/supabase/client";
 import { newKey, unwrap } from "@/lib/data";
 import { friendlyError } from "@/lib/errors";
@@ -82,6 +82,8 @@ export default function NuevaReservaPage() {
   const [gridLoading, setGridLoading] = useState(false);
   const [spaceId, setSpaceId] = useState<string | null>(null);
   const [runChoice, setRunChoice] = useState<Record<string, string>>({}); // inicio de tramo ocupado → espacio alternativo
+  // Si el espacio elegido está ocupado algunos días, el usuario decide qué hacer (nunca se cambia de lugar solo).
+  const [plan, setPlan] = useState<"cambiar" | null>(null);
   const gridSeq = useRef(0);
 
   async function loadGrid() {
@@ -138,15 +140,18 @@ export default function NuevaReservaPage() {
     const assign: { day: string; space_id: string }[] = [];
     for (const d of split.free) assign.push({ day: d, space_id: selected.space_id });
     for (const { run, candidates } of busyOptions) {
-      const chosen = runChoice[run.start] ?? candidates[0]?.space_id;
-      if (!chosen) return null; // tramo sin alternativa
+      if (plan !== "cambiar") return null; // todavía no decidió qué hacer con los días ocupados
+      const chosen = runChoice[run.start];
+      if (!chosen || !candidates.some((c) => c.space_id === chosen)) return null; // falta elegir a dónde pasa
       for (const d of daysOf(run.start, run.end)) assign.push({ day: d, space_id: chosen });
     }
     return buildSegments(assign);
-  }, [selected, split, busyOptions, runChoice]);
+  }, [selected, split, busyOptions, runChoice, plan]);
   const noAlternative = busyOptions.some((b) => b.candidates.length === 0);
 
-  useEffect(() => setRunChoice({}), [spaceId, start, end]);
+  useEffect(() => { setRunChoice({}); setPlan(null); }, [spaceId, start, end]);
+  /** Quién ocupa el espacio elegido el primer día de un tramo ocupado. */
+  const busyReason = (day: string) => (grid ?? []).find((r) => r.space_id === spaceId && r.day === day)?.reason ?? null;
 
   // ---------- Precio ----------
   const [agreements, setAgreements] = useState<Agreement[]>([]);
@@ -241,7 +246,9 @@ export default function NuevaReservaPage() {
   if (!datesOk) problems.push(nDays > 120 ? "La estadía puede ser de hasta 120 días." : "Revisá las fechas.");
   if (!selected) problems.push("Elegí una carpa o sombrilla.");
   else if (split && split.free.length === 0) problems.push(`${selected.code} está ocupada todos esos días. Elegí otra.`);
+  else if (split && split.busy.length > 0 && plan !== "cambiar") problems.push(`${selected.code} está ocupada algunos días: elegí qué hacer en el paso 3.`);
   else if (noAlternative) problems.push("No hay alternativas libres para algunos días: elegí otro espacio o cambiá las fechas.");
+  else if (split && split.busy.length > 0 && busyOptions.some((b) => !runChoice[b.run.start])) problems.push("Elegí a qué carpa pasa el cliente los días ocupados.");
   if (quote && !quote.ok) problems.push("Faltan tarifas para esas fechas.");
   if (courtesy && beneficiary.trim().length < 2) problems.push("Indicá el familiar beneficiario de la cortesía.");
   if (!courtesy && payMode !== "despues" && method === "dolares") {
@@ -453,38 +460,69 @@ export default function NuevaReservaPage() {
                 ) : (
                   <div className="flex flex-col gap-3">
                     <Alert tone="warn">
-                      Libre: {split.freeRuns.map((r) => `${formatDate(r.start)} al ${formatDate(r.end)}`).join(", ")}. Ocupada:{" "}
-                      {split.busyRuns.map((r) => `${formatDate(r.start)} al ${formatDate(r.end)}`).join(", ")}.
-                    </Alert>
-                    <div>
-                      <div className="mb-1 font-medium">Opción 1 · Misma reserva, cambiando de lugar los días ocupados</div>
-                      {busyOptions.map(({ run, candidates }) => (
-                        <div key={run.start} className="mb-2 flex flex-wrap items-center gap-2">
-                          <span className="text-muted">Del {formatDate(run.start)} al {formatDate(run.end)} ({run.days} {run.days === 1 ? "día" : "días"}):</span>
-                          {candidates.length === 0 ? (
-                            <Badge tone="danger">Sin alternativas libres</Badge>
-                          ) : (
-                            <Select value={runChoice[run.start] ?? candidates[0].space_id} onChange={(e) => setRunChoice((p) => ({ ...p, [run.start]: e.target.value }))} className="w-auto">
-                              {candidates.map((c) => <option key={c.space_id} value={c.space_id}>{kind === "carpa" ? "Carpa" : "Sombrilla"} {c.code}</option>)}
-                            </Select>
-                          )}
+                      <div>
+                        <strong>{selected.code}</strong> está libre {split.freeRuns.map((r) => r.start === r.end ? `el ${formatDate(r.start)}` : `del ${formatDate(r.start)} al ${formatDate(r.end)}`).join(" y ")}.
+                      </div>
+                      {split.busyRuns.map((r) => (
+                        <div key={r.start}>
+                          {r.start === r.end ? `El ${formatDate(r.start)}` : `Del ${formatDate(r.start)} al ${formatDate(r.end)}`} {busyReason(r.start) === "mantenimiento" ? "está en mantenimiento" : busyReason(r.start) === "desactivada" ? "está desactivada" : "ya está reservada por otro cliente"}.
                         </div>
                       ))}
-                      <p className="text-xs text-muted">Mismo tipo de espacio: el precio no cambia.</p>
-                    </div>
-                    <div>
-                      <div className="mb-1 font-medium">Opción 2 · Estadía completa sin mudanza</div>
-                      {fullyFree.length === 0 ? (
-                        <p className="text-muted">No hay {kind === "carpa" ? "carpas" : "sombrillas"} libres los {days.length} días.</p>
-                      ) : (
-                        <div className="flex flex-wrap gap-1.5">
-                          {fullyFree.slice(0, 12).map((s) => (
-                            <Button key={s.space_id} variant="secondary" className="px-2.5 py-1" onClick={() => setSpaceId(s.space_id)}>{s.code}</Button>
-                          ))}
-                          {fullyFree.length > 12 && <span className="self-center text-xs text-muted">y {fullyFree.length - 12} más en la lista de arriba</span>}
+                      <div className="mt-1 font-semibold">¿Qué hacemos?</div>
+                    </Alert>
+
+                    <ChoiceCard active={plan === "cambiar"} onClick={() => setPlan("cambiar")}
+                      title={<>Darle la {selected.code} los días libres y otra {kind === "carpa" ? "carpa" : "sombrilla"} los días ocupados</>}
+                      detail="Sigue siendo una sola reserva y un solo pago. Mismo tipo de espacio: el precio no cambia." />
+                    {plan === "cambiar" && busyOptions.map(({ run, candidates }) => (
+                      <div key={run.start} className="ml-4 rounded-lg border border-line p-2">
+                        <div className="mb-1.5 font-medium">
+                          {run.start === run.end ? `El ${formatDate(run.start)}` : `Del ${formatDate(run.start)} al ${formatDate(run.end)}`} ({run.days} {run.days === 1 ? "día" : "días"}) pasa a:
                         </div>
-                      )}
-                    </div>
+                        {candidates.length === 0 ? (
+                          <Badge tone="danger">No hay {kind === "carpa" ? "carpas" : "sombrillas"} libres esos días</Badge>
+                        ) : (
+                          <>
+                            <div className="flex flex-wrap gap-1.5">
+                              {candidates.slice(0, 16).map((c) => (
+                                <button key={c.space_id} type="button" onClick={() => setRunChoice((p) => ({ ...p, [run.start]: c.space_id }))}
+                                  className={cx("rounded-md border px-2.5 py-1 text-sm font-semibold tabular",
+                                    runChoice[run.start] === c.space_id ? "border-accent bg-accent text-accent-fg" : "border-ok/50 bg-ok-soft text-ok hover:bg-ok/20")}>
+                                  {c.code}
+                                </button>
+                              ))}
+                              {candidates.length > 16 && (
+                                <Select value={candidates.slice(16).some((c) => c.space_id === runChoice[run.start]) ? runChoice[run.start] : ""}
+                                  onChange={(e) => e.target.value && setRunChoice((p) => ({ ...p, [run.start]: e.target.value }))} className="w-auto py-1 text-sm" aria-label="Otras opciones">
+                                  <option value="">Otras ({candidates.length - 16})…</option>
+                                  {candidates.slice(16).map((c) => <option key={c.space_id} value={c.space_id}>{c.code}</option>)}
+                                </Select>
+                              )}
+                            </div>
+                            <p className="mt-1 text-xs text-muted">Primero las más cercanas a la {selected.code}. Todas están libres esos {run.days} {run.days === 1 ? "día" : "días"}.</p>
+                          </>
+                        )}
+                      </div>
+                    ))}
+
+                    <ChoiceCard active={false} onClick={() => document.getElementById("otra-completa")?.scrollIntoView({ behavior: "smooth", block: "center" })}
+                      title={<>Darle otra {kind === "carpa" ? "carpa" : "sombrilla"} libre los {days.length} días, sin mudanza</>}
+                      detail={fullyFree.length === 0 ? `No hay ninguna libre los ${days.length} días.` : "Tocá una:"} />
+                    {fullyFree.length > 0 && (
+                      <div id="otra-completa" className="ml-4 flex flex-wrap gap-1.5">
+                        {fullyFree.slice(0, 16).map((s) => (
+                          <button key={s.space_id} type="button" onClick={() => setSpaceId(s.space_id)}
+                            className="rounded-md border border-ok/50 bg-ok-soft px-2.5 py-1 text-sm font-semibold tabular text-ok hover:bg-ok/20">{s.code}</button>
+                        ))}
+                        {fullyFree.length > 16 && <span className="self-center text-xs text-muted">y {fullyFree.length - 16} más en la lista de arriba</span>}
+                      </div>
+                    )}
+
+                    {split.freeRuns[0]?.start === start && (
+                      <ChoiceCard active={false} onClick={() => setEnd(split.freeRuns[0].end)}
+                        title={<>Acortar la estadía: quedarse en la {selected.code} hasta el {formatDate(split.freeRuns[0].end)}</>}
+                        detail={`Pasa a ${split.freeRuns[0].days} ${split.freeRuns[0].days === 1 ? "día" : "días"} y el precio se recalcula.`} />
+                    )}
                   </div>
                 )}
                 {segments && segments.length > 1 && (
@@ -709,4 +747,14 @@ function discountLabel(d: Quote["discounts"][number], agreements: Agreement[]): 
     case "manual": return `Descuento manual${pct}${d.reason ? ` · ${d.reason}` : ""}`;
     default: return d.kind;
   }
+}
+
+function ChoiceCard({ active, onClick, title, detail }: { active: boolean; onClick: () => void; title: ReactNode; detail?: string }) {
+  return (
+    <button type="button" onClick={onClick} aria-pressed={active}
+      className={cx("flex items-start gap-2 rounded-lg border p-2.5 text-left", active ? "border-accent bg-accent-soft" : "border-line hover:bg-surface-2")}>
+      <span className={cx("mt-0.5 inline-block h-4 w-4 shrink-0 rounded-full border-2", active ? "border-accent bg-accent" : "border-line")} />
+      <span><span className="block font-semibold">{title}</span>{detail && <span className="block text-xs text-muted">{detail}</span>}</span>
+    </button>
+  );
 }
