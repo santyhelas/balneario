@@ -75,6 +75,20 @@ export function Shell({ children }: { children: ReactNode }) {
   const status = useStatus();
   const pathname = usePathname();
   const [confirmLogout, setConfirmLogout] = useState(false);
+  // Menú lateral: cerrado por defecto (pantalla limpia); se abre con el botón de tres rayas.
+  const [menuOpen, setMenuOpen] = useState(false);
+  useEffect(() => setMenuOpen(false), [pathname]);
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setMenuOpen(false); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [menuOpen]);
+  const menuButton = (
+    <button onClick={() => setMenuOpen(true)} className="rounded-lg p-2 hover:bg-surface-2" aria-label="Abrir menú" title="Menú" aria-expanded={menuOpen}>
+      <Icon d="M4 6h16M4 12h16M4 18h16" />
+    </button>
+  );
   const [loggingOut, setLoggingOut] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const undo = useUndo(() => status.reload());
@@ -107,15 +121,28 @@ export function Shell({ children }: { children: ReactNode }) {
 
   return (
     <div className="flex min-h-dvh">
-      {/* ---------------- Menú lateral (computadora) ---------------- */}
-      <aside className="sticky top-0 hidden h-dvh w-64 shrink-0 flex-col border-r border-line bg-surface print:!hidden md:flex">
-        <Link href="/configuracion" className="flex items-center gap-3 px-4 pb-3 pt-4 hover:opacity-90" title="Cambiar nombre y foto en Configuración">
+      {/* ---------------- Menú lateral (se abre con las tres rayas) ---------------- */}
+      {menuOpen && <div className="fixed inset-0 z-50 bg-black/40 print:hidden" onClick={() => setMenuOpen(false)} aria-hidden="true" />}
+      <aside
+        className={cx(
+          "pt-safe-2 fixed inset-y-0 left-0 z-50 flex w-72 max-w-[85vw] flex-col border-r border-line bg-surface shadow-2xl transition-transform duration-200 print:!hidden",
+          menuOpen ? "translate-x-0" : "-translate-x-full invisible",
+        )}
+        aria-label="Menú"
+        aria-hidden={!menuOpen}
+      >
+        <div className="flex items-start">
+        <Link href="/configuracion" className="flex min-w-0 flex-1 items-center gap-3 px-4 pb-3 pt-4 hover:opacity-90" title="Cambiar nombre y foto en Configuración">
           <BrandLogo ws={ws} className="h-12 w-12" />
           <div className="min-w-0">
             <div className="truncate font-bold uppercase tracking-wide">{ws.name}</div>
             <div className="truncate text-xs font-medium text-accent">{ws.subtitle || "Gestión del balneario"}</div>
           </div>
         </Link>
+        <button onClick={() => setMenuOpen(false)} className="m-2 rounded-lg p-2 text-muted hover:bg-surface-2" aria-label="Cerrar menú" title="Cerrar">
+          <Icon d="M6 6l12 12M18 6L6 18" />
+        </button>
+        </div>
         <div className="mx-4 mb-2 flex items-center justify-between border-y border-line py-2 text-xs">
           <span className="text-muted">{carpa?.total_activos ?? "–"} Carpas · {sombrilla?.total_activos ?? "–"} Sombrillas</span>
         </div>
@@ -173,6 +200,7 @@ export function Shell({ children }: { children: ReactNode }) {
       <div className="flex min-w-0 flex-1 flex-col">
         {/* ---------------- Barra superior (computadora) ---------------- */}
         <header className="sticky top-0 z-30 hidden items-center gap-2 border-b border-line bg-surface/95 px-4 py-2 backdrop-blur print:hidden md:flex">
+          {menuButton}
           <div className="min-w-0 flex-1">
             <div className="truncate text-[11px] font-semibold uppercase tracking-wider text-muted">{ws.name}</div>
             <div className="truncate text-sm font-bold">{status.summary ? longDate(status.summary.fecha, ws.timezone) : "…"}</div>
@@ -206,7 +234,8 @@ export function Shell({ children }: { children: ReactNode }) {
 
         {/* ---------------- Barra superior (celular) ---------------- */}
         <header className="pt-safe-2 sticky top-0 z-30 flex items-center justify-between gap-2 border-b border-line bg-surface/95 px-3 pb-2 backdrop-blur print:hidden md:hidden">
-          <Link href="/" className="flex min-w-0 items-center gap-2">
+          {menuButton}
+          <Link href="/" className="flex min-w-0 flex-1 items-center gap-2">
             <BrandLogo ws={ws} className="h-8 w-8 rounded-lg" />
             <div className="min-w-0 leading-tight">
               <div className="truncate text-sm font-bold uppercase">{ws.name}</div>
