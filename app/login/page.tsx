@@ -30,7 +30,7 @@ export default function LoginPage() {
       const settings = (await res.json()) as { external?: { google?: boolean } };
       if (!settings.external?.google) {
         setBusy(false);
-        setError("El inicio con Google todavía no está activado. Por ahora usá correo y contraseña.");
+        setError("El inicio con Google todavía no está activado en el servidor. Por ahora entrá con correo y contraseña; cuando se active, vas a poder vincular Google desde Configuración.");
         return;
       }
     } catch {

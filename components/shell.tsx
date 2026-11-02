@@ -213,7 +213,7 @@ export function Shell({ children }: { children: ReactNode }) {
 
         <InstallBanner />
         {undo.message && <div className="px-safe pt-3">{undo.message}</div>}
-        <main className="px-safe pb-tabbar mx-auto w-full max-w-7xl flex-1 pt-4 md:pt-6 print:p-0">{children}</main>
+        <main className="px-safe pb-tabbar w-full flex-1 pt-4 md:pt-6 print:p-0">{children}</main>
       </div>
 
       {/* ---------------- Barra inferior (celular) ---------------- */}
@@ -309,10 +309,14 @@ export function Shell({ children }: { children: ReactNode }) {
 function SyncChip() {
   const s = useStatus();
   const ok = s.online && !s.error;
-  const label = !s.online ? "Sin conexión" : s.error ? "Error al sincronizar" : "Nube sincronizada";
   const time = s.updatedAt?.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" });
+  // Indica si esta pantalla está conectada al servidor donde se guardan los datos, y cuándo se actualizó por última vez.
+  const label = !s.online ? "Sin internet" : s.error ? "Sin conexión con el servidor" : `Conectado${time ? ` · ${time}` : ""}`;
   return (
-    <button onClick={s.reload} title={ok ? `Actualizado ${time ?? ""}. Tocá para actualizar.` : `${s.error ?? "Sin conexión a internet"}. Tocá para reintentar.`}
+    <button onClick={s.reload}
+      title={ok
+        ? `Conectado al servidor. Todo lo que guardás queda en la base de datos online y se ve en las otras computadoras y celulares. Datos actualizados a las ${time ?? "—"}. Tocá para actualizar ahora.`
+        : `${s.error ?? "No hay internet"}. Lo que ves en pantalla puede estar desactualizado y no se puede guardar nada nuevo. Tocá para reintentar.`}
       className={cx("hidden items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold lg:flex", ok ? "border-ok/40 bg-ok-soft text-ok" : "border-danger/40 bg-danger-soft text-danger")}>
       <span className={cx("h-2 w-2 rounded-full", ok ? "bg-ok" : "bg-danger", s.loading && "animate-pulse")} />
       {label}

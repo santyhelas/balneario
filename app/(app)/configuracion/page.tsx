@@ -8,6 +8,7 @@ import { useWorkspace, type ThemePref } from "@/components/workspace";
 import { useStatus } from "@/components/status";
 import { BrandLogo, PageHeader, SyncNotice } from "@/components/shell";
 import { Alert, Badge, Button, Card, Field, Select, Spinner, TextField } from "@/components/ui";
+import { LinkedAccountsCard } from "@/components/linked-accounts";
 
 type WsRow = { name: string; subtitle: string | null; logo_data: string | null; legal_id: string | null; phone: string | null; address: string | null; latitude: number | null; longitude: number | null; version: number };
 type Member = { user_id: string; role: string; email: string | null; created_at: string };
@@ -30,6 +31,7 @@ export default function ConfiguracionPage() {
           <BalnearioCard key={q.data.row.version} row={q.data.row} editable={isAdmin} onSaved={async () => { await reloadWorkspace(); q.reload(); }} onConflict={q.reload} />
           <div className="flex flex-col gap-4">
             <ProfileCard />
+            <LinkedAccountsCard />
             <Card title="Usuarios con acceso">
               <ul className="divide-y divide-line text-sm">
                 {q.data.members.map((m) => (

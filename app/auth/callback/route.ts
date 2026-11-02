@@ -15,5 +15,11 @@ export async function GET(request: Request) {
       return NextResponse.redirect(`${origin}${safeNext}`);
     }
   }
+  // Error devuelto por Google/Supabase (por ejemplo, al vincular una cuenta): volver a la pantalla de origen con el motivo.
+  const errorDescription = searchParams.get("error_description");
+  if (errorDescription && next) {
+    const sep = safeNext.includes("?") ? "&" : "?";
+    return NextResponse.redirect(`${origin}${safeNext.split("?")[0]}${sep === "&" ? "?" : "?"}error_description=${encodeURIComponent(errorDescription)}`);
+  }
   return NextResponse.redirect(`${origin}/login?error=enlace`);
 }
