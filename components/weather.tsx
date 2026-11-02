@@ -208,7 +208,7 @@ export function WeatherStrip({ className }: { className?: string }) {
             <span className={cx("tabular font-bold", windy && "text-warn")}>{d.viento_kmh ?? "—"} km/h</span>
           </span>
           <span className="text-xs text-muted">
-            {d.viento_desde != null ? `Viene del ${cardinalName(d.viento_desde)} (${cardinal(d.viento_desde)}) → sopla hacia el ${cardinal((d.viento_desde + 180) % 360)}` : ""}
+            {d.viento_desde != null ? `Sopla hacia el ${cardinalName((d.viento_desde + 180) % 360)} (viene del ${cardinal(d.viento_desde)})` : d.viento_kmh === 0 ? "Calma" : ""}
             {d.rafagas_kmh != null ? ` · Ráfagas ${d.rafagas_kmh} km/h` : ""}
           </span>
         </Metric>
