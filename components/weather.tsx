@@ -267,8 +267,8 @@ export function WindCompass({ seaSide }: { seaSide: "top" | "bottom" | "left" | 
 
   if (w.noLocation) return null;
   return (
-    <div className="pointer-events-none absolute bottom-3 right-3 flex items-center gap-3 rounded-2xl bg-surface/90 p-3 shadow-md backdrop-blur print:hidden" aria-label="Orientación, viento y sol">
-      <svg viewBox="-50 -50 100 100" className="h-28 w-28 sm:h-40 sm:w-40">
+    <div className="pointer-events-none absolute bottom-2 right-2 flex items-center gap-1.5 rounded-xl bg-surface/90 p-1.5 shadow-md backdrop-blur sm:bottom-3 sm:right-3 sm:gap-3 sm:rounded-2xl sm:p-3 print:hidden" aria-label="Orientación, viento y sol">
+      <svg viewBox="-50 -50 100 100" className="h-12 w-12 sm:h-28 sm:w-28 lg:h-40 lg:w-40">
         <circle r="46" fill="none" stroke="var(--line)" strokeWidth="2" />
         {["N", "E", "S", "O"].map((l, i) => {
           const a = (screen(i * 90) * Math.PI) / 180;
@@ -285,16 +285,17 @@ export function WindCompass({ seaSide }: { seaSide: "top" | "bottom" | "left" | 
           return <circle cx={Math.sin(a) * 46} cy={-Math.cos(a) * 46} r="7" fill="#f6b73c" stroke="#fff" strokeWidth="2" />;
         })()}
       </svg>
-      <div className="text-sm leading-snug sm:text-base">
+      <div className="text-xs leading-snug sm:text-sm lg:text-base">
         {w.data?.viento_kmh != null ? (
           <>
-            <div className="text-lg font-bold sm:text-xl">💨 {w.data.viento_kmh} km/h</div>
-            <div className="text-muted">viene del {cardinal(w.data.viento_desde ?? 0)}{w.data.rafagas_kmh != null ? ` · ráfagas ${w.data.rafagas_kmh}` : ""}</div>
+            <div className="text-sm font-bold sm:text-lg lg:text-xl">{w.data.viento_kmh} km/h</div>
+            <div className="text-muted sm:hidden">del {cardinal(w.data.viento_desde ?? 0)}</div>
+            <div className="hidden text-muted sm:block">viene del {cardinal(w.data.viento_desde ?? 0)}{w.data.rafagas_kmh != null ? ` · ráfagas ${w.data.rafagas_kmh}` : ""}</div>
           </>
         ) : <div className="text-muted">Sin datos de viento</div>}
-        {sun && (sun.elevation > 0
+        {sun && <div className="hidden sm:block">{sun.elevation > 0
           ? <div className="mt-1.5"><span className="text-[#e0a020]">●</span> <strong>Sol del {cardinal(sun.azimuth)}</strong><div className="text-muted">{Math.round(sun.elevation)}° de altura</div></div>
-          : <div className="mt-1.5 text-muted">El sol ya se puso</div>)}
+          : <div className="mt-1.5 text-muted">El sol ya se puso</div>}</div>}
       </div>
     </div>
   );
