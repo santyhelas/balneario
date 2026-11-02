@@ -269,7 +269,7 @@ export function WindCompass({ seaSide }: { seaSide: "top" | "bottom" | "left" | 
   const w = useWeather();
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
-    const id = window.setInterval(() => setNow(new Date()), 5 * 60_000);
+    const id = window.setInterval(() => setNow(new Date()), 60_000);
     return () => window.clearInterval(id);
   }, []);
   void seaSide;
@@ -302,6 +302,19 @@ export function WindCompass({ seaSide }: { seaSide: "top" | "bottom" | "left" | 
             <path d="M0 -30 L9 -14 L-9 -14 Z" fill="var(--accent)" />
           </g>
         )}
+        {/* recorrido del sol hoy (cada 20 minutos mientras está sobre el horizonte) */}
+        {ws.latitude != null && ws.longitude != null && (() => {
+          const base = new Date(now);
+          base.setHours(0, 0, 0, 0);
+          const dots = [];
+          for (let m = 0; m < 24 * 60; m += 20) {
+            const p = sunPosition(new Date(base.getTime() + m * 60_000), Number(ws.latitude), Number(ws.longitude));
+            if (p.elevation <= 0) continue;
+            const a = (screen(p.azimuth) * Math.PI) / 180;
+            dots.push(<circle key={m} cx={Math.sin(a) * 46} cy={-Math.cos(a) * 46} r="1.6" fill="#f6b73c" opacity={0.7} />);
+          }
+          return dots;
+        })()}
         {sun && sun.elevation > 0 && (() => {
           const a = (screen(sun.azimuth) * Math.PI) / 180;
           return <circle cx={Math.sin(a) * 46} cy={-Math.cos(a) * 46} r="7" fill="#f6b73c" stroke="#fff" strokeWidth="2" />;
