@@ -69,22 +69,80 @@ export function useWeather(): Ctx {
   return c;
 }
 
+export type IconKind = "sun" | "moon" | "fair" | "fairnight" | "partly" | "cloud" | "fog" | "drizzle" | "rain" | "heavyrain" | "thunder" | "snow" | "unknown";
+
 /** Descripción e ícono a partir del código de MET Norway (ej. "lightrain", "partlycloudy_day"). */
-export function describeSymbol(code: string | null): { text: string; icon: string } {
-  if (!code) return { text: "—", icon: "🌡️" };
+export function describeSymbol(code: string | null): { text: string; icon: IconKind } {
+  if (!code) return { text: "—", icon: "unknown" };
   const c = code.replace(/_(day|night|polartwilight)$/, "");
   const night = code.endsWith("_night");
-  if (c.includes("thunder")) return { text: "Tormenta eléctrica", icon: "⛈️" };
-  if (c.includes("snow") || c.includes("sleet")) return { text: c.includes("sleet") ? "Aguanieve" : "Nieve", icon: "🌨️" };
-  if (c.includes("heavyrain")) return { text: c.includes("showers") ? "Chaparrones fuertes" : "Lluvia fuerte", icon: "🌧️" };
-  if (c.includes("lightrain")) return { text: c.includes("showers") ? "Chaparrones débiles" : "Llovizna", icon: "🌦️" };
-  if (c.includes("rain")) return { text: c.includes("showers") ? "Chaparrones" : "Lluvia", icon: "🌧️" };
-  if (c === "fog") return { text: "Niebla", icon: "🌫️" };
-  if (c === "cloudy") return { text: "Nublado", icon: "☁️" };
-  if (c === "partlycloudy") return { text: "Parcialmente nublado", icon: night ? "☁️" : "⛅" };
-  if (c === "fair") return { text: "Mayormente despejado", icon: night ? "🌙" : "🌤️" };
-  if (c === "clearsky") return { text: "Despejado", icon: night ? "🌙" : "☀️" };
-  return { text: code, icon: "🌡️" };
+  if (c.includes("thunder")) return { text: "Tormenta eléctrica", icon: "thunder" };
+  if (c.includes("snow") || c.includes("sleet")) return { text: c.includes("sleet") ? "Aguanieve" : "Nieve", icon: "snow" };
+  if (c.includes("heavyrain")) return { text: c.includes("showers") ? "Chaparrones fuertes" : "Lluvia fuerte", icon: "heavyrain" };
+  if (c.includes("lightrain")) return { text: c.includes("showers") ? "Chaparrones débiles" : "Llovizna", icon: "drizzle" };
+  if (c.includes("rain")) return { text: c.includes("showers") ? "Chaparrones" : "Lluvia", icon: "rain" };
+  if (c === "fog") return { text: "Niebla", icon: "fog" };
+  if (c === "cloudy") return { text: "Nublado", icon: "cloud" };
+  if (c === "partlycloudy") return { text: "Parcialmente nublado", icon: night ? "cloud" : "partly" };
+  if (c === "fair") return { text: "Mayormente despejado", icon: night ? "fairnight" : "fair" };
+  if (c === "clearsky") return { text: "Despejado", icon: night ? "moon" : "sun" };
+  return { text: code, icon: "unknown" };
+}
+
+/** Íconos del clima dibujados con contorno: se distinguen en tema claro y oscuro. */
+export function WeatherIcon({ kind, className = "h-14 w-14" }: { kind: IconKind; className?: string }) {
+  const SUN = "#f6b73c";
+  const SUN_EDGE = "#c98a12";
+  const CLOUD = "#e8eef3";
+  const CLOUD_EDGE = "#6b7f8e";
+  const DROP = "#3b8fd9";
+  const sun = (cx: number, cy: number, r: number) => (
+    <g>
+      {Array.from({ length: 8 }, (_, i) => {
+        const a = (i * Math.PI) / 4;
+        return <line key={i} x1={cx + Math.cos(a) * (r + 4)} y1={cy + Math.sin(a) * (r + 4)} x2={cx + Math.cos(a) * (r + 9)} y2={cy + Math.sin(a) * (r + 9)} stroke={SUN} strokeWidth={3.5} strokeLinecap="round" />;
+      })}
+      <circle cx={cx} cy={cy} r={r} fill={SUN} stroke={SUN_EDGE} strokeWidth={2} />
+    </g>
+  );
+  const moon = (cx: number, cy: number) => (
+    <path d={`M${cx + 6} ${cy - 15} a16 16 0 1 0 12 22 a13 13 0 0 1 -12 -22z`} fill="#f3d27a" stroke={SUN_EDGE} strokeWidth={2} />
+  );
+  const cloud = (dx = 0, dy = 0, fill = CLOUD) => (
+    <path transform={`translate(${dx} ${dy})`} d="M18 48 h30 a11 11 0 0 0 0 -22 a15 15 0 0 0 -28 -4 a12 12 0 0 0 -2 26z" fill={fill} stroke={CLOUD_EDGE} strokeWidth={2.5} strokeLinejoin="round" />
+  );
+  const drops = (n: number, heavy = false) => (
+    <g stroke={DROP} strokeWidth={heavy ? 4 : 3} strokeLinecap="round">
+      {Array.from({ length: n }, (_, i) => {
+        const x = 20 + i * (28 / Math.max(1, n - 1));
+        return <line key={i} x1={x} y1={52} x2={x - 3} y2={heavy ? 62 : 59} />;
+      })}
+    </g>
+  );
+  let body: ReactNode;
+  switch (kind) {
+    case "sun": body = sun(32, 32, 12); break;
+    case "moon": body = moon(30, 30); break;
+    case "fair": body = <>{sun(24, 22, 9)}{cloud(2, 10)}</>; break;
+    case "fairnight": body = <>{moon(22, 20)}{cloud(2, 10)}</>; break;
+    case "partly": body = <>{sun(22, 20, 10)}{cloud(4, 4)}</>; break;
+    case "cloud": body = <>{cloud(-6, -6, "#cfd9e1")}{cloud(4, 4)}</>; break;
+    case "fog": body = (
+      <>
+        {cloud(0, -6)}
+        <g stroke={CLOUD_EDGE} strokeWidth={3.5} strokeLinecap="round">
+          <line x1="10" y1="50" x2="54" y2="50" /><line x1="16" y1="57" x2="48" y2="57" /><line x1="12" y1="43" x2="22" y2="43" />
+        </g>
+      </>
+    ); break;
+    case "drizzle": body = <>{sun(44, 16, 7)}{cloud(-2, -4)}{drops(3)}</>; break;
+    case "rain": body = <>{cloud(0, -4)}{drops(4)}</>; break;
+    case "heavyrain": body = <>{cloud(0, -4, "#b9c6d1")}{drops(5, true)}</>; break;
+    case "thunder": body = <>{cloud(0, -6, "#b9c6d1")}<path d="M34 40 l-8 12 h7 l-4 10 l12 -15 h-7 l5 -7z" fill={SUN} stroke={SUN_EDGE} strokeWidth={1.5} strokeLinejoin="round" /></>; break;
+    case "snow": body = <>{cloud(0, -4)}<g fill="#fff" stroke={DROP} strokeWidth={1.5}><circle cx="22" cy="55" r="3" /><circle cx="33" cy="59" r="3" /><circle cx="44" cy="55" r="3" /></g></>; break;
+    default: body = <path d="M28 10 v30 a8 8 0 1 0 8 0 v-30 a4 4 0 0 0 -8 0z" fill="#fff" stroke={CLOUD_EDGE} strokeWidth={2.5} />;
+  }
+  return <svg viewBox="0 0 64 64" className={className} aria-hidden>{body}</svg>;
 }
 
 function hhmm(d: Date | string | null | undefined, tz?: string) {
@@ -133,7 +191,7 @@ export function WeatherStrip({ className }: { className?: string }) {
       )}
       <div className="flex flex-wrap items-stretch gap-x-6 gap-y-2 rounded-2xl border border-line bg-surface px-4 py-3">
         <div className="flex items-center gap-3">
-          <span className="text-4xl leading-none" aria-hidden>{sym.icon}</span>
+          <span className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-sky-100 dark:bg-slate-700"><WeatherIcon kind={sym.icon} className="h-14 w-14" /></span>
           <div>
             <div className="tabular text-3xl font-extrabold leading-none">{d.temperatura == null ? "—" : formatTemperature(d.temperatura, tempUnit)}</div>
             <div className="text-xs text-muted">{sym.text}{d.humedad != null ? ` · Humedad ${Math.round(d.humedad)}%` : ""}</div>
