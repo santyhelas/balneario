@@ -285,16 +285,16 @@ export function WindCompass({ seaSide }: { seaSide: "top" | "bottom" | "left" | 
 
   if (w.noLocation) return null;
   return (
-    <div className="pointer-events-none absolute bottom-2 right-2 flex items-center gap-1.5 rounded-xl bg-surface/90 p-1.5 shadow-md backdrop-blur sm:bottom-3 sm:right-3 sm:gap-3 sm:rounded-2xl sm:p-3 print:hidden" aria-label="Orientación, viento y sol">
+    <div className="pointer-events-none absolute bottom-2 right-2 hidden items-center sm:flex gap-1.5 rounded-xl bg-surface/90 p-1.5 shadow-md backdrop-blur sm:bottom-3 sm:right-3 sm:gap-3 sm:rounded-2xl sm:p-3 print:hidden" aria-label="Orientación, viento y sol">
       <svg viewBox="-50 -50 100 100" className="h-12 w-12 sm:h-28 sm:w-28 lg:h-40 lg:w-40">
         <circle r="46" fill="none" stroke="var(--line)" strokeWidth="2" />
         {/* de qué lado está el mar */}
         <path d={arc(seaBearing - 35, seaBearing + 35, 46)} fill="none" stroke="#2b7fc4" strokeWidth="6" strokeLinecap="round" />
-        <text x={Math.sin((seaBearing * Math.PI) / 180) * 24} y={-Math.cos((seaBearing * Math.PI) / 180) * 24} textAnchor="middle" dominantBaseline="middle"
-          fontSize="8" fontWeight={700} fill="#2b7fc4">MAR</text>
+
         {["N", "E", "S", "O"].map((l, i) => {
           const a = (screen(i * 90) * Math.PI) / 180;
-          return <text key={l} x={Math.sin(a) * 37} y={-Math.cos(a) * 37} textAnchor="middle" dominantBaseline="middle" fontSize="12" fontWeight={l === "N" ? 800 : 600} fill={l === "N" ? "var(--danger)" : "var(--muted)"}>{l}</text>;
+          const seaHere = Math.abs(((i * 90 - seaBearing + 540) % 360) - 180) <= 45;
+          return <text key={l} x={Math.sin(a) * 37} y={-Math.cos(a) * 37} textAnchor="middle" dominantBaseline="middle" fontSize="12" fontWeight={l === "N" || seaHere ? 800 : 600} fill={l === "N" ? "var(--danger)" : seaHere ? "#2b7fc4" : "var(--muted)"}>{l}</text>;
         })}
         {toward != null && (
           <g transform={`rotate(${screen(toward)})`}>
