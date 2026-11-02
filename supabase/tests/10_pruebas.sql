@@ -1,0 +1,446 @@
+-- =====================================================================
+-- Pruebas de la base de datos (casos normales y excepcionales).
+-- Se ejecutan con:  ./tests/run.sh
+-- =====================================================================
+\set ON_ERROR_STOP 1
+set client_min_messages = warning;
+\o /dev/null
+
+-- Utilidades de prueba ------------------------------------------------
+create schema t;
+create table t.results (n serial, name text, ok boolean, detail text);
+create table t.ctx (k text primary key, v text);
+grant usage on schema t to authenticated, anon;
+grant all on t.results, t.ctx, t.results_n_seq to authenticated, anon;
+
+create function t.ok(cond boolean, name text, detail text default null) returns void
+language plpgsql as $$
+begin
+  insert into t.results (name, ok, detail) values (name, coalesce(cond, false), detail);
+end $$;
+
+-- Ejecuta SQL y verifica que falle con un mensaje que contenga el patrón.
+create function t.throws(sql text, pattern text, name text) returns void
+language plpgsql as $$
+begin
+  execute sql;
+  insert into t.results (name, ok, detail) values (name, false, 'no falló');
+exception when others then
+  insert into t.results (name, ok, detail)
+  values (name, sqlerrm ilike '%' || pattern || '%', sqlerrm);
+end $$;
+
+create function t.set(k text, v text) returns void language sql as $$
+  insert into t.ctx values (k, v) on conflict (k) do update set v = excluded.v
+$$;
+create function t.get(k text) returns text language sql stable as $$ select v from t.ctx where t.ctx.k = $1 $$;
+create function t.uid(k text) returns uuid language sql stable as $$ select v::uuid from t.ctx where t.ctx.k = $1 $$;
+create function t.space(code text) returns uuid language sql stable as $$
+  select id from public.spaces where workspace_id = t.uid('ws') and spaces.code = $1
+$$;
+grant execute on all functions in schema t to authenticated, anon;
+
+-- Usuarios
+insert into auth.users values
+  ('11111111-1111-1111-1111-111111111111', 'duenio@test.com'),
+  ('22222222-2222-2222-2222-222222222222', 'extranio@test.com'),
+  ('33333333-3333-3333-3333-333333333333', 'operador@test.com');
+
+-- Fechas de prueba: siempre en el futuro respecto de "hoy".
+select t.set('d0', ((now() at time zone 'America/Argentina/San_Juan')::date + 60)::text);
+
+-- =====================================================================
+-- 1. Alta del balneario
+-- =====================================================================
+set role authenticated;
+select set_config('request.jwt.claims', '{"sub":"11111111-1111-1111-1111-111111111111","email":"duenio@test.com"}', false);
+
+select t.set('ws', public.create_workspace('Balneario de Prueba')::text);
+select t.ok((select count(*) from public.spaces where kind = 'carpa') = 90, 'Alta: 90 carpas iniciales');
+select t.ok((select count(*) from public.spaces where kind = 'sombrilla') = 10, 'Alta: 10 sombrillas iniciales');
+select t.ok((select count(*) from public.expense_categories) = 6, 'Alta: 6 categorías de gasto');
+select t.ok((select percent from public.agreements where name = 'Parque Bonito') = 30, 'Alta: convenio Parque Bonito 30%');
+select t.throws($$select public.create_workspace('Otro')$$, 'ya pertenece', 'Alta: no se crea un segundo balneario');
+
+-- =====================================================================
+-- 2. Seguridad: extraños y anónimos no ven nada
+-- =====================================================================
+select set_config('request.jwt.claims', '{"sub":"22222222-2222-2222-2222-222222222222","email":"extranio@test.com"}', false);
+select t.throws($$select public.create_workspace('Intruso')$$, 'ya fue creado', 'Seguridad: un extraño no puede crear otro balneario');
+select t.ok((select count(*) from public.spaces) = 0, 'Seguridad: un extraño no ve espacios');
+select t.ok((select count(*) from public.workspaces) = 0, 'Seguridad: un extraño no ve el balneario');
+select t.throws(format($$select public.dashboard_summary(%L)$$, t.get('ws')), 'No tenés permiso', 'Seguridad: un extraño no puede consultar el panel');
+select t.throws(format($$insert into public.customers (workspace_id, first_name) values (%L, 'X')$$, t.get('ws')),
+  'row-level security', 'Seguridad: un extraño no puede crear clientes');
+reset role;
+set role anon;
+select t.throws($$select count(*) from public.customers$$, 'permission denied', 'Seguridad: sin sesión no se accede a clientes');
+select t.throws($$select count(*) from public.payments$$, 'permission denied', 'Seguridad: sin sesión no se accede a pagos');
+reset role;
+
+-- Operador (rol limitado) para pruebas posteriores
+insert into public.workspace_members (workspace_id, user_id, role, email)
+values (t.uid('ws'), '33333333-3333-3333-3333-333333333333', 'operador', 'operador@test.com');
+
+set role authenticated;
+select set_config('request.jwt.claims', '{"sub":"11111111-1111-1111-1111-111111111111","email":"duenio@test.com"}', false);
+
+select t.throws(format($$insert into public.reservations (workspace_id, customer_id, start_date, end_date, list_amount, total_amount, request_id)
+  values (%L, gen_random_uuid(), current_date, current_date, 0, 0, gen_random_uuid())$$, t.get('ws')),
+  'permission denied', 'Seguridad: no se escriben reservas por fuera de las funciones validadas');
+select t.throws($$update public.payments set amount = 1$$, 'permission denied', 'Seguridad: no se pueden editar pagos');
+
+-- =====================================================================
+-- 3. Clientes
+-- =====================================================================
+insert into public.customers (workspace_id, first_name, last_name, phone)
+values (t.uid('ws'), 'Ana', 'Pérez', '264 155-1234'),
+       (t.uid('ws'), 'Ana', 'Pérez', null),
+       (t.uid('ws'), 'Juan', 'Gómez', '2645001122'),
+       (t.uid('ws'), 'Luis', 'Díaz', null),
+       (t.uid('ws'), 'Marta', 'Ruiz', null);
+select t.ok((select count(*) from public.customers where first_name = 'Ana') = 2, 'Clientes: se permiten nombres repetidos');
+select t.ok((select count(*) from public.find_similar_customers(t.uid('ws'), 'ana', 'pérez', null)) = 2,
+  'Clientes: advierte posibles duplicados por nombre');
+select t.ok((select count(*) from public.find_similar_customers(t.uid('ws'), 'Otro', 'Nombre', '+54 9 264 155 1234')) = 1,
+  'Clientes: advierte posibles duplicados por teléfono');
+select t.set('ana', (select id::text from public.customers where first_name = 'Ana' and phone is not null));
+select t.set('juan', (select id::text from public.customers where first_name = 'Juan'));
+select t.set('luis', (select id::text from public.customers where first_name = 'Luis'));
+select t.set('marta', (select id::text from public.customers where first_name = 'Marta'));
+
+select t.throws(format($$update public.customers set notes = 'x' where id = %L$$, t.get('ana')),
+  'otro dispositivo', 'Concurrencia: editar sin la versión correcta se rechaza');
+update public.customers set notes = 'Prefiere sombra', version = version + 1 where id = t.uid('ana');
+select t.ok((select version from public.customers where id = t.uid('ana')) = 2, 'Concurrencia: edición con versión correcta funciona');
+
+-- =====================================================================
+-- 4. Caja: apertura
+-- =====================================================================
+select t.throws(format($$select public.register_payment(%L, gen_random_uuid(), 100, 'efectivo', gen_random_uuid())$$, t.get('ws')),
+  'no está abierta', 'Caja: no se cobra con la caja sin abrir');
+select t.ok((public.open_cash_session(t.uid('ws'), 50000) ->> 'already_open')::boolean = false, 'Caja: apertura con $50.000');
+select t.ok((public.open_cash_session(t.uid('ws'), 99999) ->> 'already_open')::boolean = true, 'Caja: no pide otra apertura el mismo día');
+select t.set('session', (select id::text from public.cash_sessions));
+select t.ok((select opening_cash from public.cash_sessions) = 50000, 'Caja: la segunda apertura no cambia el efectivo inicial');
+
+-- =====================================================================
+-- 5. Reservas y disponibilidad parcial
+-- =====================================================================
+-- Reserva A: C17 desde d0+3 (día 4) por 7 días, seña de $50.000 en efectivo
+select t.set('resA', (public.create_reservation(
+  t.uid('ws'), gen_random_uuid(), t.uid('ana'), t.get('d0')::date + 3, t.get('d0')::date + 9,
+  jsonb_build_array(jsonb_build_object('space_id', t.space('C17'), 'start_date', t.get('d0')::date + 3, 'end_date', t.get('d0')::date + 9)),
+  '[{"description":"Carpa 7 días","amount":150000}]'::jsonb, '[]'::jsonb, false, null,
+  jsonb_build_object('amount', 50000, 'method', 'efectivo', 'idempotency_key', gen_random_uuid())
+) ->> 'reservation_id'));
+select t.ok((select due_amount from public.reservation_balances where reservation_id = t.uid('resA')) = 100000,
+  'Reserva A: total 150.000, seña 50.000 → saldo 100.000');
+
+-- Reserva B: del día 1 al 5 completo en C17 → conflicto
+select t.throws(format($$select public.create_reservation(%L, gen_random_uuid(), %L, %L, %L,
+  jsonb_build_array(jsonb_build_object('space_id', %L, 'start_date', %L, 'end_date', %L)),
+  '[{"amount":100000}]'::jsonb)$$,
+  t.get('ws'), t.get('juan'), t.get('d0'), t.get('d0')::date + 4, t.space('C17'), t.get('d0'), t.get('d0')::date + 4),
+  'C17 está ocupada', 'Disponibilidad: rechaza C17 completa cuando hay superposición, con detalle');
+
+-- Reserva B partida: C17 días 1-3 y C24 días 4-5 → una sola reserva
+select t.set('reqB', gen_random_uuid()::text);
+select t.set('resB', (public.create_reservation(
+  t.uid('ws'), t.uid('reqB'), t.uid('juan'), t.get('d0')::date, t.get('d0')::date + 4,
+  jsonb_build_array(
+    jsonb_build_object('space_id', t.space('C17'), 'start_date', t.get('d0')::date, 'end_date', t.get('d0')::date + 2),
+    jsonb_build_object('space_id', t.space('C24'), 'start_date', t.get('d0')::date + 3, 'end_date', t.get('d0')::date + 4)),
+  '[{"amount":60000},{"amount":40000}]'::jsonb, '[]'::jsonb, false, null, null
+) ->> 'reservation_id'));
+select t.ok((select count(*) from public.reservation_segments where reservation_id = t.uid('resB') and active) = 2,
+  'Reserva B: una sola reserva con dos tramos (C17 y C24)');
+select t.ok((select due_amount from public.reservation_balances where reservation_id = t.uid('resB')) = 100000,
+  'Reserva B: "Cobrar después" deja todo el saldo pendiente');
+select t.ok((select count(*) from public.payments where reservation_id = t.uid('resB')) = 0,
+  'Reserva B: "Cobrar después" no registra un ingreso ficticio');
+
+-- Reintento de la misma operación
+select t.ok((public.create_reservation(
+  t.uid('ws'), t.uid('reqB'), t.uid('juan'), t.get('d0')::date, t.get('d0')::date + 4,
+  '[]'::jsonb, '[]'::jsonb) ->> 'repetida')::boolean,
+  'Duplicados: reintentar la misma reserva no crea otra');
+select t.ok((select count(*) from public.reservations where customer_id = t.uid('juan')) = 1, 'Duplicados: sigue habiendo una sola reserva B');
+
+-- Tramos con hueco
+select t.throws(format($$select public.create_reservation(%L, gen_random_uuid(), %L, %L, %L,
+  jsonb_build_array(jsonb_build_object('space_id', %L, 'start_date', %L, 'end_date', %L),
+                    jsonb_build_object('space_id', %L, 'start_date', %L, 'end_date', %L)),
+  '[{"amount":1}]'::jsonb)$$,
+  t.get('ws'), t.get('luis'), t.get('d0')::date + 20, t.get('d0')::date + 25,
+  t.space('C40'), t.get('d0')::date + 20, t.get('d0')::date + 21,
+  t.space('C41'), t.get('d0')::date + 23, t.get('d0')::date + 25),
+  'días sin asignar', 'Tramos: rechaza huecos dentro de la estadía');
+
+-- Superposición dentro de la misma reserva
+select t.throws(format($$select public.create_reservation(%L, gen_random_uuid(), %L, %L, %L,
+  jsonb_build_array(jsonb_build_object('space_id', %L, 'start_date', %L, 'end_date', %L),
+                    jsonb_build_object('space_id', %L, 'start_date', %L, 'end_date', %L)),
+  '[{"amount":1}]'::jsonb)$$,
+  t.get('ws'), t.get('luis'), t.get('d0')::date + 20, t.get('d0')::date + 25,
+  t.space('C40'), t.get('d0')::date + 20, t.get('d0')::date + 23,
+  t.space('C41'), t.get('d0')::date + 22, t.get('d0')::date + 25),
+  'superpon', 'Tramos: rechaza dos carpas el mismo día en una reserva');
+
+-- Disponibilidad por día
+select t.ok((select free from public.availability_grid(t.uid('ws'), t.get('d0')::date, t.get('d0')::date + 9, 'carpa')
+             where code = 'C17' and day = t.get('d0')::date + 5) = false, 'Disponibilidad: C17 ocupada el día 6');
+select t.ok((select count(*) from public.availability_grid(t.uid('ws'), t.get('d0')::date, t.get('d0')::date + 9, 'carpa')
+             where code = 'C30' and free) = 10, 'Disponibilidad: C30 libre los 10 días');
+select t.ok((select state from public.map_day_status(t.uid('ws'), t.get('d0')::date - 1) where code = 'C17') = 'reservada_futura',
+  'Mapa: C17 figura "reservada para fecha futura" el día anterior');
+select t.ok((select state from public.map_day_status(t.uid('ws'), t.get('d0')::date + 5) where code = 'C17') = 'ocupada',
+  'Mapa: C17 ocupada el día 6');
+select t.ok((select days_remaining from public.map_day_status(t.uid('ws'), t.get('d0')::date + 5) where code = 'C17') = 4,
+  'Mapa: días restantes correctos');
+
+-- =====================================================================
+-- 6. Pagos y deudas
+-- =====================================================================
+select t.set('pkey', gen_random_uuid()::text);
+select t.set('p2', (public.register_payment(t.uid('ws'), t.uid('resA'), 30000, 'transferencia', t.uid('pkey')) ->> 'payment_id'));
+select t.ok((public.register_payment(t.uid('ws'), t.uid('resA'), 30000, 'transferencia', t.uid('pkey')) ->> 'payment_id') = t.get('p2'),
+  'Pagos: reintentar el mismo pago devuelve el mismo registro');
+select t.ok((select count(*) from public.payments where reservation_id = t.uid('resA')) = 2, 'Pagos: no se duplicó el pago');
+select t.ok((select due_amount from public.reservation_balances where reservation_id = t.uid('resA')) = 70000,
+  'Pagos: 150.000 − 50.000 − 30.000 = saldo 70.000');
+select t.throws(format($$select public.register_payment(%L, %L, 80000, 'efectivo', gen_random_uuid())$$, t.get('ws'), t.get('resA')),
+  'supera el saldo', 'Pagos: no se puede cobrar más que el saldo');
+select t.throws(format($$select public.register_payment(%L, %L, 1000, 'cheque', gen_random_uuid())$$, t.get('ws'), t.get('resA')),
+  'Medio de pago', 'Pagos: medio de pago inválido');
+
+-- Anulación de pago
+select t.set('void', (public.void_payment(t.uid('ws'), t.uid('p2'), gen_random_uuid(), 'Cargado por error') ->> 'payment_id'));
+select t.ok((select due_amount from public.reservation_balances where reservation_id = t.uid('resA')) = 100000,
+  'Anulación: el saldo vuelve a 100.000');
+select t.ok((select count(*) from public.payments where id = t.uid('p2')) = 1, 'Anulación: el pago original no se borra');
+select t.throws(format($$select public.void_payment(%L, %L, gen_random_uuid(), 'otra vez')$$, t.get('ws'), t.get('p2')),
+  'ya fue anulado', 'Anulación: no se anula dos veces');
+select t.throws(format($$select public.void_payment(%L, %L, gen_random_uuid(), '')$$, t.get('ws'), t.get('void')),
+  'anulación no se puede anular', 'Anulación: una anulación no se anula');
+
+-- =====================================================================
+-- 7. Descuentos, convenios, cortesía
+-- =====================================================================
+select t.throws(format($$select public.create_reservation(%L, gen_random_uuid(), %L, %L, %L,
+  jsonb_build_array(jsonb_build_object('space_id', %L, 'start_date', %L, 'end_date', %L)),
+  '[{"amount":10000}]'::jsonb, '[{"kind":"manual","amount":1000}]'::jsonb)$$,
+  t.get('ws'), t.get('luis'), t.get('d0')::date + 30, t.get('d0')::date + 30, t.space('C50'), t.get('d0')::date + 30, t.get('d0')::date + 30),
+  'necesitan un motivo', 'Descuentos: el manual exige motivo');
+
+select t.set('resConv', (public.create_reservation(
+  t.uid('ws'), gen_random_uuid(), t.uid('luis'), t.get('d0')::date + 30, t.get('d0')::date + 30,
+  jsonb_build_array(jsonb_build_object('space_id', t.space('C50'), 'start_date', t.get('d0')::date + 30, 'end_date', t.get('d0')::date + 30)),
+  '[{"amount":10000}]'::jsonb,
+  jsonb_build_array(jsonb_build_object('kind', 'convenio', 'agreement_id', (select id from public.agreements limit 1), 'amount', 3000))
+) ->> 'reservation_id'));
+select t.ok((select total_amount from public.reservations where id = t.uid('resConv')) = 7000, 'Convenio: 10.000 − 30% = 7.000');
+select t.ok((select label || ' ' || percent from public.reservation_discounts where reservation_id = t.uid('resConv')) = 'Convenio Parque Bonito 30.00',
+  'Convenio: queda registrada la foto del convenio aplicado');
+
+update public.agreements set active = false, version = version + 1;
+select t.throws(format($$select public.create_reservation(%L, gen_random_uuid(), %L, %L, %L,
+  jsonb_build_array(jsonb_build_object('space_id', %L, 'start_date', %L, 'end_date', %L)),
+  '[{"amount":10000}]'::jsonb, jsonb_build_array(jsonb_build_object('kind','convenio','agreement_id',%L,'amount',3000)))$$,
+  t.get('ws'), t.get('luis'), t.get('d0')::date + 31, t.get('d0')::date + 31, t.space('C50'), t.get('d0')::date + 31, t.get('d0')::date + 31,
+  (select id from public.agreements limit 1)),
+  'no está vigente', 'Convenio: desactivado deja de ofrecerse');
+select t.ok((select total_amount from public.reservations where id = t.uid('resConv')) = 7000, 'Convenio: desactivarlo no cambia reservas anteriores');
+
+select t.set('resCort', (public.create_reservation(
+  t.uid('ws'), gen_random_uuid(), t.uid('marta'), t.get('d0')::date, t.get('d0')::date + 14,
+  jsonb_build_array(jsonb_build_object('space_id', t.space('C60'), 'start_date', t.get('d0')::date, 'end_date', t.get('d0')::date + 14)),
+  '[{"amount":200000}]'::jsonb, '[]'::jsonb, true
+) ->> 'reservation_id'));
+select t.ok((select total_amount = 0 and list_amount = 200000 from public.reservations where id = t.uid('resCort')),
+  'Cortesía: importe cero, conserva el valor de lista');
+select t.ok((select due_amount from public.reservation_balances where reservation_id = t.uid('resCort')) = 0, 'Cortesía: no genera deuda');
+select t.ok((select state from public.map_day_status(t.uid('ws'), t.get('d0')::date + 1) where code = 'C60') = 'cortesia',
+  'Cortesía: el espacio figura ocupado por cortesía');
+select t.throws(format($$select public.register_payment(%L, %L, 100, 'efectivo', gen_random_uuid())$$, t.get('ws'), t.get('resCort')),
+  'supera el saldo', 'Cortesía: no admite cobros');
+
+-- Operador no puede aplicar descuento manual
+select set_config('request.jwt.claims', '{"sub":"33333333-3333-3333-3333-333333333333","email":"operador@test.com"}', false);
+select t.throws(format($$select public.create_reservation(%L, gen_random_uuid(), %L, %L, %L,
+  jsonb_build_array(jsonb_build_object('space_id', %L, 'start_date', %L, 'end_date', %L)),
+  '[{"amount":10000}]'::jsonb, '[{"kind":"manual","amount":1000,"reason":"amigo"}]'::jsonb)$$,
+  t.get('ws'), t.get('luis'), t.get('d0')::date + 40, t.get('d0')::date + 40, t.space('C50'), t.get('d0')::date + 40, t.get('d0')::date + 40),
+  'Solo un administrador', 'Permisos: un operador no aplica descuentos manuales');
+select t.throws(format($$select public.void_payment(%L, %L, gen_random_uuid(), 'x')$$, t.get('ws'), t.get('p2')),
+  'No tenés permiso', 'Permisos: un operador no anula pagos');
+select set_config('request.jwt.claims', '{"sub":"11111111-1111-1111-1111-111111111111","email":"duenio@test.com"}', false);
+
+-- =====================================================================
+-- 8. Cambios de carpa durante la estadía
+-- =====================================================================
+-- Reserva C: C12 por 15 días (días 1 a 15 = d0+40 .. d0+54)
+select t.set('c1', (t.get('d0')::date + 40)::text);
+select t.set('resC', (public.create_reservation(
+  t.uid('ws'), gen_random_uuid(), t.uid('luis'), t.get('c1')::date, t.get('c1')::date + 14,
+  jsonb_build_array(jsonb_build_object('space_id', t.space('C12'), 'start_date', t.get('c1')::date, 'end_date', t.get('c1')::date + 14)),
+  '[{"amount":300000}]'::jsonb, '[]'::jsonb, false, null,
+  jsonb_build_object('amount', 300000, 'method', 'tarjeta', 'idempotency_key', gen_random_uuid())
+) ->> 'reservation_id'));
+
+select t.throws(format($$select public.relocate_reservation(%L, %L, %L, %L, 99)$$, t.get('resC'), t.space('C20'), t.get('c1')::date + 2, t.get('c1')::date + 2),
+  'otro dispositivo', 'Cambio de carpa: versión desactualizada se rechaza');
+
+-- Cambio por un solo día (día 3) a C20
+select t.set('chg1', (public.relocate_reservation(t.uid('resC'), t.space('C20'), t.get('c1')::date + 2, t.get('c1')::date + 2,
+  (select version from public.reservations where id = t.uid('resC'))) ->> 'change_id'));
+select t.ok((select string_agg(sp.code || ':' || (s.start_date - t.get('c1')::date + 1) || '-' || (s.end_date - t.get('c1')::date + 1), ',' order by s.start_date)
+             from public.reservation_segments s join public.spaces sp on sp.id = s.space_id
+             where s.reservation_id = t.uid('resC') and s.active) = 'C12:1-2,C20:3-3,C12:4-15',
+  'Cambio por un día: C12 días 1-2, C20 día 3, vuelve a C12 desde el día 4');
+select t.ok((select state from public.map_day_status(t.uid('ws'), t.get('c1')::date + 2) where code = 'C12') <> 'ocupada',
+  'Cambio por un día: C12 queda libre ese día');
+select t.ok((select count(*) from public.reservations where customer_id = t.uid('luis') and status = 'confirmada') = 2,
+  'Cambio por un día: no se crea otra reserva');
+select t.ok((select paid_amount from public.reservation_balances where reservation_id = t.uid('resC')) = 300000,
+  'Cambio de carpa: los pagos se conservan');
+
+-- Cambio por el resto de la estadía (desde el día 10) a C21
+select t.set('chg2', (public.relocate_reservation(t.uid('resC'), t.space('C21'), t.get('c1')::date + 9, t.get('c1')::date + 14,
+  (select version from public.reservations where id = t.uid('resC'))) ->> 'change_id'));
+select t.ok((select string_agg(sp.code || ':' || (s.start_date - t.get('c1')::date + 1) || '-' || (s.end_date - t.get('c1')::date + 1), ',' order by s.start_date)
+             from public.reservation_segments s join public.spaces sp on sp.id = s.space_id
+             where s.reservation_id = t.uid('resC') and s.active) = 'C12:1-2,C20:3-3,C12:4-9,C21:10-15',
+  'Cambio por el resto: pasa a C21 desde el día 10');
+
+-- Destino ocupado
+select t.throws(format($$select public.relocate_reservation(%L, %L, %L, %L, %s)$$, t.get('resC'), t.space('C17'),
+  t.get('d0')::date + 5, t.get('d0')::date + 5, (select version from public.reservations where id = t.uid('resC'))),
+  'dentro de la estadía', 'Cambio de carpa: fechas fuera de la estadía se rechazan');
+
+-- =====================================================================
+-- 9. Historial: deshacer y revertir
+-- =====================================================================
+select t.ok((public.last_reversible_change(t.uid('ws')) ->> 'change_id') = t.get('chg2'), 'Deshacer: identifica el último cambio');
+select t.throws(format($$select public.revert_change(%L)$$, t.get('chg1')), 'cambios posteriores',
+  'Revertir: bloquea revertir un cambio viejo si hay cambios posteriores encima');
+select public.revert_change(t.uid('chg2'), 'Prueba');
+select public.revert_change(t.uid('chg1'), 'Prueba');
+select t.ok((select string_agg(sp.code || ':' || (s.start_date - t.get('c1')::date + 1) || '-' || (s.end_date - t.get('c1')::date + 1), ',' order by s.start_date)
+             from public.reservation_segments s join public.spaces sp on sp.id = s.space_id
+             where s.reservation_id = t.uid('resC') and s.active) = 'C12:1-15',
+  'Revertir: tras revertir ambos cambios vuelve a C12 días 1-15');
+select t.ok((select count(*) from public.reservation_changes where reservation_id = t.uid('resC')) = 5,
+  'Revertir: los cambios originales no se borran (5 eventos)');
+select t.throws(format($$select public.revert_change(%L)$$, t.get('chg2')), 'ya fue revertido', 'Revertir: no se revierte dos veces');
+
+-- Reversión con conflicto: muevo el día 5 a C30, otro cliente toma C12 ese día, intento revertir
+select t.set('chg3', (public.relocate_reservation(t.uid('resC'), t.space('C30'), t.get('c1')::date + 4, t.get('c1')::date + 4,
+  (select version from public.reservations where id = t.uid('resC'))) ->> 'change_id'));
+select public.create_reservation(t.uid('ws'), gen_random_uuid(), t.uid('juan'), t.get('c1')::date + 4, t.get('c1')::date + 4,
+  jsonb_build_array(jsonb_build_object('space_id', t.space('C12'), 'start_date', t.get('c1')::date + 4, 'end_date', t.get('c1')::date + 4)),
+  '[{"amount":20000}]'::jsonb);
+select t.throws(format($$select public.revert_change(%L)$$, t.get('chg3')), 'C12 está ocupada',
+  'Revertir: bloquea la reversión si la carpa fue tomada por otra reserva, y explica por qué');
+
+-- =====================================================================
+-- 10. Mantenimiento
+-- =====================================================================
+select t.throws(format($$insert into public.maintenance_blocks (workspace_id, space_id, start_date, end_date, reason)
+  values (%L, %L, %L, %L, 'Lona rota')$$, t.get('ws'), t.space('C17'), t.get('d0')::date + 5, t.get('d0')::date + 6),
+  'choca con: reserva', 'Mantenimiento: advierte conflicto con una reserva existente');
+insert into public.maintenance_blocks (workspace_id, space_id, start_date, end_date, reason)
+values (t.uid('ws'), t.space('C80'), t.get('d0')::date, t.get('d0')::date + 5, 'Cambio de lona');
+select t.throws(format($$select public.create_reservation(%L, gen_random_uuid(), %L, %L, %L,
+  jsonb_build_array(jsonb_build_object('space_id', %L, 'start_date', %L, 'end_date', %L)), '[{"amount":1}]'::jsonb)$$,
+  t.get('ws'), t.get('luis'), t.get('d0')::date + 3, t.get('d0')::date + 3, t.space('C80'), t.get('d0')::date + 3, t.get('d0')::date + 3),
+  'mantenimiento', 'Mantenimiento: no se puede reservar durante el bloqueo');
+select t.ok((select state from public.map_day_status(t.uid('ws'), t.get('d0')::date + 1) where code = 'C80') = 'mantenimiento',
+  'Mantenimiento: figura en el mapa');
+
+-- =====================================================================
+-- 11. Inventario
+-- =====================================================================
+insert into public.spaces (workspace_id, kind, code, x, y) values (t.uid('ws'), 'carpa', 'C91', 1800, 400);
+select t.ok((select count(*) from public.spaces where kind = 'carpa') = 91, 'Inventario: se agregan carpas');
+select t.throws(format($$insert into public.spaces (workspace_id, kind, code) values (%L, 'carpa', 'c17')$$, t.get('ws')),
+  'duplicate key', 'Inventario: no se repiten códigos');
+select t.throws(format($$update public.spaces set active = false, version = version + 1 where id = %L$$, t.space('C17')),
+  'tiene reservas pendientes', 'Inventario: no se desactiva una carpa con reservas futuras');
+update public.spaces set active = false, version = version + 1 where code = 'C91';
+select t.ok((select state from public.map_day_status(t.uid('ws'), t.get('d0')::date) where code = 'C91') = 'desactivada', 'Inventario: carpa desactivada');
+select t.throws(format($$select public.create_reservation(%L, gen_random_uuid(), %L, %L, %L,
+  jsonb_build_array(jsonb_build_object('space_id', %L, 'start_date', %L, 'end_date', %L)), '[{"amount":1}]'::jsonb)$$,
+  t.get('ws'), t.get('luis'), t.get('d0')::date + 3, t.get('d0')::date + 3, t.space('C91'), t.get('d0')::date + 3, t.get('d0')::date + 3),
+  'desactivad', 'Inventario: no se reserva una carpa desactivada');
+update public.spaces set x = 5, y = 5, version = version + 1 where code = 'C01';
+select t.ok((select x = 5 and y = 5 from public.spaces where code = 'C01'), 'Mapa: la posición se guarda');
+
+-- =====================================================================
+-- 12. Cancelación
+-- =====================================================================
+select public.cancel_reservation(t.uid('resA'), (select version from public.reservations where id = t.uid('resA')), 'El cliente desistió');
+select t.ok((select state from public.map_day_status(t.uid('ws'), t.get('d0')::date + 5) where code = 'C17') = 'disponible',
+  'Cancelación: libera la carpa');
+select t.ok((select count(*) from public.payments where reservation_id = t.uid('resA')) = 3, 'Cancelación: conserva los pagos');
+select t.ok((select due_amount = 0 and credit_amount = 50000 from public.reservation_balances where reservation_id = t.uid('resA')),
+  'Cancelación: sin deuda y $50.000 a favor del cliente');
+select t.set('cancelChg', (select id::text from public.reservation_changes where reservation_id = t.uid('resA') and kind = 'cancelacion'));
+select public.create_reservation(t.uid('ws'), gen_random_uuid(), t.uid('luis'), t.get('d0')::date + 5, t.get('d0')::date + 5,
+  jsonb_build_array(jsonb_build_object('space_id', t.space('C17'), 'start_date', t.get('d0')::date + 5, 'end_date', t.get('d0')::date + 5)),
+  '[{"amount":20000}]'::jsonb);
+select t.throws(format($$select public.revert_change(%L)$$, t.get('cancelChg')), 'C17 está ocupada',
+  'Cancelación: no se revierte si la carpa ya se volvió a alquilar');
+
+-- =====================================================================
+-- 13. Gastos, otros ingresos y cierre de caja
+-- =====================================================================
+select t.set('gasto', (public.register_expense(t.uid('ws'), gen_random_uuid(), 30000, (now() at time zone 'America/Argentina/San_Juan')::date,
+  'Lavandina y bolsas', (select id from public.expense_categories where name = 'Limpieza'), 'efectivo') ->> 'expense_id'));
+select public.register_expense(t.uid('ws'), gen_random_uuid(), 12000, (now() at time zone 'America/Argentina/San_Juan')::date,
+  'Repuesto', (select id from public.expense_categories where name = 'Reparaciones'), 'transferencia');
+select t.throws(format($$select public.register_expense(%L, gen_random_uuid(), 100, %L, 'Futuro', %L, 'efectivo')$$,
+  t.get('ws'), t.get('d0'), (select id from public.expense_categories limit 1)),
+  'ya pagados', 'Gastos: no se registran gastos futuros');
+select set_config('request.jwt.claims', '{"sub":"33333333-3333-3333-3333-333333333333","email":"operador@test.com"}', false);
+select t.throws(format($$select public.void_expense(%L, %L, 'error')$$, t.get('ws'), t.get('gasto')),
+  'No tenés permiso', 'Permisos: un operador no anula gastos');
+select set_config('request.jwt.claims', '{"sub":"11111111-1111-1111-1111-111111111111","email":"duenio@test.com"}', false);
+
+-- Efectivo esperado: 50.000 apertura + 50.000 seña efectivo − 30.000 gasto efectivo = 70.000
+-- (transferencias y tarjeta no cuentan como efectivo; la anulación fue de una transferencia)
+select t.ok((public.cash_session_summary(t.uid('session')) ->> 'efectivo_esperado')::numeric = 70000,
+  'Caja: efectivo esperado = apertura + cobros efectivo − gastos efectivo');
+select t.ok(((public.cash_session_summary(t.uid('session')) -> 'por_medio' -> 'tarjeta' ->> 'entradas')::numeric) = 300000,
+  'Caja: el cobro con tarjeta figura aparte');
+
+select public.void_expense(t.uid('ws'), t.uid('gasto'), 'Era de otra caja');
+select t.ok((public.cash_session_summary(t.uid('session')) ->> 'efectivo_esperado')::numeric = 100000,
+  'Gastos: anular un gasto en efectivo lo compensa en caja');
+select t.ok((select count(*) from public.expenses where id = t.uid('gasto')) = 1, 'Gastos: el gasto anulado no se borra');
+
+select t.ok((select (x ->> 'difference')::numeric = -500 from public.close_cash_session(t.uid('session'), 99500, 1, 'Faltante menor') x),
+  'Cierre: contado 99.500 vs esperado 100.000 → diferencia −500');
+select t.throws(format($$select public.register_payment(%L, %L, 1000, 'efectivo', gen_random_uuid())$$, t.get('ws'), t.get('resB')),
+  'no está abierta', 'Cierre: con la caja cerrada no se aceptan cobros');
+select t.throws(format($$select public.open_cash_session(%L, 0)$$, t.get('ws')), 'abierta y cerrada', 'Cierre: no se reabre la caja del día');
+reset role;
+select t.throws($$update public.payments set amount = 1$$, 'no se puede modificar', 'Inmutabilidad: ni un administrador de base edita pagos');
+select t.throws($$delete from public.cash_movements$$, 'no se puede modificar', 'Inmutabilidad: no se borran movimientos de caja');
+set role authenticated;
+
+-- =====================================================================
+-- 14. Panel principal
+-- =====================================================================
+select t.ok((public.dashboard_summary(t.uid('ws')) -> 'espacios' -> 'carpa' ->> 'total_activos')::int = 90,
+  'Panel: cuenta carpas activas desde la base (90 tras desactivar C91)');
+select t.ok((public.dashboard_summary(t.uid('ws')) -> 'caja' ->> 'estado') = 'cerrada', 'Panel: estado de caja');
+select t.ok((public.dashboard_summary(t.uid('ws')) ->> 'gastos_hoy')::numeric = 12000, 'Panel: gastos del día excluyen los anulados');
+
+reset role;
+\o
+-- Resultado ----------------------------------------------------------
+\pset format aligned
+select n, case when ok then 'OK ' else 'FALLA' end as res, name, case when not ok then detail end as detalle
+from t.results order by n;
+select count(*) filter (where ok) as aprobadas, count(*) filter (where not ok) as fallidas from t.results;

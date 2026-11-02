@@ -1,0 +1,2395 @@
+-- =====================================================================
+--  SISTEMA DE GESTIÓN DE BALNEARIO · Instalación de la base de datos
+--  Pegar TODO este archivo en Supabase → SQL Editor → New query → Run.
+--  Se ejecuta una sola vez, en un proyecto nuevo.
+-- =====================================================================
+begin;
+
+-- >>> 0001_base.sql
+-- =====================================================================
+-- 0001 · Base: extensiones, balnearios (espacios de trabajo), miembros,
+--        preferencias de usuario, auditoría y control de versiones.
+-- =====================================================================
+
+create schema if not exists extensions;
+create extension if not exists btree_gist with schema extensions;
+
+-- Esquema privado: funciones auxiliares que no se exponen por la API.
+create schema if not exists private;
+revoke all on schema private from public;
+grant usage on schema private to authenticated;
+
+-- ---------------------------------------------------------------------
+-- Usuario actual (compatible con Supabase Auth)
+-- ---------------------------------------------------------------------
+create or replace function private.current_user_id() returns uuid
+language sql stable as $$
+  select auth.uid()
+$$;
+
+create or replace function private.current_user_email() returns text
+language sql stable as $$
+  select nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'email'
+$$;
+
+-- ---------------------------------------------------------------------
+-- Balnearios
+-- ---------------------------------------------------------------------
+create table public.workspaces (
+  id          uuid primary key default gen_random_uuid(),
+  name        text not null check (char_length(btrim(name)) between 1 and 120),
+  timezone    text not null default 'America/Argentina/San_Juan',
+  latitude    numeric(9,6) check (latitude between -90 and 90),
+  longitude   numeric(9,6) check (longitude between -180 and 180),
+  logo_path   text,
+  map_width   integer not null default 2000 check (map_width between 400 and 20000),
+  map_height  integer not null default 1200 check (map_height between 300 and 20000),
+  sea_side    text not null default 'top' check (sea_side in ('top','bottom','left','right')),
+  version     integer not null default 1,
+  created_at  timestamptz not null default now(),
+  created_by  uuid
+);
+
+create table public.workspace_members (
+  workspace_id uuid not null references public.workspaces(id) on delete restrict,
+  user_id      uuid not null references auth.users(id) on delete cascade,
+  role         text not null check (role in ('propietario','administrador','operador')),
+  email        text,
+  created_at   timestamptz not null default now(),
+  primary key (workspace_id, user_id)
+);
+create index workspace_members_user_idx on public.workspace_members(user_id);
+
+-- ---------------------------------------------------------------------
+-- Permisos
+-- ---------------------------------------------------------------------
+create or replace function private.is_member(ws uuid) returns boolean
+language sql stable security definer set search_path = '' as $$
+  select exists (
+    select 1 from public.workspace_members m
+    where m.workspace_id = ws and m.user_id = auth.uid()
+  )
+$$;
+
+create or replace function private.has_role(ws uuid, roles text[]) returns boolean
+language sql stable security definer set search_path = '' as $$
+  select exists (
+    select 1 from public.workspace_members m
+    where m.workspace_id = ws and m.user_id = auth.uid() and m.role = any(roles)
+  )
+$$;
+
+-- Lanza un error si el usuario no pertenece al balneario (o no tiene el rol).
+create or replace function private.require_member(ws uuid, roles text[] default null) returns void
+language plpgsql stable security definer set search_path = '' as $$
+begin
+  if auth.uid() is null then
+    raise exception 'Tenés que iniciar sesión.' using errcode = '28000';
+  end if;
+  if ws is null or not exists (
+    select 1 from public.workspace_members m
+    where m.workspace_id = ws and m.user_id = auth.uid()
+      and (roles is null or m.role = any(roles))
+  ) then
+    raise exception 'No tenés permiso para realizar esta operación en este balneario.' using errcode = '42501';
+  end if;
+end $$;
+
+-- Fecha de hoy según la zona horaria del balneario.
+create or replace function private.ws_today(ws uuid) returns date
+language sql stable security definer set search_path = '' as $$
+  select (now() at time zone w.timezone)::date from public.workspaces w where w.id = ws
+$$;
+
+grant execute on function private.is_member(uuid), private.has_role(uuid, text[]),
+  private.require_member(uuid, text[]), private.ws_today(uuid),
+  private.current_user_id(), private.current_user_email() to authenticated;
+
+-- ---------------------------------------------------------------------
+-- Control de concurrencia optimista
+-- Toda modificación debe enviar version = versión_leída + 1.
+-- Si otro dispositivo modificó el registro antes, la operación se rechaza
+-- en lugar de sobrescribir silenciosamente.
+-- ---------------------------------------------------------------------
+create or replace function private.check_version() returns trigger
+language plpgsql as $$
+begin
+  if new.version is distinct from old.version + 1 then
+    raise exception 'Este dato fue modificado desde otro dispositivo. Recargá la pantalla e intentá de nuevo.'
+      using errcode = '40001', hint = 'CONFLICTO_VERSION';
+  end if;
+  return new;
+end $$;
+
+create trigger workspaces_version before update on public.workspaces
+  for each row execute function private.check_version();
+
+create or replace function private.validate_timezone() returns trigger
+language plpgsql as $$
+begin
+  if not exists (select 1 from pg_catalog.pg_timezone_names where name = new.timezone) then
+    raise exception 'Zona horaria inválida: %', new.timezone;
+  end if;
+  return new;
+end $$;
+
+create trigger workspaces_timezone before insert or update of timezone on public.workspaces
+  for each row execute function private.validate_timezone();
+
+-- ---------------------------------------------------------------------
+-- Auditoría: cada alta, modificación o baja queda registrada con
+-- estado anterior, estado posterior, usuario, fecha y motivo.
+-- ---------------------------------------------------------------------
+create table public.audit_log (
+  id           bigint generated always as identity primary key,
+  workspace_id uuid not null,
+  table_name   text not null,
+  row_id       uuid,
+  action       text not null check (action in ('alta','modificacion','baja')),
+  old_data     jsonb,
+  new_data     jsonb,
+  reason       text,
+  actor_id     uuid,
+  actor_email  text,
+  at           timestamptz not null default now()
+);
+create index audit_log_ws_at_idx on public.audit_log(workspace_id, at desc);
+create index audit_log_row_idx on public.audit_log(workspace_id, table_name, row_id);
+
+create or replace function private.audit() returns trigger
+language plpgsql security definer set search_path = '' as $$
+declare
+  v_ws uuid;
+  v_id uuid;
+begin
+  if tg_op = 'DELETE' then
+    v_ws := (to_jsonb(old) ->> 'workspace_id')::uuid;
+    v_id := (to_jsonb(old) ->> 'id')::uuid;
+  else
+    v_ws := (to_jsonb(new) ->> 'workspace_id')::uuid;
+    v_id := (to_jsonb(new) ->> 'id')::uuid;
+  end if;
+  if tg_table_name = 'workspaces' then
+    v_ws := coalesce(v_ws, v_id);
+  end if;
+
+  insert into public.audit_log (workspace_id, table_name, row_id, action, old_data, new_data, reason, actor_id, actor_email)
+  values (
+    v_ws, tg_table_name, v_id,
+    case tg_op when 'INSERT' then 'alta' when 'UPDATE' then 'modificacion' else 'baja' end,
+    case when tg_op in ('UPDATE','DELETE') then to_jsonb(old) end,
+    case when tg_op in ('INSERT','UPDATE') then to_jsonb(new) end,
+    nullif(current_setting('app.reason', true), ''),
+    auth.uid(),
+    nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'email'
+  );
+  return null;
+end $$;
+
+create trigger workspaces_audit after insert or update or delete on public.workspaces
+  for each row execute function private.audit();
+
+-- ---------------------------------------------------------------------
+-- Registros inmutables (pagos, movimientos de caja, historial)
+-- ---------------------------------------------------------------------
+create or replace function private.forbid_change() returns trigger
+language plpgsql as $$
+begin
+  raise exception 'Este registro no se puede modificar ni borrar. Las correcciones se hacen con una anulación.'
+    using errcode = '42501';
+end $$;
+
+create trigger audit_log_immutable before update or delete on public.audit_log
+  for each row execute function private.forbid_change();
+
+-- ---------------------------------------------------------------------
+-- Preferencias de cada usuario (se sincronizan entre dispositivos)
+-- ---------------------------------------------------------------------
+create table public.user_preferences (
+  user_id          uuid primary key default auth.uid() references auth.users(id) on delete cascade,
+  theme            text not null default 'sistema' check (theme in ('claro','oscuro','sistema')),
+  temperature_unit text not null default 'C' check (temperature_unit in ('C','F')),
+  avatar_path      text,
+  updated_at       timestamptz not null default now()
+);
+
+-- ---------------------------------------------------------------------
+-- Seguridad a nivel de fila
+-- ---------------------------------------------------------------------
+alter table public.workspaces        enable row level security;
+alter table public.workspace_members enable row level security;
+alter table public.audit_log         enable row level security;
+alter table public.user_preferences  enable row level security;
+
+create policy "miembros ven su balneario" on public.workspaces
+  for select to authenticated using (private.is_member(id));
+create policy "administradores editan su balneario" on public.workspaces
+  for update to authenticated
+  using (private.has_role(id, array['propietario','administrador']))
+  with check (private.has_role(id, array['propietario','administrador']));
+
+create policy "miembros ven a los miembros" on public.workspace_members
+  for select to authenticated using (private.is_member(workspace_id));
+
+create policy "miembros ven el historial" on public.audit_log
+  for select to authenticated using (private.is_member(workspace_id));
+
+create policy "cada usuario ve sus preferencias" on public.user_preferences
+  for select to authenticated using (user_id = auth.uid());
+create policy "cada usuario crea sus preferencias" on public.user_preferences
+  for insert to authenticated with check (user_id = auth.uid());
+create policy "cada usuario edita sus preferencias" on public.user_preferences
+  for update to authenticated using (user_id = auth.uid()) with check (user_id = auth.uid());
+
+revoke all on public.workspaces, public.workspace_members, public.audit_log, public.user_preferences from anon;
+revoke insert, update, delete on public.workspaces from authenticated;
+revoke insert, update, delete on public.workspace_members from authenticated;
+revoke insert, update, delete on public.audit_log from authenticated;
+grant select on public.workspaces to authenticated;
+grant update (name, timezone, latitude, longitude, logo_path, map_width, map_height, sea_side, version)
+  on public.workspaces to authenticated;
+grant select on public.workspace_members, public.audit_log to authenticated;
+revoke all on public.user_preferences from authenticated;
+grant select, insert, update on public.user_preferences to authenticated;
+
+-- >>> 0002_espacios_clientes.sql
+-- =====================================================================
+-- 0002 · Espacios (carpas y sombrillas), elementos del mapa, clientes,
+--        convenios y categorías de gastos.
+-- =====================================================================
+
+-- ---------------------------------------------------------------------
+-- Carpas y sombrillas
+-- ---------------------------------------------------------------------
+create table public.spaces (
+  id           uuid primary key default gen_random_uuid(),
+  workspace_id uuid not null references public.workspaces(id) on delete restrict,
+  kind         text not null check (kind in ('carpa','sombrilla')),
+  code         text not null check (char_length(btrim(code)) between 1 and 20),
+  x            numeric(10,2) not null default 0,
+  y            numeric(10,2) not null default 0,
+  rotation     numeric(6,2) not null default 0,
+  active       boolean not null default true,
+  notes        text,
+  version      integer not null default 1,
+  created_at   timestamptz not null default now(),
+  unique (workspace_id, id)
+);
+-- El código (ej. C17) no se puede repetir dentro del mismo balneario.
+create unique index spaces_code_unique on public.spaces(workspace_id, lower(btrim(code)));
+
+create or replace function private.spaces_guard() returns trigger
+language plpgsql as $$
+begin
+  if tg_op = 'UPDATE' and new.kind <> old.kind then
+    raise exception 'No se puede cambiar el tipo de un espacio existente. Desactivalo y creá uno nuevo.';
+  end if;
+  new.code := btrim(new.code);
+  return new;
+end $$;
+
+create trigger spaces_guard before insert or update on public.spaces
+  for each row execute function private.spaces_guard();
+create trigger spaces_version before update on public.spaces
+  for each row execute function private.check_version();
+create trigger spaces_audit after insert or update on public.spaces
+  for each row execute function private.audit();
+create trigger spaces_no_delete before delete on public.spaces
+  for each row execute function private.forbid_change();
+
+-- ---------------------------------------------------------------------
+-- Elementos del mapa: caminos, pasillos, áreas comunes, instalaciones, sectores
+-- ---------------------------------------------------------------------
+create table public.map_features (
+  id           uuid primary key default gen_random_uuid(),
+  workspace_id uuid not null references public.workspaces(id) on delete restrict,
+  kind         text not null check (kind in ('camino','pasillo','area_comun','instalacion','sector')),
+  label        text check (char_length(label) <= 80),
+  x            numeric(10,2) not null default 0,
+  y            numeric(10,2) not null default 0,
+  width        numeric(10,2) not null default 100 check (width > 0),
+  height       numeric(10,2) not null default 100 check (height > 0),
+  rotation     numeric(6,2) not null default 0,
+  color        text check (color ~ '^#[0-9a-fA-F]{6}$'),
+  active       boolean not null default true,
+  version      integer not null default 1,
+  created_at   timestamptz not null default now()
+);
+
+create trigger map_features_version before update on public.map_features
+  for each row execute function private.check_version();
+create trigger map_features_audit after insert or update on public.map_features
+  for each row execute function private.audit();
+
+-- ---------------------------------------------------------------------
+-- Clientes (sin DNI obligatorio; nombres repetidos permitidos)
+-- ---------------------------------------------------------------------
+create table public.customers (
+  id            uuid primary key default gen_random_uuid(),
+  workspace_id  uuid not null references public.workspaces(id) on delete restrict,
+  first_name    text not null check (char_length(btrim(first_name)) between 1 and 80),
+  last_name     text not null default '' check (char_length(last_name) <= 80),
+  phone         text check (char_length(phone) <= 40),
+  phone_digits  text generated always as (nullif(regexp_replace(coalesce(phone,''), '\D', '', 'g'), '')) stored,
+  email         text check (char_length(email) <= 150),
+  other_contact text check (char_length(other_contact) <= 200),
+  notes         text check (char_length(notes) <= 2000),
+  version       integer not null default 1,
+  created_at    timestamptz not null default now(),
+  created_by    uuid default auth.uid(),
+  unique (workspace_id, id)
+);
+create index customers_name_idx on public.customers(workspace_id, lower(last_name), lower(first_name));
+create index customers_phone_idx on public.customers(workspace_id, phone_digits);
+
+create trigger customers_version before update on public.customers
+  for each row execute function private.check_version();
+create trigger customers_audit after insert or update on public.customers
+  for each row execute function private.audit();
+create trigger customers_no_delete before delete on public.customers
+  for each row execute function private.forbid_change();
+
+-- Posibles duplicados: mismo teléfono o mismo nombre y apellido.
+-- Solo advierte; nunca impide el alta.
+create or replace function public.find_similar_customers(
+  p_workspace_id uuid, p_first_name text, p_last_name text, p_phone text
+) returns table (id uuid, first_name text, last_name text, phone text, motivo text)
+language plpgsql stable security definer set search_path = '' as $$
+declare
+  v_digits text := nullif(regexp_replace(coalesce(p_phone,''), '\D', '', 'g'), '');
+begin
+  perform private.require_member(p_workspace_id);
+  return query
+    select c.id, c.first_name, c.last_name, c.phone,
+           case
+             when v_digits is not null and length(v_digits) >= 6 and c.phone_digits is not null
+                  and right(c.phone_digits, 8) = right(v_digits, 8) then 'Mismo teléfono'
+             else 'Mismo nombre y apellido'
+           end
+    from public.customers c
+    where c.workspace_id = p_workspace_id
+      and (
+        (v_digits is not null and length(v_digits) >= 6 and c.phone_digits is not null
+          and right(c.phone_digits, 8) = right(v_digits, 8))
+        or (lower(btrim(c.first_name)) = lower(btrim(coalesce(p_first_name,'')))
+            and lower(btrim(c.last_name)) = lower(btrim(coalesce(p_last_name,''))))
+      )
+    order by c.last_name, c.first_name
+    limit 20;
+end $$;
+
+-- ---------------------------------------------------------------------
+-- Convenios (ej. Parque Bonito 30%). Se desactivan, nunca se borran.
+-- ---------------------------------------------------------------------
+create table public.agreements (
+  id           uuid primary key default gen_random_uuid(),
+  workspace_id uuid not null references public.workspaces(id) on delete restrict,
+  name         text not null check (char_length(btrim(name)) between 1 and 80),
+  percent      numeric(5,2) not null check (percent > 0 and percent <= 100),
+  active       boolean not null default true,
+  version      integer not null default 1,
+  created_at   timestamptz not null default now(),
+  unique (workspace_id, id)
+);
+create unique index agreements_name_unique on public.agreements(workspace_id, lower(btrim(name)));
+
+create trigger agreements_version before update on public.agreements
+  for each row execute function private.check_version();
+create trigger agreements_audit after insert or update on public.agreements
+  for each row execute function private.audit();
+create trigger agreements_no_delete before delete on public.agreements
+  for each row execute function private.forbid_change();
+
+-- ---------------------------------------------------------------------
+-- Categorías de gastos
+-- ---------------------------------------------------------------------
+create table public.expense_categories (
+  id           uuid primary key default gen_random_uuid(),
+  workspace_id uuid not null references public.workspaces(id) on delete restrict,
+  name         text not null check (char_length(btrim(name)) between 1 and 60),
+  active       boolean not null default true,
+  version      integer not null default 1,
+  created_at   timestamptz not null default now(),
+  unique (workspace_id, id)
+);
+create unique index expense_categories_name_unique on public.expense_categories(workspace_id, lower(btrim(name)));
+
+create trigger expense_categories_version before update on public.expense_categories
+  for each row execute function private.check_version();
+create trigger expense_categories_no_delete before delete on public.expense_categories
+  for each row execute function private.forbid_change();
+
+-- ---------------------------------------------------------------------
+-- Seguridad
+-- ---------------------------------------------------------------------
+alter table public.spaces             enable row level security;
+alter table public.map_features       enable row level security;
+alter table public.customers          enable row level security;
+alter table public.agreements         enable row level security;
+alter table public.expense_categories enable row level security;
+
+-- Lectura: cualquier miembro del balneario.
+create policy "miembros leen espacios" on public.spaces for select to authenticated using (private.is_member(workspace_id));
+create policy "miembros leen mapa" on public.map_features for select to authenticated using (private.is_member(workspace_id));
+create policy "miembros leen clientes" on public.customers for select to authenticated using (private.is_member(workspace_id));
+create policy "miembros leen convenios" on public.agreements for select to authenticated using (private.is_member(workspace_id));
+create policy "miembros leen categorias" on public.expense_categories for select to authenticated using (private.is_member(workspace_id));
+
+-- Clientes: cualquier miembro puede crearlos y editarlos.
+create policy "miembros crean clientes" on public.customers for insert to authenticated
+  with check (private.is_member(workspace_id));
+create policy "miembros editan clientes" on public.customers for update to authenticated
+  using (private.is_member(workspace_id)) with check (private.is_member(workspace_id));
+
+-- Inventario, mapa, convenios y categorías: solo administradores.
+create policy "admins crean espacios" on public.spaces for insert to authenticated
+  with check (private.has_role(workspace_id, array['propietario','administrador']));
+create policy "admins editan espacios" on public.spaces for update to authenticated
+  using (private.has_role(workspace_id, array['propietario','administrador']))
+  with check (private.has_role(workspace_id, array['propietario','administrador']));
+create policy "admins crean mapa" on public.map_features for insert to authenticated
+  with check (private.has_role(workspace_id, array['propietario','administrador']));
+create policy "admins editan mapa" on public.map_features for update to authenticated
+  using (private.has_role(workspace_id, array['propietario','administrador']))
+  with check (private.has_role(workspace_id, array['propietario','administrador']));
+create policy "admins crean convenios" on public.agreements for insert to authenticated
+  with check (private.has_role(workspace_id, array['propietario','administrador']));
+create policy "admins editan convenios" on public.agreements for update to authenticated
+  using (private.has_role(workspace_id, array['propietario','administrador']))
+  with check (private.has_role(workspace_id, array['propietario','administrador']));
+create policy "admins crean categorias" on public.expense_categories for insert to authenticated
+  with check (private.has_role(workspace_id, array['propietario','administrador']));
+create policy "admins editan categorias" on public.expense_categories for update to authenticated
+  using (private.has_role(workspace_id, array['propietario','administrador']))
+  with check (private.has_role(workspace_id, array['propietario','administrador']));
+
+revoke all on public.spaces, public.map_features, public.customers, public.agreements, public.expense_categories from anon;
+revoke all on public.spaces, public.map_features, public.customers, public.agreements, public.expense_categories from authenticated;
+grant select on public.spaces, public.map_features, public.customers, public.agreements, public.expense_categories to authenticated;
+
+grant insert (workspace_id, kind, code, x, y, rotation, active, notes) on public.spaces to authenticated;
+grant update (code, x, y, rotation, active, notes, version) on public.spaces to authenticated;
+
+grant insert (workspace_id, kind, label, x, y, width, height, rotation, color, active) on public.map_features to authenticated;
+grant update (kind, label, x, y, width, height, rotation, color, active, version) on public.map_features to authenticated;
+
+grant insert (workspace_id, first_name, last_name, phone, email, other_contact, notes) on public.customers to authenticated;
+grant update (first_name, last_name, phone, email, other_contact, notes, version) on public.customers to authenticated;
+
+grant insert (workspace_id, name, percent, active) on public.agreements to authenticated;
+-- El porcentaje de un convenio no se edita: se desactiva y se crea otro (protege el historial).
+grant update (name, active, version) on public.agreements to authenticated;
+
+grant insert (workspace_id, name, active) on public.expense_categories to authenticated;
+grant update (name, active, version) on public.expense_categories to authenticated;
+
+revoke all on function public.find_similar_customers(uuid, text, text, text) from public, anon;
+grant execute on function public.find_similar_customers(uuid, text, text, text) to authenticated;
+
+-- >>> 0003_reservas.sql
+-- =====================================================================
+-- 0003 · Reservas, tramos de ocupación, precios, descuentos,
+--        mantenimiento e historial de cambios.
+-- Las fechas son inclusivas: start_date y end_date cuentan como ocupados.
+-- =====================================================================
+
+create table public.reservations (
+  id              uuid primary key default gen_random_uuid(),
+  workspace_id    uuid not null references public.workspaces(id) on delete restrict,
+  number          bigint generated always as identity,
+  customer_id     uuid not null,
+  start_date      date not null,
+  end_date        date not null,
+  status          text not null default 'confirmada' check (status in ('confirmada','cancelada')),
+  is_courtesy     boolean not null default false,
+  list_amount     numeric(14,2) not null check (list_amount >= 0),
+  discount_amount numeric(14,2) not null default 0 check (discount_amount >= 0),
+  total_amount    numeric(14,2) not null check (total_amount >= 0),
+  notes           text check (char_length(notes) <= 2000),
+  request_id      uuid not null,
+  version         integer not null default 1,
+  created_at      timestamptz not null default now(),
+  created_by      uuid,
+  cancelled_at    timestamptz,
+  cancelled_by    uuid,
+  cancel_reason   text,
+  unique (workspace_id, id),
+  unique (workspace_id, request_id),
+  foreign key (workspace_id, customer_id) references public.customers(workspace_id, id),
+  check (end_date >= start_date),
+  check (end_date - start_date < 366),
+  check (total_amount = list_amount - discount_amount),
+  check (not is_courtesy or total_amount = 0),
+  check ((status = 'cancelada') = (cancelled_at is not null))
+);
+create index reservations_dates_idx on public.reservations(workspace_id, start_date, end_date);
+create index reservations_customer_idx on public.reservations(workspace_id, customer_id);
+
+create trigger reservations_version before update on public.reservations
+  for each row execute function private.check_version();
+create trigger reservations_audit after insert or update on public.reservations
+  for each row execute function private.audit();
+create trigger reservations_no_delete before delete on public.reservations
+  for each row execute function private.forbid_change();
+
+-- ---------------------------------------------------------------------
+-- Historial de cambios de cada reserva (para deshacer y revertir)
+-- ---------------------------------------------------------------------
+create table public.reservation_changes (
+  id                    uuid primary key default gen_random_uuid(),
+  workspace_id          uuid not null,
+  reservation_id        uuid not null,
+  kind                  text not null check (kind in ('creacion','reubicacion','cancelacion','reversion')),
+  description           text not null,
+  reason                text,
+  before_state          jsonb,
+  after_state           jsonb,
+  reverts_change_id     uuid references public.reservation_changes(id),
+  reverted_by_change_id uuid references public.reservation_changes(id),
+  actor_id              uuid default auth.uid(),
+  actor_email           text default (nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'email'),
+  at                    timestamptz not null default now(),
+  foreign key (workspace_id, reservation_id) references public.reservations(workspace_id, id)
+);
+create index reservation_changes_res_idx on public.reservation_changes(reservation_id, at desc);
+create index reservation_changes_ws_idx on public.reservation_changes(workspace_id, at desc);
+create unique index reservation_changes_one_revert on public.reservation_changes(reverts_change_id)
+  where reverts_change_id is not null;
+
+-- Solo se puede completar after_state (una vez) y marcar la reversión (una vez).
+create or replace function private.changes_guard() returns trigger
+language plpgsql as $$
+begin
+  if tg_op = 'DELETE' then
+    raise exception 'El historial no se puede borrar.' using errcode = '42501';
+  end if;
+  if (to_jsonb(new) - 'after_state' - 'reverted_by_change_id') <> (to_jsonb(old) - 'after_state' - 'reverted_by_change_id')
+     or (old.after_state is not null and new.after_state is distinct from old.after_state)
+     or (old.reverted_by_change_id is not null and new.reverted_by_change_id is distinct from old.reverted_by_change_id) then
+    raise exception 'El historial no se puede modificar.' using errcode = '42501';
+  end if;
+  return new;
+end $$;
+create trigger reservation_changes_guard before update or delete on public.reservation_changes
+  for each row execute function private.changes_guard();
+
+-- ---------------------------------------------------------------------
+-- Tramos de ocupación: qué carpa usa la reserva cada día
+-- ---------------------------------------------------------------------
+create table public.reservation_segments (
+  id                   uuid primary key default gen_random_uuid(),
+  workspace_id         uuid not null,
+  reservation_id       uuid not null,
+  space_id             uuid not null,
+  start_date           date not null,
+  end_date             date not null,
+  active               boolean not null default true,
+  created_by_change_id uuid not null references public.reservation_changes(id),
+  ended_by_change_id   uuid references public.reservation_changes(id),
+  created_at           timestamptz not null default now(),
+  foreign key (workspace_id, reservation_id) references public.reservations(workspace_id, id),
+  foreign key (workspace_id, space_id) references public.spaces(workspace_id, id),
+  check (end_date >= start_date),
+  check (active = (ended_by_change_id is null)),
+  -- Garantía en la base de datos: un espacio no puede estar ocupado dos veces el mismo día.
+  constraint segments_no_double_booking exclude using gist (
+    space_id with =, daterange(start_date, end_date, '[]') with &&
+  ) where (active),
+  -- Una reserva no puede tener dos carpas el mismo día.
+  constraint segments_no_overlap_in_reservation exclude using gist (
+    reservation_id with =, daterange(start_date, end_date, '[]') with &&
+  ) where (active)
+);
+create index reservation_segments_res_idx on public.reservation_segments(reservation_id) where active;
+create index reservation_segments_space_idx on public.reservation_segments(space_id, start_date, end_date) where active;
+
+-- ---------------------------------------------------------------------
+-- Mantenimiento
+-- ---------------------------------------------------------------------
+create table public.maintenance_blocks (
+  id           uuid primary key default gen_random_uuid(),
+  workspace_id uuid not null,
+  space_id     uuid not null,
+  start_date   date not null,
+  end_date     date not null,
+  reason       text not null check (char_length(btrim(reason)) between 3 and 300),
+  notes        text check (char_length(notes) <= 2000),
+  active       boolean not null default true,
+  version      integer not null default 1,
+  created_at   timestamptz not null default now(),
+  created_by   uuid default auth.uid(),
+  foreign key (workspace_id, space_id) references public.spaces(workspace_id, id),
+  check (end_date >= start_date),
+  constraint maintenance_no_overlap exclude using gist (
+    space_id with =, daterange(start_date, end_date, '[]') with &&
+  ) where (active)
+);
+
+create trigger maintenance_version before update on public.maintenance_blocks
+  for each row execute function private.check_version();
+create trigger maintenance_audit after insert or update on public.maintenance_blocks
+  for each row execute function private.audit();
+create trigger maintenance_no_delete before delete on public.maintenance_blocks
+  for each row execute function private.forbid_change();
+
+-- ---------------------------------------------------------------------
+-- Bloqueos por espacio: serializa las operaciones que compiten por la
+-- misma carpa (reservas, cambios, mantenimiento) entre dispositivos.
+-- ---------------------------------------------------------------------
+create or replace function private.lock_spaces(p_space_ids uuid[]) returns void
+language plpgsql as $$
+declare v_id uuid;
+begin
+  for v_id in select distinct s from unnest(p_space_ids) s where s is not null order by s loop
+    perform pg_advisory_xact_lock(hashtextextended('espacio:' || v_id::text, 0));
+  end loop;
+end $$;
+
+-- Describe por qué un espacio no está libre en un rango (null si está libre).
+create or replace function private.space_conflict(
+  p_space_id uuid, p_start date, p_end date, p_ignore_reservation uuid default null
+) returns text
+language plpgsql stable security definer set search_path = '' as $$
+declare
+  v_space public.spaces%rowtype;
+  v_msg text;
+begin
+  select * into v_space from public.spaces where id = p_space_id;
+  if not found then
+    return 'El espacio no existe.';
+  end if;
+  if not v_space.active then
+    return format('%s está desactivado.', v_space.code);
+  end if;
+
+  select format('%s está en mantenimiento del %s al %s (%s).', v_space.code,
+                to_char(m.start_date, 'DD/MM/YYYY'), to_char(m.end_date, 'DD/MM/YYYY'), m.reason)
+    into v_msg
+  from public.maintenance_blocks m
+  where m.space_id = p_space_id and m.active
+    and daterange(m.start_date, m.end_date, '[]') && daterange(p_start, p_end, '[]')
+  order by m.start_date limit 1;
+  if v_msg is not null then return v_msg; end if;
+
+  select format('%s está ocupada del %s al %s por la reserva #%s (%s).', v_space.code,
+                to_char(greatest(s.start_date, p_start), 'DD/MM/YYYY'),
+                to_char(least(s.end_date, p_end), 'DD/MM/YYYY'),
+                r.number, btrim(c.first_name || ' ' || c.last_name))
+    into v_msg
+  from public.reservation_segments s
+  join public.reservations r on r.id = s.reservation_id
+  join public.customers c on c.id = r.customer_id
+  where s.space_id = p_space_id and s.active
+    and (p_ignore_reservation is null or s.reservation_id <> p_ignore_reservation)
+    and daterange(s.start_date, s.end_date, '[]') && daterange(p_start, p_end, '[]')
+  order by s.start_date limit 1;
+  return v_msg;
+end $$;
+
+-- Al activar un tramo: el espacio debe estar activo y sin mantenimiento.
+create or replace function private.segments_guard() returns trigger
+language plpgsql security definer set search_path = '' as $$
+declare v_msg text;
+begin
+  if tg_op = 'DELETE' then
+    raise exception 'Los tramos no se borran; se finalizan con un cambio registrado.' using errcode = '42501';
+  end if;
+
+  if tg_op = 'UPDATE' then
+    -- Lo único permitido es finalizar un tramo activo.
+    if not (old.active and not new.active and new.ended_by_change_id is not null
+            and (to_jsonb(new) - 'active' - 'ended_by_change_id') = (to_jsonb(old) - 'active' - 'ended_by_change_id')) then
+      raise exception 'Un tramo solo puede finalizarse, no modificarse.' using errcode = '42501';
+    end if;
+    return new;
+  end if;
+
+  if new.active then
+    perform private.lock_spaces(array[new.space_id]);
+    if exists (select 1 from public.reservations r where r.id = new.reservation_id and r.status = 'cancelada') then
+      raise exception 'No se pueden asignar espacios a una reserva cancelada.';
+    end if;
+    if new.start_date < (select r.start_date from public.reservations r where r.id = new.reservation_id)
+       or new.end_date > (select r.end_date from public.reservations r where r.id = new.reservation_id) then
+      raise exception 'El tramo queda fuera de las fechas de la reserva.';
+    end if;
+    -- Desactivado o mantenimiento (las superposiciones con otras reservas
+    -- las rechaza la restricción segments_no_double_booking).
+    select case
+             when not sp.active then format('%s está desactivado.', sp.code)
+             else (select format('%s está en mantenimiento del %s al %s (%s).', sp.code,
+                          to_char(m.start_date, 'DD/MM/YYYY'), to_char(m.end_date, 'DD/MM/YYYY'), m.reason)
+                   from public.maintenance_blocks m
+                   where m.space_id = new.space_id and m.active
+                     and daterange(m.start_date, m.end_date, '[]') && daterange(new.start_date, new.end_date, '[]')
+                   limit 1)
+           end
+      into v_msg
+    from public.spaces sp where sp.id = new.space_id;
+    if v_msg is not null then
+      raise exception '%', v_msg using errcode = '23P01';
+    end if;
+  end if;
+  return new;
+end $$;
+
+create trigger reservation_segments_guard before insert or update or delete on public.reservation_segments
+  for each row execute function private.segments_guard();
+create trigger reservation_segments_audit after insert or update on public.reservation_segments
+  for each row execute function private.audit();
+
+-- Al crear o modificar un mantenimiento: no puede pisar reservas activas.
+create or replace function private.maintenance_guard() returns trigger
+language plpgsql security definer set search_path = '' as $$
+declare v_msg text;
+begin
+  if tg_op = 'UPDATE' and new.space_id <> old.space_id then
+    raise exception 'No se puede cambiar el espacio de un mantenimiento. Finalizalo y creá otro.';
+  end if;
+  if new.active then
+    perform private.lock_spaces(array[new.space_id]);
+    if not (select sp.active from public.spaces sp where sp.id = new.space_id) then
+      raise exception 'El espacio está desactivado.';
+    end if;
+    select string_agg(format('reserva #%s de %s (%s al %s)', r.number,
+                             btrim(c.first_name || ' ' || c.last_name),
+                             to_char(greatest(s.start_date, new.start_date), 'DD/MM/YYYY'),
+                             to_char(least(s.end_date, new.end_date), 'DD/MM/YYYY')), '; ' order by s.start_date)
+      into v_msg
+    from public.reservation_segments s
+    join public.reservations r on r.id = s.reservation_id
+    join public.customers c on c.id = r.customer_id
+    where s.space_id = new.space_id and s.active
+      and daterange(s.start_date, s.end_date, '[]') && daterange(new.start_date, new.end_date, '[]');
+    if v_msg is not null then
+      raise exception 'El mantenimiento choca con: %. Primero cambiá de carpa a esos clientes.', v_msg
+        using errcode = '23P01', hint = 'CONFLICTO_MANTENIMIENTO';
+    end if;
+  end if;
+  return new;
+end $$;
+
+create trigger maintenance_guard before insert or update on public.maintenance_blocks
+  for each row execute function private.maintenance_guard();
+
+-- No se puede desactivar un espacio que tiene reservas de hoy en adelante.
+create or replace function private.spaces_deactivation_guard() returns trigger
+language plpgsql security definer set search_path = '' as $$
+declare v_msg text;
+begin
+  if old.active and not new.active then
+    perform private.lock_spaces(array[new.id]);
+    select string_agg(format('#%s (%s al %s)', r.number, to_char(s.start_date, 'DD/MM/YYYY'),
+                             to_char(s.end_date, 'DD/MM/YYYY')), ', ' order by s.start_date)
+      into v_msg
+    from public.reservation_segments s
+    join public.reservations r on r.id = s.reservation_id
+    where s.space_id = new.id and s.active and s.end_date >= private.ws_today(new.workspace_id);
+    if v_msg is not null then
+      raise exception 'No se puede desactivar %: tiene reservas pendientes %. Cambialas de carpa primero.', new.code, v_msg;
+    end if;
+  end if;
+  return new;
+end $$;
+
+create trigger spaces_deactivation_guard before update of active on public.spaces
+  for each row execute function private.spaces_deactivation_guard();
+
+-- ---------------------------------------------------------------------
+-- Detalle de precio (fotografía histórica) y descuentos aplicados
+-- ---------------------------------------------------------------------
+create table public.reservation_charges (
+  id             uuid primary key default gen_random_uuid(),
+  workspace_id   uuid not null,
+  reservation_id uuid not null,
+  position       integer not null,
+  description    text not null check (char_length(description) <= 200),
+  space_kind     text check (space_kind in ('carpa','sombrilla')),
+  start_date     date,
+  end_date       date,
+  days           integer check (days > 0),
+  unit_price     numeric(14,2) check (unit_price >= 0),
+  amount         numeric(14,2) not null check (amount >= 0),
+  is_manual      boolean not null default false,
+  rate_snapshot  jsonb,
+  foreign key (workspace_id, reservation_id) references public.reservations(workspace_id, id),
+  check (end_date is null or start_date is null or end_date >= start_date),
+  unique (reservation_id, position)
+);
+
+create table public.reservation_discounts (
+  id             uuid primary key default gen_random_uuid(),
+  workspace_id   uuid not null,
+  reservation_id uuid not null,
+  position       integer not null,
+  kind           text not null check (kind in ('efectivo','convenio','manual','cortesia')),
+  agreement_id   uuid,
+  label          text not null check (char_length(label) <= 120),
+  percent        numeric(5,2) check (percent > 0 and percent <= 100),
+  amount         numeric(14,2) not null check (amount >= 0),
+  reason         text check (char_length(reason) <= 300),
+  created_by     uuid default auth.uid(),
+  created_at     timestamptz not null default now(),
+  foreign key (workspace_id, reservation_id) references public.reservations(workspace_id, id),
+  foreign key (workspace_id, agreement_id) references public.agreements(workspace_id, id),
+  check (kind <> 'convenio' or agreement_id is not null),
+  check (kind <> 'manual' or char_length(btrim(coalesce(reason, ''))) >= 3),
+  unique (reservation_id, position)
+);
+
+create trigger reservation_charges_immutable before update or delete on public.reservation_charges
+  for each row execute function private.forbid_change();
+create trigger reservation_discounts_immutable before update or delete on public.reservation_discounts
+  for each row execute function private.forbid_change();
+
+-- ---------------------------------------------------------------------
+-- Comprueba que los tramos activos cubran toda la estadía sin huecos.
+-- ---------------------------------------------------------------------
+create or replace function private.assert_coverage(p_reservation_id uuid) returns void
+language plpgsql stable security definer set search_path = '' as $$
+declare
+  v_res public.reservations%rowtype;
+  v_prev date;
+  v_count integer := 0;
+  r record;
+begin
+  select * into v_res from public.reservations where id = p_reservation_id;
+  if v_res.status = 'cancelada' then
+    if exists (select 1 from public.reservation_segments where reservation_id = p_reservation_id and active) then
+      raise exception 'Una reserva cancelada no puede ocupar espacios.';
+    end if;
+    return;
+  end if;
+  v_prev := v_res.start_date - 1;
+  for r in select start_date, end_date from public.reservation_segments
+           where reservation_id = p_reservation_id and active order by start_date loop
+    if r.start_date <> v_prev + 1 then
+      raise exception 'Los tramos de carpa dejan días sin asignar o se superponen (a partir del %).',
+        to_char(v_prev + 1, 'DD/MM/YYYY');
+    end if;
+    v_prev := r.end_date;
+    v_count := v_count + 1;
+  end loop;
+  if v_count = 0 or v_prev <> v_res.end_date then
+    raise exception 'Los tramos de carpa no cubren toda la estadía (falta desde el %).',
+      to_char(v_prev + 1, 'DD/MM/YYYY');
+  end if;
+end $$;
+
+-- ---------------------------------------------------------------------
+-- Seguridad: lectura para miembros; la escritura de reservas y tramos
+-- solo es posible mediante las funciones validadas (ver 0005).
+-- ---------------------------------------------------------------------
+alter table public.reservations          enable row level security;
+alter table public.reservation_changes   enable row level security;
+alter table public.reservation_segments  enable row level security;
+alter table public.maintenance_blocks    enable row level security;
+alter table public.reservation_charges   enable row level security;
+alter table public.reservation_discounts enable row level security;
+
+create policy "miembros leen reservas" on public.reservations for select to authenticated using (private.is_member(workspace_id));
+create policy "miembros leen cambios" on public.reservation_changes for select to authenticated using (private.is_member(workspace_id));
+create policy "miembros leen tramos" on public.reservation_segments for select to authenticated using (private.is_member(workspace_id));
+create policy "miembros leen mantenimiento" on public.maintenance_blocks for select to authenticated using (private.is_member(workspace_id));
+create policy "miembros leen precios" on public.reservation_charges for select to authenticated using (private.is_member(workspace_id));
+create policy "miembros leen descuentos" on public.reservation_discounts for select to authenticated using (private.is_member(workspace_id));
+
+create policy "admins crean mantenimiento" on public.maintenance_blocks for insert to authenticated
+  with check (private.has_role(workspace_id, array['propietario','administrador']));
+create policy "admins editan mantenimiento" on public.maintenance_blocks for update to authenticated
+  using (private.has_role(workspace_id, array['propietario','administrador']))
+  with check (private.has_role(workspace_id, array['propietario','administrador']));
+
+revoke all on public.reservations, public.reservation_changes, public.reservation_segments,
+  public.maintenance_blocks, public.reservation_charges, public.reservation_discounts from anon, authenticated;
+grant select on public.reservations, public.reservation_changes, public.reservation_segments,
+  public.maintenance_blocks, public.reservation_charges, public.reservation_discounts to authenticated;
+grant insert (workspace_id, space_id, start_date, end_date, reason, notes) on public.maintenance_blocks to authenticated;
+grant update (end_date, reason, notes, active, version) on public.maintenance_blocks to authenticated;
+
+-- >>> 0004_dinero.sql
+-- =====================================================================
+-- 0004 · Caja diaria, pagos, devoluciones, anulaciones, gastos.
+-- Los registros de dinero son inmutables: los errores se corrigen
+-- con una anulación que queda registrada, nunca borrando.
+-- =====================================================================
+
+create table public.cash_sessions (
+  id            uuid primary key default gen_random_uuid(),
+  workspace_id  uuid not null references public.workspaces(id) on delete restrict,
+  business_date date not null,
+  opening_cash  numeric(14,2) not null check (opening_cash >= 0),
+  opening_notes text check (char_length(opening_notes) <= 1000),
+  opened_at     timestamptz not null default now(),
+  opened_by     uuid not null default auth.uid(),
+  closed_at     timestamptz,
+  closed_by     uuid,
+  counted_cash  numeric(14,2) check (counted_cash >= 0),
+  expected_cash numeric(14,2),
+  difference    numeric(14,2),
+  close_notes   text check (char_length(close_notes) <= 1000),
+  version       integer not null default 1,
+  unique (workspace_id, id),
+  unique (workspace_id, business_date),
+  check ((closed_at is null) = (counted_cash is null)),
+  check ((closed_at is null) = (expected_cash is null)),
+  check (difference is null or difference = counted_cash - expected_cash)
+);
+-- Solo puede haber una caja abierta a la vez por balneario.
+create unique index cash_sessions_one_open on public.cash_sessions(workspace_id) where closed_at is null;
+
+create trigger cash_sessions_version before update on public.cash_sessions
+  for each row execute function private.check_version();
+create trigger cash_sessions_audit after insert or update on public.cash_sessions
+  for each row execute function private.audit();
+create trigger cash_sessions_no_delete before delete on public.cash_sessions
+  for each row execute function private.forbid_change();
+
+-- Una caja cerrada no se reabre ni se modifica.
+create or replace function private.cash_sessions_guard() returns trigger
+language plpgsql as $$
+begin
+  if old.closed_at is not null then
+    raise exception 'Esta caja ya está cerrada y no se puede modificar.' using errcode = '42501';
+  end if;
+  if new.opening_cash <> old.opening_cash or new.business_date <> old.business_date then
+    raise exception 'La apertura de caja no se puede modificar.' using errcode = '42501';
+  end if;
+  return new;
+end $$;
+create trigger cash_sessions_guard before update on public.cash_sessions
+  for each row execute function private.cash_sessions_guard();
+
+-- ---------------------------------------------------------------------
+-- Pagos vinculados a reservas
+--   cobro       → dinero que entra (seña, pago parcial, pago total)
+--   devolucion  → dinero que se le devuelve al cliente
+--   anulacion   → corrige un cobro o devolución cargado por error
+-- signed_amount: efecto sobre lo cobrado (+ entra, − sale)
+-- ---------------------------------------------------------------------
+create table public.payments (
+  id               uuid primary key default gen_random_uuid(),
+  workspace_id     uuid not null,
+  reservation_id   uuid not null,
+  kind             text not null check (kind in ('cobro','devolucion','anulacion')),
+  amount           numeric(14,2) not null check (amount > 0),
+  signed_amount    numeric(14,2) not null,
+  method           text not null check (method in ('efectivo','transferencia','tarjeta')),
+  voids_payment_id uuid references public.payments(id),
+  cash_session_id  uuid not null,
+  idempotency_key  uuid not null,
+  note             text check (char_length(note) <= 500),
+  reason           text check (char_length(reason) <= 300),
+  created_by       uuid not null default auth.uid(),
+  created_at       timestamptz not null default now(),
+  unique (workspace_id, id),
+  unique (workspace_id, idempotency_key),
+  foreign key (workspace_id, reservation_id) references public.reservations(workspace_id, id),
+  foreign key (workspace_id, cash_session_id) references public.cash_sessions(workspace_id, id),
+  check (abs(signed_amount) = amount),
+  check ((kind = 'anulacion') = (voids_payment_id is not null)),
+  check (kind = 'cobro' or char_length(btrim(coalesce(reason, ''))) >= 3)
+);
+create unique index payments_one_void on public.payments(voids_payment_id) where voids_payment_id is not null;
+create index payments_reservation_idx on public.payments(reservation_id);
+create index payments_ws_created_idx on public.payments(workspace_id, created_at);
+
+create trigger payments_immutable before update or delete on public.payments
+  for each row execute function private.forbid_change();
+
+-- ---------------------------------------------------------------------
+-- Gastos efectivamente pagados
+-- ---------------------------------------------------------------------
+create table public.expenses (
+  id              uuid primary key default gen_random_uuid(),
+  workspace_id    uuid not null,
+  cash_session_id uuid not null,
+  amount          numeric(14,2) not null check (amount > 0),
+  spent_on        date not null,
+  concept         text not null check (char_length(btrim(concept)) between 2 and 200),
+  category_id     uuid not null,
+  supplier        text check (char_length(supplier) <= 120),
+  method          text not null check (method in ('efectivo','transferencia','tarjeta')),
+  notes           text check (char_length(notes) <= 1000),
+  idempotency_key uuid not null,
+  created_by      uuid not null default auth.uid(),
+  created_at      timestamptz not null default now(),
+  voided_at       timestamptz,
+  voided_by       uuid,
+  void_reason     text,
+  unique (workspace_id, id),
+  unique (workspace_id, idempotency_key),
+  foreign key (workspace_id, cash_session_id) references public.cash_sessions(workspace_id, id),
+  foreign key (workspace_id, category_id) references public.expense_categories(workspace_id, id),
+  check ((voided_at is null) = (void_reason is null))
+);
+create index expenses_ws_date_idx on public.expenses(workspace_id, spent_on);
+
+-- Un gasto solo puede anularse (una vez); nada más se modifica.
+create or replace function private.expenses_guard() returns trigger
+language plpgsql as $$
+begin
+  if tg_op = 'DELETE' then
+    raise exception 'Los gastos no se borran; se anulan.' using errcode = '42501';
+  end if;
+  if old.voided_at is not null
+     or (to_jsonb(new) - 'voided_at' - 'voided_by' - 'void_reason') <> (to_jsonb(old) - 'voided_at' - 'voided_by' - 'void_reason') then
+    raise exception 'Un gasto registrado no se puede modificar; solo anular.' using errcode = '42501';
+  end if;
+  return new;
+end $$;
+create trigger expenses_guard before update or delete on public.expenses
+  for each row execute function private.expenses_guard();
+create trigger expenses_audit after insert or update on public.expenses
+  for each row execute function private.audit();
+
+-- ---------------------------------------------------------------------
+-- Movimientos de caja (entradas y salidas, por medio de pago)
+-- ---------------------------------------------------------------------
+create table public.cash_movements (
+  id              uuid primary key default gen_random_uuid(),
+  workspace_id    uuid not null,
+  cash_session_id uuid not null,
+  direction       text not null check (direction in ('entrada','salida')),
+  method          text not null check (method in ('efectivo','transferencia','tarjeta')),
+  amount          numeric(14,2) not null check (amount > 0),
+  category        text not null check (category in ('cobro','devolucion','anulacion_cobro','anulacion_devolucion',
+                                                    'gasto','anulacion_gasto','otro_ingreso')),
+  concept         text not null check (char_length(concept) <= 200),
+  payment_id      uuid unique,
+  expense_id      uuid,
+  idempotency_key uuid,
+  created_by      uuid not null default auth.uid(),
+  created_at      timestamptz not null default now(),
+  foreign key (workspace_id, cash_session_id) references public.cash_sessions(workspace_id, id),
+  foreign key (workspace_id, payment_id) references public.payments(workspace_id, id),
+  foreign key (workspace_id, expense_id) references public.expenses(workspace_id, id),
+  unique (workspace_id, idempotency_key),
+  check ((category in ('cobro','devolucion','anulacion_cobro','anulacion_devolucion')) = (payment_id is not null)),
+  check ((category in ('gasto','anulacion_gasto')) = (expense_id is not null)),
+  check (category <> 'otro_ingreso' or idempotency_key is not null)
+);
+create unique index cash_movements_expense_once on public.cash_movements(expense_id, category) where expense_id is not null;
+create index cash_movements_session_idx on public.cash_movements(cash_session_id);
+
+create trigger cash_movements_immutable before update or delete on public.cash_movements
+  for each row execute function private.forbid_change();
+
+-- Una caja cerrada no acepta movimientos nuevos.
+create or replace function private.cash_movements_guard() returns trigger
+language plpgsql security definer set search_path = '' as $$
+begin
+  if exists (select 1 from public.cash_sessions s where s.id = new.cash_session_id and s.closed_at is not null) then
+    raise exception 'La caja ya está cerrada; no se pueden agregar movimientos.' using errcode = '42501';
+  end if;
+  return new;
+end $$;
+create trigger cash_movements_guard before insert on public.cash_movements
+  for each row execute function private.cash_movements_guard();
+
+-- ---------------------------------------------------------------------
+-- Saldo de cada reserva calculado con los pagos reales
+-- ---------------------------------------------------------------------
+create view public.reservation_balances with (security_invoker = true) as
+select
+  r.id as reservation_id,
+  r.workspace_id,
+  r.status,
+  r.total_amount,
+  coalesce(p.paid, 0)::numeric(14,2) as paid_amount,
+  case when r.status = 'cancelada' then 0
+       else greatest(r.total_amount - coalesce(p.paid, 0), 0) end::numeric(14,2) as due_amount,
+  case when r.status = 'cancelada' then coalesce(p.paid, 0)
+       else greatest(coalesce(p.paid, 0) - r.total_amount, 0) end::numeric(14,2) as credit_amount
+from public.reservations r
+left join (
+  select reservation_id, sum(signed_amount) as paid from public.payments group by reservation_id
+) p on p.reservation_id = r.id;
+
+-- ---------------------------------------------------------------------
+-- Funciones internas
+-- ---------------------------------------------------------------------
+
+-- Devuelve la caja abierta de hoy (y la bloquea para que no se cierre
+-- mientras se registra el movimiento). Explica el problema si no la hay.
+create or replace function private.today_session(p_workspace_id uuid) returns uuid
+language plpgsql security definer set search_path = '' as $$
+declare
+  v_today date := private.ws_today(p_workspace_id);
+  v_session public.cash_sessions%rowtype;
+begin
+  select * into v_session from public.cash_sessions
+  where workspace_id = p_workspace_id and closed_at is null
+  for share;
+  if not found then
+    raise exception 'La caja de hoy no está abierta. Abrila para registrar cobros o gastos.'
+      using hint = 'CAJA_CERRADA';
+  end if;
+  if v_session.business_date <> v_today then
+    raise exception 'La caja del % quedó sin cerrar. Cerrala antes de registrar movimientos de hoy.',
+      to_char(v_session.business_date, 'DD/MM/YYYY') using hint = 'CAJA_ANTERIOR_ABIERTA';
+  end if;
+  return v_session.id;
+end $$;
+
+-- Registra un cobro, devolución o anulación de forma idempotente:
+-- si se reintenta con la misma clave, devuelve el pago ya existente.
+create or replace function private.record_payment(
+  p_workspace_id uuid, p_reservation_id uuid, p_kind text, p_amount numeric, p_method text,
+  p_idempotency_key uuid, p_note text, p_reason text, p_voids_payment_id uuid default null
+) returns uuid
+language plpgsql security definer set search_path = '' as $$
+declare
+  v_existing public.payments%rowtype;
+  v_res public.reservations%rowtype;
+  v_orig public.payments%rowtype;
+  v_session uuid;
+  v_paid numeric(14,2);
+  v_signed numeric(14,2);
+  v_amount numeric(14,2) := round(p_amount, 2);
+  v_id uuid;
+  v_category text;
+  v_concept text;
+begin
+  if p_idempotency_key is null then
+    raise exception 'Falta la clave de operación.';
+  end if;
+
+  select * into v_existing from public.payments
+  where workspace_id = p_workspace_id and idempotency_key = p_idempotency_key;
+  if found then
+    if v_existing.reservation_id <> p_reservation_id or v_existing.kind <> p_kind
+       or (p_kind <> 'anulacion' and (v_existing.amount <> v_amount or v_existing.method <> p_method)) then
+      raise exception 'Esta operación ya fue registrada con otros datos.';
+    end if;
+    return v_existing.id;
+  end if;
+
+  v_session := private.today_session(p_workspace_id);
+
+  -- Bloquea la reserva: dos pagos simultáneos se procesan de a uno.
+  select * into v_res from public.reservations
+  where id = p_reservation_id and workspace_id = p_workspace_id
+  for update;
+  if not found then
+    raise exception 'La reserva no existe.';
+  end if;
+
+  -- Reintento simultáneo con la misma clave: el otro ya terminó.
+  select * into v_existing from public.payments
+  where workspace_id = p_workspace_id and idempotency_key = p_idempotency_key;
+  if found then
+    return v_existing.id;
+  end if;
+
+  select coalesce(sum(signed_amount), 0) into v_paid from public.payments where reservation_id = p_reservation_id;
+
+  if p_kind = 'cobro' then
+    if v_res.status = 'cancelada' then
+      raise exception 'No se pueden registrar cobros en una reserva cancelada.';
+    end if;
+    if v_amount is null or v_amount <= 0 then
+      raise exception 'El importe debe ser mayor a cero.';
+    end if;
+    if v_amount > v_res.total_amount - v_paid then
+      raise exception 'El cobro (%) supera el saldo pendiente (%).',
+        to_char(v_amount, 'FM999G999G990D00'), to_char(greatest(v_res.total_amount - v_paid, 0), 'FM999G999G990D00');
+    end if;
+    v_signed := v_amount;
+    v_category := 'cobro';
+    v_concept := format('Cobro reserva #%s', v_res.number);
+
+  elsif p_kind = 'devolucion' then
+    if v_amount is null or v_amount <= 0 then
+      raise exception 'El importe debe ser mayor a cero.';
+    end if;
+    if v_amount > v_paid then
+      raise exception 'La devolución supera lo cobrado en la reserva.';
+    end if;
+    v_signed := -v_amount;
+    v_category := 'devolucion';
+    v_concept := format('Devolución reserva #%s', v_res.number);
+
+  elsif p_kind = 'anulacion' then
+    select * into v_orig from public.payments
+    where id = p_voids_payment_id and reservation_id = p_reservation_id;
+    if not found then
+      raise exception 'El pago a anular no existe en esta reserva.';
+    end if;
+    if v_orig.kind = 'anulacion' then
+      raise exception 'Una anulación no se puede anular.';
+    end if;
+    if exists (select 1 from public.payments where voids_payment_id = v_orig.id) then
+      raise exception 'Ese pago ya fue anulado.';
+    end if;
+    v_amount := v_orig.amount;
+    p_method := v_orig.method;
+    v_signed := -v_orig.signed_amount;
+    v_category := case v_orig.kind when 'cobro' then 'anulacion_cobro' else 'anulacion_devolucion' end;
+    v_concept := format('Anulación de %s · reserva #%s', v_orig.kind, v_res.number);
+  else
+    raise exception 'Tipo de pago inválido.';
+  end if;
+
+  if p_method not in ('efectivo','transferencia','tarjeta') then
+    raise exception 'Medio de pago inválido.';
+  end if;
+
+  insert into public.payments (workspace_id, reservation_id, kind, amount, signed_amount, method,
+                               voids_payment_id, cash_session_id, idempotency_key, note, reason)
+  values (p_workspace_id, p_reservation_id, p_kind, v_amount, v_signed, p_method,
+          p_voids_payment_id, v_session, p_idempotency_key, nullif(btrim(p_note), ''), nullif(btrim(p_reason), ''))
+  returning id into v_id;
+
+  insert into public.cash_movements (workspace_id, cash_session_id, direction, method, amount, category, concept, payment_id)
+  values (p_workspace_id, v_session, case when v_signed > 0 then 'entrada' else 'salida' end,
+          p_method, v_amount, v_category, v_concept, v_id);
+
+  return v_id;
+end $$;
+
+-- ---------------------------------------------------------------------
+-- Funciones públicas: pagos
+-- ---------------------------------------------------------------------
+create or replace function public.register_payment(
+  p_workspace_id uuid, p_reservation_id uuid, p_amount numeric, p_method text,
+  p_idempotency_key uuid, p_note text default null
+) returns jsonb
+language plpgsql security definer set search_path = '' as $$
+declare v_id uuid;
+begin
+  perform private.require_member(p_workspace_id);
+  v_id := private.record_payment(p_workspace_id, p_reservation_id, 'cobro', p_amount, p_method,
+                                 p_idempotency_key, p_note, null);
+  return jsonb_build_object('payment_id', v_id);
+end $$;
+
+create or replace function public.refund_payment(
+  p_workspace_id uuid, p_reservation_id uuid, p_amount numeric, p_method text,
+  p_idempotency_key uuid, p_reason text
+) returns jsonb
+language plpgsql security definer set search_path = '' as $$
+declare v_id uuid;
+begin
+  perform private.require_member(p_workspace_id, array['propietario','administrador']);
+  perform set_config('app.reason', coalesce(p_reason, ''), true);
+  v_id := private.record_payment(p_workspace_id, p_reservation_id, 'devolucion', p_amount, p_method,
+                                 p_idempotency_key, null, p_reason);
+  return jsonb_build_object('payment_id', v_id);
+end $$;
+
+create or replace function public.void_payment(
+  p_workspace_id uuid, p_payment_id uuid, p_idempotency_key uuid, p_reason text
+) returns jsonb
+language plpgsql security definer set search_path = '' as $$
+declare v_res uuid; v_id uuid;
+begin
+  perform private.require_member(p_workspace_id, array['propietario','administrador']);
+  select reservation_id into v_res from public.payments where id = p_payment_id and workspace_id = p_workspace_id;
+  if not found then
+    raise exception 'El pago no existe.';
+  end if;
+  perform set_config('app.reason', coalesce(p_reason, ''), true);
+  v_id := private.record_payment(p_workspace_id, v_res, 'anulacion', null, null,
+                                 p_idempotency_key, null, p_reason, p_payment_id);
+  return jsonb_build_object('payment_id', v_id);
+end $$;
+
+-- ---------------------------------------------------------------------
+-- Funciones públicas: caja
+-- ---------------------------------------------------------------------
+create or replace function public.open_cash_session(
+  p_workspace_id uuid, p_opening_cash numeric, p_notes text default null
+) returns jsonb
+language plpgsql security definer set search_path = '' as $$
+declare
+  v_today date;
+  v_session public.cash_sessions%rowtype;
+begin
+  perform private.require_member(p_workspace_id);
+  v_today := private.ws_today(p_workspace_id);
+
+  -- Evita aperturas simultáneas desde dos dispositivos.
+  perform pg_advisory_xact_lock(hashtextextended('caja:' || p_workspace_id::text, 0));
+
+  select * into v_session from public.cash_sessions
+  where workspace_id = p_workspace_id and business_date = v_today;
+  if found then
+    if v_session.closed_at is not null then
+      raise exception 'La caja de hoy ya fue abierta y cerrada.' using hint = 'CAJA_YA_CERRADA';
+    end if;
+    -- Ya estaba abierta: no se pide ni se registra otra apertura.
+    return jsonb_build_object('session_id', v_session.id, 'already_open', true);
+  end if;
+
+  select * into v_session from public.cash_sessions
+  where workspace_id = p_workspace_id and closed_at is null;
+  if found then
+    raise exception 'La caja del % quedó sin cerrar. Cerrala antes de abrir la de hoy.',
+      to_char(v_session.business_date, 'DD/MM/YYYY') using hint = 'CAJA_ANTERIOR_ABIERTA';
+  end if;
+
+  if p_opening_cash is null or p_opening_cash < 0 then
+    raise exception 'Ingresá el efectivo inicial (puede ser 0).';
+  end if;
+
+  insert into public.cash_sessions (workspace_id, business_date, opening_cash, opening_notes)
+  values (p_workspace_id, v_today, round(p_opening_cash, 2), nullif(btrim(p_notes), ''))
+  returning * into v_session;
+
+  return jsonb_build_object('session_id', v_session.id, 'already_open', false);
+end $$;
+
+-- Resumen de una caja: apertura, entradas y salidas por medio, efectivo esperado.
+create or replace function public.cash_session_summary(p_session_id uuid) returns jsonb
+language plpgsql stable security definer set search_path = '' as $$
+declare
+  v_s public.cash_sessions%rowtype;
+  v_methods jsonb;
+  v_cash_in numeric(14,2);
+  v_cash_out numeric(14,2);
+begin
+  select * into v_s from public.cash_sessions where id = p_session_id;
+  if not found then
+    raise exception 'La caja no existe.';
+  end if;
+  perform private.require_member(v_s.workspace_id);
+
+  select coalesce(sum(amount) filter (where direction = 'entrada' and method = 'efectivo'), 0),
+         coalesce(sum(amount) filter (where direction = 'salida' and method = 'efectivo'), 0)
+    into v_cash_in, v_cash_out
+  from public.cash_movements where cash_session_id = p_session_id;
+
+  select coalesce(jsonb_object_agg(m.method, jsonb_build_object(
+           'entradas', coalesce(x.entradas, 0), 'salidas', coalesce(x.salidas, 0))), '{}'::jsonb)
+    into v_methods
+  from (values ('efectivo'), ('transferencia'), ('tarjeta')) m(method)
+  left join (
+    select method,
+           sum(amount) filter (where direction = 'entrada') as entradas,
+           sum(amount) filter (where direction = 'salida') as salidas
+    from public.cash_movements where cash_session_id = p_session_id group by method
+  ) x on x.method = m.method;
+
+  return jsonb_build_object(
+    'session_id', v_s.id,
+    'business_date', v_s.business_date,
+    'opening_cash', v_s.opening_cash,
+    'opened_at', v_s.opened_at,
+    'opened_by', v_s.opened_by,
+    'por_medio', v_methods,
+    'efectivo_esperado', v_s.opening_cash + v_cash_in - v_cash_out,
+    'closed_at', v_s.closed_at,
+    'counted_cash', v_s.counted_cash,
+    'difference', v_s.difference,
+    'close_notes', v_s.close_notes,
+    'version', v_s.version
+  );
+end $$;
+
+create or replace function public.close_cash_session(
+  p_session_id uuid, p_counted_cash numeric, p_expected_version integer, p_notes text default null
+) returns jsonb
+language plpgsql security definer set search_path = '' as $$
+declare
+  v_s public.cash_sessions%rowtype;
+  v_expected numeric(14,2);
+begin
+  select * into v_s from public.cash_sessions where id = p_session_id for update;
+  if not found then
+    raise exception 'La caja no existe.';
+  end if;
+  perform private.require_member(v_s.workspace_id);
+  if v_s.closed_at is not null then
+    raise exception 'Esta caja ya está cerrada.';
+  end if;
+  if p_counted_cash is null or p_counted_cash < 0 then
+    raise exception 'Ingresá el efectivo contado.';
+  end if;
+
+  select v_s.opening_cash
+         + coalesce(sum(amount) filter (where direction = 'entrada' and method = 'efectivo'), 0)
+         - coalesce(sum(amount) filter (where direction = 'salida' and method = 'efectivo'), 0)
+    into v_expected
+  from public.cash_movements where cash_session_id = p_session_id;
+
+  update public.cash_sessions set
+    closed_at = now(),
+    closed_by = auth.uid(),
+    counted_cash = round(p_counted_cash, 2),
+    expected_cash = v_expected,
+    difference = round(p_counted_cash, 2) - v_expected,
+    close_notes = nullif(btrim(p_notes), ''),
+    version = p_expected_version + 1
+  where id = p_session_id;
+
+  return public.cash_session_summary(p_session_id);
+end $$;
+
+-- ---------------------------------------------------------------------
+-- Funciones públicas: gastos y otros ingresos
+-- ---------------------------------------------------------------------
+create or replace function public.register_expense(
+  p_workspace_id uuid, p_idempotency_key uuid, p_amount numeric, p_spent_on date, p_concept text,
+  p_category_id uuid, p_method text, p_supplier text default null, p_notes text default null
+) returns jsonb
+language plpgsql security definer set search_path = '' as $$
+declare
+  v_existing public.expenses%rowtype;
+  v_session uuid;
+  v_id uuid;
+begin
+  perform private.require_member(p_workspace_id);
+
+  select * into v_existing from public.expenses
+  where workspace_id = p_workspace_id and idempotency_key = p_idempotency_key;
+  if found then
+    return jsonb_build_object('expense_id', v_existing.id, 'repetida', true);
+  end if;
+
+  if p_amount is null or p_amount <= 0 then
+    raise exception 'El importe debe ser mayor a cero.';
+  end if;
+  if p_spent_on is null or p_spent_on > private.ws_today(p_workspace_id) then
+    raise exception 'Solo se registran gastos ya pagados (la fecha no puede ser futura).';
+  end if;
+  if p_method not in ('efectivo','transferencia','tarjeta') then
+    raise exception 'Medio de pago inválido.';
+  end if;
+  if not exists (select 1 from public.expense_categories c
+                 where c.id = p_category_id and c.workspace_id = p_workspace_id and c.active) then
+    raise exception 'Elegí una categoría válida.';
+  end if;
+
+  v_session := private.today_session(p_workspace_id);
+
+  insert into public.expenses (workspace_id, cash_session_id, amount, spent_on, concept, category_id,
+                               supplier, method, notes, idempotency_key)
+  values (p_workspace_id, v_session, round(p_amount, 2), p_spent_on, btrim(p_concept), p_category_id,
+          nullif(btrim(p_supplier), ''), p_method, nullif(btrim(p_notes), ''), p_idempotency_key)
+  returning id into v_id;
+
+  insert into public.cash_movements (workspace_id, cash_session_id, direction, method, amount, category, concept, expense_id)
+  values (p_workspace_id, v_session, 'salida', p_method, round(p_amount, 2), 'gasto', left('Gasto: ' || btrim(p_concept), 200), v_id);
+
+  return jsonb_build_object('expense_id', v_id, 'repetida', false);
+end $$;
+
+create or replace function public.void_expense(
+  p_workspace_id uuid, p_expense_id uuid, p_reason text
+) returns jsonb
+language plpgsql security definer set search_path = '' as $$
+declare
+  v_e public.expenses%rowtype;
+  v_session uuid;
+begin
+  perform private.require_member(p_workspace_id, array['propietario','administrador']);
+  if char_length(btrim(coalesce(p_reason, ''))) < 3 then
+    raise exception 'Indicá el motivo de la anulación.';
+  end if;
+  select * into v_e from public.expenses where id = p_expense_id and workspace_id = p_workspace_id for update;
+  if not found then
+    raise exception 'El gasto no existe.';
+  end if;
+  if v_e.voided_at is not null then
+    return jsonb_build_object('expense_id', v_e.id, 'repetida', true);
+  end if;
+
+  v_session := private.today_session(p_workspace_id);
+  perform set_config('app.reason', p_reason, true);
+
+  update public.expenses set voided_at = now(), voided_by = auth.uid(), void_reason = btrim(p_reason)
+  where id = p_expense_id;
+
+  insert into public.cash_movements (workspace_id, cash_session_id, direction, method, amount, category, concept, expense_id)
+  values (p_workspace_id, v_session, 'entrada', v_e.method, v_e.amount, 'anulacion_gasto',
+          left('Anulación gasto: ' || v_e.concept, 200), v_e.id);
+
+  return jsonb_build_object('expense_id', v_e.id, 'repetida', false);
+end $$;
+
+create or replace function public.register_other_income(
+  p_workspace_id uuid, p_idempotency_key uuid, p_amount numeric, p_method text, p_concept text
+) returns jsonb
+language plpgsql security definer set search_path = '' as $$
+declare
+  v_existing uuid;
+  v_session uuid;
+  v_id uuid;
+begin
+  perform private.require_member(p_workspace_id);
+  select id into v_existing from public.cash_movements
+  where workspace_id = p_workspace_id and idempotency_key = p_idempotency_key;
+  if found then
+    return jsonb_build_object('movement_id', v_existing, 'repetida', true);
+  end if;
+  if p_amount is null or p_amount <= 0 then
+    raise exception 'El importe debe ser mayor a cero.';
+  end if;
+  if char_length(btrim(coalesce(p_concept, ''))) < 3 then
+    raise exception 'Indicá el concepto del ingreso.';
+  end if;
+  if p_method not in ('efectivo','transferencia','tarjeta') then
+    raise exception 'Medio de pago inválido.';
+  end if;
+  v_session := private.today_session(p_workspace_id);
+  insert into public.cash_movements (workspace_id, cash_session_id, direction, method, amount, category, concept, idempotency_key)
+  values (p_workspace_id, v_session, 'entrada', p_method, round(p_amount, 2), 'otro_ingreso', btrim(p_concept), p_idempotency_key)
+  returning id into v_id;
+  return jsonb_build_object('movement_id', v_id, 'repetida', false);
+end $$;
+
+-- ---------------------------------------------------------------------
+-- Seguridad
+-- ---------------------------------------------------------------------
+alter table public.cash_sessions  enable row level security;
+alter table public.payments       enable row level security;
+alter table public.expenses       enable row level security;
+alter table public.cash_movements enable row level security;
+
+create policy "miembros leen cajas" on public.cash_sessions for select to authenticated using (private.is_member(workspace_id));
+create policy "miembros leen pagos" on public.payments for select to authenticated using (private.is_member(workspace_id));
+create policy "miembros leen gastos" on public.expenses for select to authenticated using (private.is_member(workspace_id));
+create policy "miembros leen movimientos" on public.cash_movements for select to authenticated using (private.is_member(workspace_id));
+
+revoke all on public.cash_sessions, public.payments, public.expenses, public.cash_movements from anon, authenticated;
+grant select on public.cash_sessions, public.payments, public.expenses, public.cash_movements to authenticated;
+revoke all on public.reservation_balances from anon;
+grant select on public.reservation_balances to authenticated;
+
+revoke all on function public.register_payment(uuid, uuid, numeric, text, uuid, text),
+  public.refund_payment(uuid, uuid, numeric, text, uuid, text),
+  public.void_payment(uuid, uuid, uuid, text),
+  public.open_cash_session(uuid, numeric, text),
+  public.cash_session_summary(uuid),
+  public.close_cash_session(uuid, numeric, integer, text),
+  public.register_expense(uuid, uuid, numeric, date, text, uuid, text, text, text),
+  public.void_expense(uuid, uuid, text),
+  public.register_other_income(uuid, uuid, numeric, text, text)
+  from public, anon;
+grant execute on function public.register_payment(uuid, uuid, numeric, text, uuid, text),
+  public.refund_payment(uuid, uuid, numeric, text, uuid, text),
+  public.void_payment(uuid, uuid, uuid, text),
+  public.open_cash_session(uuid, numeric, text),
+  public.cash_session_summary(uuid),
+  public.close_cash_session(uuid, numeric, integer, text),
+  public.register_expense(uuid, uuid, numeric, date, text, uuid, text, text, text),
+  public.void_expense(uuid, uuid, text),
+  public.register_other_income(uuid, uuid, numeric, text, text)
+  to authenticated;
+
+-- >>> 0005_operaciones_reservas.sql
+-- =====================================================================
+-- 0005 · Operaciones sobre reservas (todas en una sola transacción):
+--   create_reservation   · alta con tramos, precio, descuentos y pago opcional
+--   relocate_reservation · cambio de carpa por un día o por el resto de la estadía
+--   cancel_reservation   · cancelación sin borrar historial ni pagos
+--   revert_change        · revertir un cambio desde el historial
+--   last_reversible_change · para "Deshacer último cambio"
+-- =====================================================================
+
+-- Tramos activos de una reserva, en formato legible para el historial.
+create or replace function private.segments_snapshot(p_reservation_id uuid) returns jsonb
+language sql stable security definer set search_path = '' as $$
+  select coalesce(jsonb_agg(jsonb_build_object(
+           'segment_id', s.id, 'space_id', s.space_id, 'space_code', sp.code,
+           'start_date', s.start_date, 'end_date', s.end_date) order by s.start_date), '[]'::jsonb)
+  from public.reservation_segments s
+  join public.spaces sp on sp.id = s.space_id
+  where s.reservation_id = p_reservation_id and s.active
+$$;
+
+-- ---------------------------------------------------------------------
+-- Crear reserva
+-- p_segments:  [{"space_id": uuid, "start_date": "AAAA-MM-DD", "end_date": "AAAA-MM-DD"}]
+-- p_charges:   [{"description", "space_kind", "start_date", "end_date", "days",
+--                "unit_price", "amount", "is_manual", "rate_snapshot"}]
+-- p_discounts: [{"kind": "efectivo|convenio|manual", "agreement_id", "percent", "amount", "reason"}]
+-- p_payment:   {"amount", "method", "idempotency_key"} o null (cobrar después)
+-- ---------------------------------------------------------------------
+create or replace function public.create_reservation(
+  p_workspace_id uuid,
+  p_request_id uuid,
+  p_customer_id uuid,
+  p_start_date date,
+  p_end_date date,
+  p_segments jsonb,
+  p_charges jsonb,
+  p_discounts jsonb default '[]'::jsonb,
+  p_is_courtesy boolean default false,
+  p_notes text default null,
+  p_payment jsonb default null
+) returns jsonb
+language plpgsql security definer set search_path = '' as $$
+declare
+  v_existing public.reservations%rowtype;
+  v_res_id uuid := gen_random_uuid();
+  v_change_id uuid := gen_random_uuid();
+  v_number bigint;
+  v_list numeric(14,2) := 0;
+  v_discount numeric(14,2) := 0;
+  v_total numeric(14,2);
+  v_seg jsonb;
+  v_item jsonb;
+  v_pos integer := 0;
+  v_conflict text;
+  v_space_ids uuid[];
+  v_agreement public.agreements%rowtype;
+  v_payment_id uuid;
+  v_kind text;
+  v_amount numeric(14,2);
+  v_label text;
+  v_percent numeric(5,2);
+begin
+  perform private.require_member(p_workspace_id);
+
+  -- Reintento (doble clic, recarga, red lenta): devuelve la misma reserva.
+  select * into v_existing from public.reservations
+  where workspace_id = p_workspace_id and request_id = p_request_id;
+  if found then
+    return jsonb_build_object('reservation_id', v_existing.id, 'number', v_existing.number, 'repetida', true);
+  end if;
+
+  if p_start_date is null or p_end_date is null or p_end_date < p_start_date then
+    raise exception 'Revisá las fechas: la salida no puede ser anterior a la entrada.';
+  end if;
+  if not exists (select 1 from public.customers c where c.id = p_customer_id and c.workspace_id = p_workspace_id) then
+    raise exception 'Elegí un cliente válido.';
+  end if;
+  if p_segments is null or jsonb_typeof(p_segments) <> 'array' or jsonb_array_length(p_segments) = 0 then
+    raise exception 'Asigná al menos una carpa o sombrilla.';
+  end if;
+  if p_charges is null or jsonb_typeof(p_charges) <> 'array' then
+    raise exception 'Falta el detalle de precio.';
+  end if;
+  p_discounts := coalesce(p_discounts, '[]'::jsonb);
+
+  -- Cada tramo dentro de la estadía y sin días repetidos entre tramos.
+  if exists (select 1 from jsonb_array_elements(p_segments) s
+             where (s ->> 'start_date') is null or (s ->> 'end_date') is null or (s ->> 'space_id') is null
+                or (s ->> 'end_date')::date < (s ->> 'start_date')::date
+                or (s ->> 'start_date')::date < p_start_date or (s ->> 'end_date')::date > p_end_date) then
+    raise exception 'Cada tramo de carpa tiene que estar dentro de las fechas de la estadía.';
+  end if;
+  if exists (select 1 from jsonb_array_elements(p_segments) with ordinality a(s, i)
+             join jsonb_array_elements(p_segments) with ordinality b(s, j) on a.i < b.j
+             where daterange((a.s ->> 'start_date')::date, (a.s ->> 'end_date')::date, '[]')
+                && daterange((b.s ->> 'start_date')::date, (b.s ->> 'end_date')::date, '[]')) then
+    raise exception 'Los tramos de carpa se superponen: un cliente no puede tener dos carpas el mismo día.';
+  end if;
+
+  -- Bloquea todos los espacios involucrados (en orden, para evitar bloqueos cruzados)
+  select array_agg((s ->> 'space_id')::uuid) into v_space_ids from jsonb_array_elements(p_segments) s;
+  perform private.lock_spaces(v_space_ids);
+
+  -- Revalida la disponibilidad al guardar, con el detalle de cada conflicto.
+  for v_seg in select * from jsonb_array_elements(p_segments) loop
+    if not exists (select 1 from public.spaces sp where sp.id = (v_seg ->> 'space_id')::uuid
+                   and sp.workspace_id = p_workspace_id) then
+      raise exception 'Uno de los espacios elegidos no existe.';
+    end if;
+    v_conflict := private.space_conflict((v_seg ->> 'space_id')::uuid,
+                                         (v_seg ->> 'start_date')::date, (v_seg ->> 'end_date')::date);
+    if v_conflict is not null then
+      raise exception 'Ya no está disponible: %', v_conflict using errcode = '23P01', hint = 'CONFLICTO_DISPONIBILIDAD';
+    end if;
+  end loop;
+
+  -- Precio de lista
+  for v_item in select * from jsonb_array_elements(p_charges) loop
+    v_amount := round((v_item ->> 'amount')::numeric, 2);
+    if v_amount is null or v_amount < 0 then
+      raise exception 'Hay un importe inválido en el detalle de precio.';
+    end if;
+    v_list := v_list + v_amount;
+  end loop;
+
+  -- Descuentos (cada uno queda registrado con su importe, motivo y responsable)
+  for v_item in select * from jsonb_array_elements(p_discounts) loop
+    v_kind := v_item ->> 'kind';
+    v_amount := round((v_item ->> 'amount')::numeric, 2);
+    if v_amount is null or v_amount < 0 then
+      raise exception 'Hay un descuento con importe inválido.';
+    end if;
+    if v_kind = 'cortesia' then
+      raise exception 'La cortesía se indica marcando la reserva como cortesía, no como descuento.';
+    elsif v_kind = 'convenio' then
+      select * into v_agreement from public.agreements
+      where id = (v_item ->> 'agreement_id')::uuid and workspace_id = p_workspace_id;
+      if not found or not v_agreement.active then
+        raise exception 'El convenio elegido no está vigente.';
+      end if;
+    elsif v_kind = 'manual' then
+      if not private.has_role(p_workspace_id, array['propietario','administrador']) then
+        raise exception 'Solo un administrador puede aplicar descuentos manuales.' using errcode = '42501';
+      end if;
+      if char_length(btrim(coalesce(v_item ->> 'reason', ''))) < 3 then
+        raise exception 'Los descuentos manuales necesitan un motivo.';
+      end if;
+    elsif v_kind <> 'efectivo' then
+      raise exception 'Tipo de descuento inválido.';
+    end if;
+    v_discount := v_discount + v_amount;
+  end loop;
+
+  if p_is_courtesy then
+    if jsonb_array_length(p_discounts) > 0 then
+      raise exception 'Una cortesía no lleva otros descuentos.';
+    end if;
+    if p_payment is not null then
+      raise exception 'Una cortesía no genera cobros.';
+    end if;
+    v_discount := v_list;
+  end if;
+
+  if v_discount > v_list then
+    raise exception 'Los descuentos superan el precio.';
+  end if;
+  v_total := v_list - v_discount;
+
+  insert into public.reservations (id, workspace_id, customer_id, start_date, end_date, is_courtesy,
+                                   list_amount, discount_amount, total_amount, notes, request_id, created_by)
+  values (v_res_id, p_workspace_id, p_customer_id, p_start_date, p_end_date, coalesce(p_is_courtesy, false),
+          v_list, v_discount, v_total, nullif(btrim(p_notes), ''), p_request_id, auth.uid())
+  returning number into v_number;
+
+  insert into public.reservation_changes (id, workspace_id, reservation_id, kind, description)
+  values (v_change_id, p_workspace_id, v_res_id, 'creacion', format('Reserva #%s creada', v_number));
+
+  for v_seg in select * from jsonb_array_elements(p_segments) loop
+    insert into public.reservation_segments (workspace_id, reservation_id, space_id, start_date, end_date, created_by_change_id)
+    values (p_workspace_id, v_res_id, (v_seg ->> 'space_id')::uuid,
+            (v_seg ->> 'start_date')::date, (v_seg ->> 'end_date')::date, v_change_id);
+  end loop;
+  perform private.assert_coverage(v_res_id);
+
+  v_pos := 0;
+  for v_item in select * from jsonb_array_elements(p_charges) loop
+    v_pos := v_pos + 1;
+    insert into public.reservation_charges (workspace_id, reservation_id, position, description, space_kind,
+                                            start_date, end_date, days, unit_price, amount, is_manual, rate_snapshot)
+    values (p_workspace_id, v_res_id, v_pos,
+            coalesce(nullif(btrim(v_item ->> 'description'), ''), 'Alquiler'),
+            v_item ->> 'space_kind',
+            (v_item ->> 'start_date')::date, (v_item ->> 'end_date')::date,
+            (v_item ->> 'days')::integer,
+            round((v_item ->> 'unit_price')::numeric, 2),
+            round((v_item ->> 'amount')::numeric, 2),
+            coalesce((v_item ->> 'is_manual')::boolean, false),
+            v_item -> 'rate_snapshot');
+  end loop;
+
+  v_pos := 0;
+  if p_is_courtesy then
+    insert into public.reservation_discounts (workspace_id, reservation_id, position, kind, label, percent, amount, reason)
+    values (p_workspace_id, v_res_id, 1, 'cortesia', 'Cortesía familiar', 100, v_list, 'Cortesía familiar');
+  else
+    for v_item in select * from jsonb_array_elements(p_discounts) loop
+      v_pos := v_pos + 1;
+      v_kind := v_item ->> 'kind';
+      v_percent := (v_item ->> 'percent')::numeric;
+      v_label := case v_kind when 'efectivo' then 'Pago en efectivo' when 'manual' then 'Descuento manual' else null end;
+      if v_kind = 'convenio' then
+        select * into v_agreement from public.agreements where id = (v_item ->> 'agreement_id')::uuid;
+        v_label := 'Convenio ' || v_agreement.name;
+        v_percent := v_agreement.percent;
+      end if;
+      insert into public.reservation_discounts (workspace_id, reservation_id, position, kind, agreement_id,
+                                                label, percent, amount, reason)
+      values (p_workspace_id, v_res_id, v_pos, v_kind,
+              case when v_kind = 'convenio' then v_agreement.id end,
+              v_label, v_percent, round((v_item ->> 'amount')::numeric, 2),
+              nullif(btrim(v_item ->> 'reason'), ''));
+    end loop;
+  end if;
+
+  if p_payment is not null then
+    if coalesce((p_payment ->> 'amount')::numeric, 0) <= 0 then
+      raise exception 'Ingresá el importe cobrado (o elegí "Cobrar después").';
+    end if;
+    v_payment_id := private.record_payment(p_workspace_id, v_res_id, 'cobro', (p_payment ->> 'amount')::numeric,
+                                           p_payment ->> 'method', (p_payment ->> 'idempotency_key')::uuid,
+                                           'Pago al reservar', null);
+  end if;
+
+  update public.reservation_changes set after_state = jsonb_build_object(
+    'segments', private.segments_snapshot(v_res_id), 'total_amount', v_total)
+  where id = v_change_id;
+
+  return jsonb_build_object('reservation_id', v_res_id, 'number', v_number, 'total_amount', v_total,
+                            'payment_id', v_payment_id, 'repetida', false);
+end $$;
+
+-- ---------------------------------------------------------------------
+-- Cambio de carpa durante la estadía
+--   Un solo día:            p_from = p_to = ese día
+--   Resto de la estadía:    p_from = fecha del cambio, p_to = fin de la reserva
+-- La reserva sigue siendo una sola; pagos y deuda no se tocan.
+-- ---------------------------------------------------------------------
+create or replace function public.relocate_reservation(
+  p_reservation_id uuid, p_target_space_id uuid, p_from date, p_to date,
+  p_expected_version integer, p_reason text default null
+) returns jsonb
+language plpgsql security definer set search_path = '' as $$
+declare
+  v_res public.reservations%rowtype;
+  v_seg public.reservation_segments%rowtype;
+  v_change_id uuid := gen_random_uuid();
+  v_target public.spaces%rowtype;
+  v_before jsonb;
+  v_conflict text;
+  v_space_ids uuid[];
+begin
+  select * into v_res from public.reservations where id = p_reservation_id for update;
+  if not found then
+    raise exception 'La reserva no existe.';
+  end if;
+  perform private.require_member(v_res.workspace_id);
+  if v_res.version <> p_expected_version then
+    raise exception 'Esta reserva fue modificada desde otro dispositivo. Recargá e intentá de nuevo.'
+      using errcode = '40001', hint = 'CONFLICTO_VERSION';
+  end if;
+  if v_res.status <> 'confirmada' then
+    raise exception 'Solo se pueden cambiar de carpa reservas confirmadas.';
+  end if;
+  if p_from is null or p_to is null or p_to < p_from or p_from < v_res.start_date or p_to > v_res.end_date then
+    raise exception 'Las fechas del cambio deben estar dentro de la estadía (% al %).',
+      to_char(v_res.start_date, 'DD/MM/YYYY'), to_char(v_res.end_date, 'DD/MM/YYYY');
+  end if;
+
+  select * into v_target from public.spaces where id = p_target_space_id and workspace_id = v_res.workspace_id;
+  if not found then
+    raise exception 'El espacio de destino no existe.';
+  end if;
+
+  select array_agg(distinct space_id) || p_target_space_id into v_space_ids
+  from public.reservation_segments where reservation_id = p_reservation_id and active;
+  perform private.lock_spaces(v_space_ids);
+
+  if not exists (select 1 from public.reservation_segments s
+                 where s.reservation_id = p_reservation_id and s.active and s.space_id <> p_target_space_id
+                   and daterange(s.start_date, s.end_date, '[]') && daterange(p_from, p_to, '[]')) then
+    raise exception 'El cliente ya está en % en esas fechas.', v_target.code;
+  end if;
+
+  v_conflict := private.space_conflict(p_target_space_id, p_from, p_to, p_reservation_id);
+  if v_conflict is not null then
+    raise exception 'No se puede hacer el cambio: %', v_conflict using errcode = '23P01', hint = 'CONFLICTO_DISPONIBILIDAD';
+  end if;
+
+  v_before := private.segments_snapshot(p_reservation_id);
+  perform set_config('app.reason', coalesce(p_reason, ''), true);
+
+  insert into public.reservation_changes (id, workspace_id, reservation_id, kind, description, reason, before_state)
+  values (v_change_id, v_res.workspace_id, p_reservation_id, 'reubicacion',
+          case when p_from = p_to
+               then format('Cambio a %s por el día %s', v_target.code, to_char(p_from, 'DD/MM/YYYY'))
+               else format('Cambio a %s del %s al %s', v_target.code, to_char(p_from, 'DD/MM/YYYY'), to_char(p_to, 'DD/MM/YYYY'))
+          end,
+          nullif(btrim(p_reason), ''), jsonb_build_object('segments', v_before));
+
+  -- Finaliza los tramos afectados y recrea las partes que quedan fuera del cambio.
+  for v_seg in select * from public.reservation_segments s
+               where s.reservation_id = p_reservation_id and s.active
+                 and daterange(s.start_date, s.end_date, '[]') && daterange(p_from, p_to, '[]')
+               order by s.start_date loop
+    update public.reservation_segments set active = false, ended_by_change_id = v_change_id where id = v_seg.id;
+    if v_seg.start_date < p_from then
+      insert into public.reservation_segments (workspace_id, reservation_id, space_id, start_date, end_date, created_by_change_id)
+      values (v_seg.workspace_id, p_reservation_id, v_seg.space_id, v_seg.start_date, p_from - 1, v_change_id);
+    end if;
+    if v_seg.end_date > p_to then
+      insert into public.reservation_segments (workspace_id, reservation_id, space_id, start_date, end_date, created_by_change_id)
+      values (v_seg.workspace_id, p_reservation_id, v_seg.space_id, p_to + 1, v_seg.end_date, v_change_id);
+    end if;
+  end loop;
+
+  insert into public.reservation_segments (workspace_id, reservation_id, space_id, start_date, end_date, created_by_change_id)
+  values (v_res.workspace_id, p_reservation_id, p_target_space_id, p_from, p_to, v_change_id);
+
+  perform private.assert_coverage(p_reservation_id);
+
+  update public.reservation_changes set after_state = jsonb_build_object('segments', private.segments_snapshot(p_reservation_id))
+  where id = v_change_id;
+  update public.reservations set version = version + 1 where id = p_reservation_id;
+
+  return jsonb_build_object('change_id', v_change_id, 'segments', private.segments_snapshot(p_reservation_id));
+end $$;
+
+-- ---------------------------------------------------------------------
+-- Cancelar reserva: libera los espacios, conserva pagos e historial.
+-- Si hubo cobros, quedan como saldo a favor hasta que se registre
+-- una devolución (decisión del administrador).
+-- ---------------------------------------------------------------------
+create or replace function public.cancel_reservation(
+  p_reservation_id uuid, p_expected_version integer, p_reason text
+) returns jsonb
+language plpgsql security definer set search_path = '' as $$
+declare
+  v_res public.reservations%rowtype;
+  v_change_id uuid := gen_random_uuid();
+begin
+  select * into v_res from public.reservations where id = p_reservation_id for update;
+  if not found then
+    raise exception 'La reserva no existe.';
+  end if;
+  perform private.require_member(v_res.workspace_id);
+  if v_res.version <> p_expected_version then
+    raise exception 'Esta reserva fue modificada desde otro dispositivo. Recargá e intentá de nuevo.'
+      using errcode = '40001', hint = 'CONFLICTO_VERSION';
+  end if;
+  if v_res.status = 'cancelada' then
+    raise exception 'La reserva ya está cancelada.';
+  end if;
+  if char_length(btrim(coalesce(p_reason, ''))) < 3 then
+    raise exception 'Indicá el motivo de la cancelación.';
+  end if;
+
+  perform set_config('app.reason', p_reason, true);
+  insert into public.reservation_changes (id, workspace_id, reservation_id, kind, description, reason, before_state)
+  values (v_change_id, v_res.workspace_id, p_reservation_id, 'cancelacion',
+          format('Reserva #%s cancelada', v_res.number), btrim(p_reason),
+          jsonb_build_object('segments', private.segments_snapshot(p_reservation_id)));
+
+  update public.reservation_segments set active = false, ended_by_change_id = v_change_id
+  where reservation_id = p_reservation_id and active;
+
+  update public.reservations set status = 'cancelada', cancelled_at = now(), cancelled_by = auth.uid(),
+         cancel_reason = btrim(p_reason), version = version + 1
+  where id = p_reservation_id;
+
+  update public.reservation_changes set after_state = jsonb_build_object('segments', '[]'::jsonb)
+  where id = v_change_id;
+
+  return jsonb_build_object('change_id', v_change_id);
+end $$;
+
+-- ---------------------------------------------------------------------
+-- Revertir un cambio (cambio de carpa o cancelación).
+-- Solo si es seguro: no debe haber cambios posteriores sobre los mismos
+-- tramos y los espacios deben seguir libres. Nunca borra el cambio original.
+-- ---------------------------------------------------------------------
+create or replace function public.revert_change(p_change_id uuid, p_reason text default null) returns jsonb
+language plpgsql security definer set search_path = '' as $$
+declare
+  v_chg public.reservation_changes%rowtype;
+  v_res public.reservations%rowtype;
+  v_new_id uuid := gen_random_uuid();
+  v_seg public.reservation_segments%rowtype;
+  v_conflict text;
+  v_space_ids uuid[];
+begin
+  select * into v_chg from public.reservation_changes where id = p_change_id;
+  if not found then
+    raise exception 'El cambio no existe.';
+  end if;
+  perform private.require_member(v_chg.workspace_id);
+
+  select * into v_res from public.reservations where id = v_chg.reservation_id for update;
+  -- Vuelve a leer el cambio ya con la reserva bloqueada.
+  select * into v_chg from public.reservation_changes where id = p_change_id;
+
+  if v_chg.kind not in ('reubicacion','cancelacion') then
+    raise exception 'Este tipo de cambio no se puede revertir desde el historial.';
+  end if;
+  if v_chg.reverted_by_change_id is not null then
+    raise exception 'Este cambio ya fue revertido.';
+  end if;
+
+  -- Los tramos que dejó este cambio tienen que seguir vigentes tal cual
+  -- (mismo espacio y mismas fechas); si no, hubo cambios posteriores encima.
+  if exists (select 1 from public.reservation_segments c
+             where c.created_by_change_id = p_change_id
+               and not exists (select 1 from public.reservation_segments a
+                               where a.reservation_id = c.reservation_id and a.active
+                                 and a.space_id = c.space_id and a.start_date = c.start_date
+                                 and a.end_date = c.end_date)) then
+    raise exception 'Hay cambios posteriores sobre esta reserva. Revertí primero los más recientes.'
+      using hint = 'REVERSION_INSEGURA';
+  end if;
+
+  select array_agg(distinct space_id) into v_space_ids from public.reservation_segments
+  where ended_by_change_id = p_change_id or created_by_change_id = p_change_id;
+  perform private.lock_spaces(v_space_ids);
+
+  -- Los espacios a recuperar tienen que seguir libres.
+  for v_seg in select * from public.reservation_segments where ended_by_change_id = p_change_id order by start_date loop
+    v_conflict := private.space_conflict(v_seg.space_id, v_seg.start_date, v_seg.end_date, v_res.id);
+    if v_conflict is not null then
+      raise exception 'No se puede revertir: %', v_conflict using errcode = '23P01', hint = 'REVERSION_CONFLICTO';
+    end if;
+  end loop;
+
+  perform set_config('app.reason', coalesce(p_reason, ''), true);
+  insert into public.reservation_changes (id, workspace_id, reservation_id, kind, description, reason,
+                                          before_state, reverts_change_id)
+  values (v_new_id, v_chg.workspace_id, v_chg.reservation_id, 'reversion',
+          'Reversión: ' || v_chg.description, nullif(btrim(p_reason), ''),
+          jsonb_build_object('segments', private.segments_snapshot(v_chg.reservation_id)), p_change_id);
+
+  if v_chg.kind = 'cancelacion' then
+    if v_res.status <> 'cancelada' then
+      raise exception 'La reserva ya no está cancelada.';
+    end if;
+    update public.reservations set status = 'confirmada', cancelled_at = null, cancelled_by = null,
+           cancel_reason = null, version = version + 1
+    where id = v_res.id;
+  else
+    update public.reservation_segments a set active = false, ended_by_change_id = v_new_id
+    where a.reservation_id = v_res.id and a.active
+      and exists (select 1 from public.reservation_segments c
+                  where c.created_by_change_id = p_change_id and c.space_id = a.space_id
+                    and c.start_date = a.start_date and c.end_date = a.end_date);
+    update public.reservations set version = version + 1 where id = v_res.id;
+  end if;
+
+  -- Se recrean (como tramos nuevos) los tramos que el cambio había finalizado.
+  for v_seg in select * from public.reservation_segments where ended_by_change_id = p_change_id order by start_date loop
+    insert into public.reservation_segments (workspace_id, reservation_id, space_id, start_date, end_date, created_by_change_id)
+    values (v_seg.workspace_id, v_seg.reservation_id, v_seg.space_id, v_seg.start_date, v_seg.end_date, v_new_id);
+  end loop;
+
+  perform private.assert_coverage(v_res.id);
+
+  update public.reservation_changes set reverted_by_change_id = v_new_id where id = p_change_id;
+  update public.reservation_changes set after_state = jsonb_build_object('segments', private.segments_snapshot(v_res.id))
+  where id = v_new_id;
+
+  return jsonb_build_object('change_id', v_new_id, 'segments', private.segments_snapshot(v_res.id));
+end $$;
+
+-- Último cambio reversible del balneario (para el botón "Deshacer").
+create or replace function public.last_reversible_change(p_workspace_id uuid) returns jsonb
+language plpgsql stable security definer set search_path = '' as $$
+declare v jsonb;
+begin
+  perform private.require_member(p_workspace_id);
+  select jsonb_build_object('change_id', c.id, 'reservation_id', c.reservation_id, 'reservation_number', r.number,
+                            'kind', c.kind, 'description', c.description, 'at', c.at, 'actor_email', c.actor_email)
+    into v
+  from public.reservation_changes c
+  join public.reservations r on r.id = c.reservation_id
+  where c.workspace_id = p_workspace_id and c.kind in ('reubicacion','cancelacion')
+    and c.reverted_by_change_id is null
+  order by c.at desc
+  limit 1;
+  return v;
+end $$;
+
+-- Editar observaciones de una reserva.
+create or replace function public.update_reservation_notes(
+  p_reservation_id uuid, p_expected_version integer, p_notes text
+) returns void
+language plpgsql security definer set search_path = '' as $$
+declare v_ws uuid;
+begin
+  select workspace_id into v_ws from public.reservations where id = p_reservation_id;
+  if not found then
+    raise exception 'La reserva no existe.';
+  end if;
+  perform private.require_member(v_ws);
+  update public.reservations set notes = nullif(btrim(p_notes), ''), version = p_expected_version + 1
+  where id = p_reservation_id;
+end $$;
+
+revoke all on function
+  public.create_reservation(uuid, uuid, uuid, date, date, jsonb, jsonb, jsonb, boolean, text, jsonb),
+  public.relocate_reservation(uuid, uuid, date, date, integer, text),
+  public.cancel_reservation(uuid, integer, text),
+  public.revert_change(uuid, text),
+  public.last_reversible_change(uuid),
+  public.update_reservation_notes(uuid, integer, text)
+  from public, anon;
+grant execute on function
+  public.create_reservation(uuid, uuid, uuid, date, date, jsonb, jsonb, jsonb, boolean, text, jsonb),
+  public.relocate_reservation(uuid, uuid, date, date, integer, text),
+  public.cancel_reservation(uuid, integer, text),
+  public.revert_change(uuid, text),
+  public.last_reversible_change(uuid),
+  public.update_reservation_notes(uuid, integer, text)
+  to authenticated;
+
+-- >>> 0006_consultas.sql
+-- =====================================================================
+-- 0006 · Consultas centrales de disponibilidad.
+-- Mapa, línea de tiempo, Nueva reserva y panel usan esta misma lógica.
+-- =====================================================================
+
+-- Estado de cada espacio en un día dado (para el mapa).
+create or replace function public.map_day_status(p_workspace_id uuid, p_day date)
+returns table (
+  space_id uuid, code text, kind text, x numeric, y numeric, rotation numeric, active boolean,
+  state text,                 -- disponible | ocupada | cortesia | reservada_futura | mantenimiento | desactivada
+  reservation_id uuid, reservation_number bigint, customer_id uuid, customer_name text,
+  reservation_start date, reservation_end date, days_remaining integer,
+  due_amount numeric, maintenance_reason text, maintenance_end date, next_start date,
+  version integer
+)
+language plpgsql stable security definer set search_path = '' as $$
+begin
+  perform private.require_member(p_workspace_id);
+  return query
+  select sp.id, sp.code, sp.kind, sp.x, sp.y, sp.rotation, sp.active,
+         case
+           when not sp.active then 'desactivada'
+           when m.id is not null then 'mantenimiento'
+           when occ.reservation_id is not null and occ.is_courtesy then 'cortesia'
+           when occ.reservation_id is not null then 'ocupada'
+           when nxt.next_start is not null then 'reservada_futura'
+           else 'disponible'
+         end,
+         occ.reservation_id, occ.number, occ.customer_id, occ.customer_name,
+         occ.start_date, occ.end_date,
+         case when occ.reservation_id is not null then (occ.end_date - p_day) end,
+         occ.due_amount, m.reason, m.end_date, nxt.next_start, sp.version
+  from public.spaces sp
+  left join lateral (
+    select mb.id, mb.reason, mb.end_date from public.maintenance_blocks mb
+    where mb.space_id = sp.id and mb.active and p_day between mb.start_date and mb.end_date
+    limit 1
+  ) m on true
+  left join lateral (
+    select r.id as reservation_id, r.number, r.customer_id, r.is_courtesy, r.start_date, r.end_date,
+           btrim(c.first_name || ' ' || c.last_name) as customer_name, b.due_amount
+    from public.reservation_segments s
+    join public.reservations r on r.id = s.reservation_id
+    join public.customers c on c.id = r.customer_id
+    join public.reservation_balances b on b.reservation_id = r.id
+    where s.space_id = sp.id and s.active and p_day between s.start_date and s.end_date
+    limit 1
+  ) occ on true
+  left join lateral (
+    select min(s.start_date) as next_start from public.reservation_segments s
+    where s.space_id = sp.id and s.active and s.start_date > p_day
+  ) nxt on true
+  where sp.workspace_id = p_workspace_id
+  order by sp.kind, sp.code;
+end $$;
+
+-- Disponibilidad día por día (para Nueva reserva y alternativas).
+-- Máximo 120 días por consulta.
+create or replace function public.availability_grid(
+  p_workspace_id uuid, p_from date, p_to date, p_kind text default null
+) returns table (space_id uuid, code text, kind text, day date, free boolean, reason text)
+language plpgsql stable security definer set search_path = '' as $$
+begin
+  perform private.require_member(p_workspace_id);
+  if p_to < p_from or p_to - p_from > 120 then
+    raise exception 'El rango de fechas debe ser de hasta 120 días.';
+  end if;
+  return query
+  select sp.id, sp.code, sp.kind, d::date,
+         (sp.active and m.id is null and s.id is null),
+         case when not sp.active then 'desactivada'
+              when m.id is not null then 'mantenimiento'
+              when s.id is not null then 'ocupada'
+         end
+  from public.spaces sp
+  cross join generate_series(p_from, p_to, interval '1 day') d
+  left join public.maintenance_blocks m
+    on m.space_id = sp.id and m.active and d::date between m.start_date and m.end_date
+  left join public.reservation_segments s
+    on s.space_id = sp.id and s.active and d::date between s.start_date and s.end_date
+  where sp.workspace_id = p_workspace_id
+    and (p_kind is null or sp.kind = p_kind)
+  order by sp.kind, sp.code, d;
+end $$;
+
+-- Elementos de la línea de tiempo: tramos y bloqueos dentro de un rango.
+create or replace function public.timeline_items(p_workspace_id uuid, p_from date, p_to date)
+returns table (
+  item_type text, space_id uuid, start_date date, end_date date,
+  reservation_id uuid, reservation_number bigint, customer_name text, is_courtesy boolean,
+  reservation_start date, reservation_end date, is_relocation boolean, label text
+)
+language plpgsql stable security definer set search_path = '' as $$
+begin
+  perform private.require_member(p_workspace_id);
+  if p_to < p_from or p_to - p_from > 400 then
+    raise exception 'El rango de fechas debe ser de hasta 400 días.';
+  end if;
+  return query
+  select 'tramo', s.space_id, s.start_date, s.end_date, r.id, r.number,
+         btrim(c.first_name || ' ' || c.last_name), r.is_courtesy, r.start_date, r.end_date,
+         (select count(*) from public.reservation_segments s2 where s2.reservation_id = r.id and s2.active) > 1,
+         null::text
+  from public.reservation_segments s
+  join public.reservations r on r.id = s.reservation_id
+  join public.customers c on c.id = r.customer_id
+  where s.workspace_id = p_workspace_id and s.active
+    and daterange(s.start_date, s.end_date, '[]') && daterange(p_from, p_to, '[]')
+  union all
+  select 'mantenimiento', m.space_id, m.start_date, m.end_date, null, null, null, false, null, null, false, m.reason
+  from public.maintenance_blocks m
+  where m.workspace_id = p_workspace_id and m.active
+    and daterange(m.start_date, m.end_date, '[]') && daterange(p_from, p_to, '[]');
+end $$;
+
+-- Panel principal: todo lo del día en una sola consulta.
+create or replace function public.dashboard_summary(p_workspace_id uuid) returns jsonb
+language plpgsql stable security definer set search_path = '' as $$
+declare
+  v_today date;
+  v_counts jsonb;
+  v_starting jsonb;
+  v_ending jsonb;
+  v_debtors integer;
+  v_session public.cash_sessions%rowtype;
+  v_old_open public.cash_sessions%rowtype;
+  v_income jsonb;
+  v_expenses numeric(14,2);
+begin
+  perform private.require_member(p_workspace_id);
+  v_today := private.ws_today(p_workspace_id);
+
+  select jsonb_object_agg(kind, x) into v_counts from (
+    select kind, jsonb_build_object(
+      'total_activos', count(*) filter (where state <> 'desactivada'),
+      'ocupados', count(*) filter (where state in ('ocupada','cortesia')),
+      'cortesias', count(*) filter (where state = 'cortesia'),
+      'disponibles', count(*) filter (where state in ('disponible','reservada_futura')),
+      'mantenimiento', count(*) filter (where state = 'mantenimiento'),
+      'desactivados', count(*) filter (where state = 'desactivada')
+    ) as x
+    from public.map_day_status(p_workspace_id, v_today) group by kind
+  ) t;
+
+  select coalesce(jsonb_agg(jsonb_build_object(
+           'reservation_id', r.id, 'number', r.number,
+           'customer', btrim(c.first_name || ' ' || c.last_name), 'phone', c.phone,
+           'start_date', r.start_date, 'end_date', r.end_date,
+           'spaces', (select string_agg(sp.code, ', ' order by s.start_date) from public.reservation_segments s
+                      join public.spaces sp on sp.id = s.space_id where s.reservation_id = r.id and s.active),
+           'due_amount', b.due_amount, 'is_courtesy', r.is_courtesy) order by r.number), '[]'::jsonb)
+    into v_starting
+  from public.reservations r
+  join public.customers c on c.id = r.customer_id
+  join public.reservation_balances b on b.reservation_id = r.id
+  where r.workspace_id = p_workspace_id and r.status = 'confirmada' and r.start_date = v_today;
+
+  select coalesce(jsonb_agg(jsonb_build_object(
+           'reservation_id', r.id, 'number', r.number,
+           'customer', btrim(c.first_name || ' ' || c.last_name), 'phone', c.phone,
+           'start_date', r.start_date, 'end_date', r.end_date,
+           'spaces', (select string_agg(sp.code, ', ' order by s.start_date) from public.reservation_segments s
+                      join public.spaces sp on sp.id = s.space_id where s.reservation_id = r.id and s.active),
+           'due_amount', b.due_amount, 'is_courtesy', r.is_courtesy) order by b.due_amount desc, r.number), '[]'::jsonb)
+    into v_ending
+  from public.reservations r
+  join public.customers c on c.id = r.customer_id
+  join public.reservation_balances b on b.reservation_id = r.id
+  where r.workspace_id = p_workspace_id and r.status = 'confirmada' and r.end_date = v_today;
+
+  select count(distinct r.customer_id) into v_debtors
+  from public.reservations r join public.reservation_balances b on b.reservation_id = r.id
+  where r.workspace_id = p_workspace_id and b.due_amount > 0;
+
+  select * into v_session from public.cash_sessions
+  where workspace_id = p_workspace_id and business_date = v_today;
+  select * into v_old_open from public.cash_sessions
+  where workspace_id = p_workspace_id and closed_at is null and business_date < v_today;
+
+  select jsonb_build_object(
+           'efectivo', coalesce(sum(amount) filter (where method = 'efectivo'), 0),
+           'transferencia', coalesce(sum(amount) filter (where method = 'transferencia'), 0),
+           'tarjeta', coalesce(sum(amount) filter (where method = 'tarjeta'), 0),
+           'total', coalesce(sum(amount), 0))
+    into v_income
+  from public.cash_movements
+  where cash_session_id = v_session.id and direction = 'entrada';
+
+  select coalesce(sum(e.amount), 0) into v_expenses
+  from public.expenses e where e.workspace_id = p_workspace_id and e.spent_on = v_today and e.voided_at is null;
+
+  return jsonb_build_object(
+    'fecha', v_today,
+    'espacios', coalesce(v_counts, '{}'::jsonb),
+    'ingresan_hoy', v_starting,
+    'finalizan_hoy', v_ending,
+    'clientes_con_deuda', v_debtors,
+    'ingresos_hoy', coalesce(v_income, jsonb_build_object('efectivo', 0, 'transferencia', 0, 'tarjeta', 0, 'total', 0)),
+    'gastos_hoy', v_expenses,
+    'caja', case
+              when v_session.id is null then jsonb_build_object('estado', 'sin_abrir')
+              when v_session.closed_at is null then jsonb_build_object('estado', 'abierta', 'session_id', v_session.id)
+              else jsonb_build_object('estado', 'cerrada', 'session_id', v_session.id)
+            end,
+    'caja_anterior_sin_cerrar', case when v_old_open.id is not null
+              then jsonb_build_object('session_id', v_old_open.id, 'fecha', v_old_open.business_date) end
+  );
+end $$;
+
+revoke all on function
+  public.map_day_status(uuid, date),
+  public.availability_grid(uuid, date, date, text),
+  public.timeline_items(uuid, date, date),
+  public.dashboard_summary(uuid)
+  from public, anon;
+grant execute on function
+  public.map_day_status(uuid, date),
+  public.availability_grid(uuid, date, date, text),
+  public.timeline_items(uuid, date, date),
+  public.dashboard_summary(uuid)
+  to authenticated;
+
+-- >>> 0007_alta_balneario.sql
+-- =====================================================================
+-- 0007 · Alta del balneario con su inventario inicial.
+-- Lo usa la primera persona que inicia sesión. Queda como propietaria.
+-- =====================================================================
+
+create or replace function public.create_workspace(p_name text) returns uuid
+language plpgsql security definer set search_path = '' as $$
+declare
+  v_ws uuid;
+  v_user uuid := auth.uid();
+  v_email text := nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'email';
+  i integer;
+begin
+  if v_user is null then
+    raise exception 'Tenés que iniciar sesión.' using errcode = '28000';
+  end if;
+  if exists (select 1 from public.workspace_members where user_id = v_user) then
+    raise exception 'Tu cuenta ya pertenece a un balneario.';
+  end if;
+  -- Instalación de un solo balneario: solo la primera cuenta puede crearlo.
+  -- Las demás personas entran únicamente por invitación del propietario.
+  perform pg_advisory_xact_lock(hashtextextended('alta-balneario', 0));
+  if exists (select 1 from public.workspaces) then
+    raise exception 'El balneario ya fue creado. Pedile al propietario que te invite.' using errcode = '42501';
+  end if;
+  if char_length(btrim(coalesce(p_name, ''))) = 0 then
+    raise exception 'Ingresá el nombre del balneario.';
+  end if;
+
+  insert into public.workspaces (name, created_by) values (btrim(p_name), v_user) returning id into v_ws;
+  insert into public.workspace_members (workspace_id, user_id, role, email) values (v_ws, v_user, 'propietario', v_email);
+
+  -- Inventario inicial: 90 carpas (C01–C90) y 10 sombrillas (S01–S10).
+  -- Es solo el punto de partida: se pueden mover, renombrar, agregar o desactivar.
+  for i in 1..90 loop
+    insert into public.spaces (workspace_id, kind, code, x, y)
+    values (v_ws, 'carpa', 'C' || lpad(i::text, 2, '0'),
+            150 + ((i - 1) % 15) * 110,
+            330 + ((i - 1) / 15) * 120);
+  end loop;
+  for i in 1..10 loop
+    insert into public.spaces (workspace_id, kind, code, x, y)
+    values (v_ws, 'sombrilla', 'S' || lpad(i::text, 2, '0'), 150 + (i - 1) * 110, 1060);
+  end loop;
+
+  insert into public.expense_categories (workspace_id, name) values
+    (v_ws, 'Proveedores e insumos'), (v_ws, 'Mantenimiento'), (v_ws, 'Reparaciones'),
+    (v_ws, 'Limpieza'), (v_ws, 'Materiales y herramientas'), (v_ws, 'Otros gastos');
+
+  insert into public.agreements (workspace_id, name, percent) values (v_ws, 'Parque Bonito', 30);
+
+  insert into public.user_preferences (user_id) values (v_user) on conflict (user_id) do nothing;
+
+  return v_ws;
+end $$;
+
+revoke all on function public.create_workspace(text) from public, anon;
+grant execute on function public.create_workspace(text) to authenticated;
+
+commit;
