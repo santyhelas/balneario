@@ -74,7 +74,7 @@ export function Shell({ children }: { children: ReactNode }) {
 
   return (
     <div className="flex min-h-dvh">
-      <aside className="sticky top-0 hidden h-dvh w-56 shrink-0 flex-col border-r border-line bg-surface p-3 md:flex">
+      <aside className="sticky top-0 hidden h-dvh print:!hidden w-56 shrink-0 flex-col border-r border-line bg-surface p-3 md:flex">
         <div className="mb-5 flex items-center gap-2 px-2 pt-1">
           <img src="/icon.svg" alt="" className="h-8 w-8" />
           <span className="truncate font-semibold" title={ws.name}>{ws.name}</span>
@@ -97,7 +97,7 @@ export function Shell({ children }: { children: ReactNode }) {
 
       <div className="flex min-w-0 flex-1 flex-col">
         {/* Barra superior en pantallas chicas */}
-        <header className="sticky top-0 z-30 flex items-center justify-between border-b border-line bg-surface px-3 py-2 md:hidden">
+        <header className="sticky top-0 z-30 flex items-center print:hidden justify-between border-b border-line bg-surface px-3 py-2 md:hidden">
           <button onClick={() => setMenuOpen((v) => !v)} className="rounded-lg p-2 hover:bg-surface-2" aria-label="Menú">
             <Icon d="M4 6h16M4 12h16M4 18h16" />
           </button>
@@ -114,7 +114,7 @@ export function Shell({ children }: { children: ReactNode }) {
             </button>
           </div>
         )}
-        <main className="mx-auto w-full max-w-7xl flex-1 p-4 md:p-6">{children}</main>
+        <main className="mx-auto w-full max-w-7xl flex-1 p-4 md:p-6 print:p-0">{children}</main>
       </div>
 
       <ConfirmDialog

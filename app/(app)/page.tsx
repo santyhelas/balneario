@@ -111,6 +111,11 @@ export default function DashboardPage() {
             </Card>
           </div>
 
+          <div className="flex flex-wrap gap-2">
+            <Link href="/reservas/nueva"><Button>Nueva reserva</Button></Link>
+            <Link href="/mapa"><Button variant="secondary">Ver mapa</Button></Link>
+          </div>
+
           <Card title="Caja" actions={<Link className="text-sm text-accent hover:underline" href="/caja">Ir a caja →</Link>}>
             <p className="text-sm">
               Estado:{" "}
@@ -148,7 +153,7 @@ function ResList({ items, empty }: { items: ResItem[]; empty: string }) {
       {items.map((r) => (
         <li key={r.reservation_id} className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm">
           <div>
-            <div className="font-medium">{r.customer} <span className="text-muted">· #{r.number}</span></div>
+            <Link href={`/reservas/${r.reservation_id}`} className="font-medium hover:underline">{r.customer} <span className="text-muted">· #{r.number}</span></Link>
             <div className="text-xs text-muted">
               {r.spaces} · {formatDate(r.start_date)} al {formatDate(r.end_date)}
               {r.phone ? ` · ${r.phone}` : ""}

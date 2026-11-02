@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import { useMemo, useState, type FormEvent } from "react";
 import { getSupabase } from "@/lib/supabase/client";
 import { unwrap, useLoader } from "@/lib/data";
@@ -231,6 +232,13 @@ function SpacePanel({ space, day, today, isAdmin, onChanged, onCheckDate }: { sp
       {space.state === "disponible" && !space.next_start && <p className="mb-3 text-sm text-muted">Sin reservas futuras.</p>}
 
       {error && <Alert tone="danger" className="mb-3">{error}</Alert>}
+
+      <div className="mb-3 flex flex-wrap gap-2">
+        {space.reservation_id && <Link href={`/reservas/${space.reservation_id}`}><Button>Ver reserva #{space.reservation_number}</Button></Link>}
+        {space.active && !space.reservation_id && space.state !== "mantenimiento" && (
+          <Link href={`/reservas/nueva?espacio=${space.space_id}&desde=${day}`}><Button>Reservar desde el {formatDate(day)}</Button></Link>
+        )}
+      </div>
 
       {isAdmin && (
         <div className="flex flex-wrap gap-2 border-t border-line pt-3">
