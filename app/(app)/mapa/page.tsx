@@ -47,8 +47,13 @@ export default function MapaPage() {
   );
 
   const featuresQ = useLoader<MapFeature[]>(
-    async () => unwrap(await sb.from("map_features").select("id, kind, label, x, y, width, height, rotation, color, version")
-      .eq("workspace_id", ws.id).eq("active", true).order("created_at")) as MapFeature[],
+    async () => {
+      const q = (cols: string) => sb.from("map_features").select(cols).eq("workspace_id", ws.id).eq("active", true).order("created_at");
+      let res = await q("id, kind, label, x, y, width, height, rotation, color, layer, version");
+      // Sin la actualización 0014 todavía no existe la columna de capas.
+      if (res.error?.code === "42703") res = await q("id, kind, label, x, y, width, height, rotation, color, version");
+      return unwrap(res) as unknown as MapFeature[];
+    },
     [ws.id],
     0,
   );
@@ -211,7 +216,7 @@ export default function MapaPage() {
         {(selectedSpace || selectedFeature) && (
           <div id="ficha-espacio" className="mt-3 scroll-mt-20 lg:absolute lg:left-3 lg:top-3 lg:mt-0 lg:max-h-[calc(100%-1.5rem)] lg:w-[340px] lg:overflow-y-auto lg:rounded-xl lg:shadow-xl">
             {selectedSpace && <SpacePanel space={selectedSpace} day={day} today={today} isAdmin={isAdmin} onChanged={reload} onCheckDate={setDay} onClose={() => setSel(null)} />}
-            {selectedFeature && <FeaturePanel feature={selectedFeature} onSave={(patch) => updateFeature(selectedFeature.id, patch)} onClose={() => setSel(null)} onRemove={async () => { if (await updateFeature(selectedFeature.id, { active: false } as Partial<MapFeature>)) setSel(null); }} />}
+            {selectedFeature && <FeaturePanel feature={selectedFeature} features={features} onSave={(patch) => updateFeature(selectedFeature.id, patch)} onSaveOther={(id, patch) => updateFeature(id, patch)} onClose={() => setSel(null)} onRemove={async () => { if (await updateFeature(selectedFeature.id, { active: false } as Partial<MapFeature>)) setSel(null); }} />}
           </div>
         )}
       </div>
@@ -231,9 +236,43 @@ export default function MapaPage() {
   );
 }
 
-function FeaturePanel({ feature, onSave, onClose, onRemove }: {
-  feature: MapFeature; onSave: (patch: Partial<MapFeature>) => Promise<boolean>; onClose: () => void; onRemove: () => Promise<void>;
+function FeaturePanel({ feature, features, onSave, onSaveOther, onClose, onRemove }: {
+  feature: MapFeature; features: MapFeature[]; onSave: (patch: Partial<MapFeature>) => Promise<boolean>;
+  onSaveOther: (id: string, patch: Partial<MapFeature>) => Promise<boolean>; onClose: () => void; onRemove: () => Promise<void>;
 }) {
+  const [len, setLen] = useState(String(Math.round(Number(feature.width))));
+  const [wid, setWid] = useState(String(Math.round(Number(feature.height))));
+  useEffect(() => {
+    setLen(String(Math.round(Number(feature.width))));
+    setWid(String(Math.round(Number(feature.height))));
+  }, [feature.id, feature.width, feature.height]);
+  const hasLayers = feature.layer !== undefined;
+  const layers = features.map((f) => f.layer ?? 0);
+  const myLayer = feature.layer ?? 0;
+
+  // Capas: más alto = más arriba (las carpas y sombrillas siempre quedan encima de todo).
+  async function toFront() { await run({ layer: Math.max(...layers) + 1 }); }
+  async function toBack() { await run({ layer: Math.min(...layers) - 1 }); }
+  async function step(dir: 1 | -1) {
+    // Intercambia la capa con el elemento inmediatamente arriba (o abajo) que se superpone en el plano.
+    const others = features
+      .filter((f) => f.id !== feature.id && overlaps(f, feature))
+      .filter((f) => (dir === 1 ? (f.layer ?? 0) >= myLayer : (f.layer ?? 0) <= myLayer))
+      .sort((a, b) => dir * ((a.layer ?? 0) - (b.layer ?? 0)));
+    const other = others[0];
+    if (!other) {
+      await run({ layer: myLayer + dir });
+      return;
+    }
+    const otherLayer = other.layer ?? 0;
+    setBusy(true);
+    if (otherLayer === myLayer) await onSave({ layer: myLayer + dir });
+    else {
+      await onSaveOther(other.id, { layer: myLayer });
+      await onSave({ layer: otherLayer });
+    }
+    setBusy(false);
+  }
   const [kind, setKind] = useState(feature.kind);
   const [label, setLabel] = useState(feature.label ?? "");
   const [color, setColor] = useState(feature.color ?? "#9a6a34");
@@ -270,7 +309,24 @@ function FeaturePanel({ feature, onSave, onClose, onRemove }: {
           </div>
         </Field>
         {dirty && <Button loading={busy} onClick={() => run({ kind, label: label.trim() || null, color })}>Guardar cambios</Button>}
-        <p className="text-xs text-muted">Tamaño: {Math.round(Number(feature.width))} × {Math.round(Number(feature.height))}. Para agrandarlo o achicarlo, arrastrá el círculo de su esquina.</p>
+        <div className="grid grid-cols-2 gap-2">
+          <TextField label="Largo" inputMode="numeric" value={len} onChange={(e) => setLen(e.target.value.replace(/\D/g, ""))}
+            onBlur={() => { const v = Number(len); if (v >= 16 && v !== Math.round(Number(feature.width))) run({ width: v }); }} />
+          <TextField label="Ancho" inputMode="numeric" value={wid} onChange={(e) => setWid(e.target.value.replace(/\D/g, ""))}
+            onBlur={() => { const v = Number(wid); if (v >= 16 && v !== Math.round(Number(feature.height))) run({ height: v }); }} />
+        </div>
+        <p className="text-xs text-muted">También podés estirarlo en el plano tirando de las agarraderas de sus lados o esquinas. Como referencia, una carpa mide 86 de largo.</p>
+        {hasLayers ? (
+          <div>
+            <div className="mb-1 text-sm font-medium">Superponer</div>
+            <div className="grid grid-cols-2 gap-2">
+              <Button variant="secondary" className="py-1.5" loading={busy} onClick={toFront}>Traer al frente</Button>
+              <Button variant="secondary" className="py-1.5" loading={busy} onClick={toBack}>Enviar al fondo</Button>
+              <Button variant="secondary" className="py-1.5" loading={busy} onClick={() => step(1)}>Subir un nivel</Button>
+              <Button variant="secondary" className="py-1.5" loading={busy} onClick={() => step(-1)}>Bajar un nivel</Button>
+            </div>
+          </div>
+        ) : <p className="text-xs text-warn">Para superponer elementos falta aplicar la actualización 0014 de la base de datos.</p>}
         <div className="flex flex-wrap gap-2 border-t border-line pt-3">
           <Button variant="secondary" loading={busy} onClick={() => run({ rotation: ((Number(feature.rotation) || 0) + 90) % 360 })}>Girar 90°</Button>
           <Button variant="secondary" loading={busy} onClick={() => run({ width: Number(feature.height), height: Number(feature.width) })}>Cambiar orientación</Button>
@@ -495,4 +551,17 @@ function AddSpaceModal({ open, onClose, onDone, mapW, mapH }: { open: boolean; o
       </form>
     </Modal>
   );
+}
+
+/** ¿Se tocan dos elementos en el plano? (aproximación con rectángulos sin rotar) */
+function overlaps(a: MapFeature, b: MapFeature): boolean {
+  const ext = (f: MapFeature) => {
+    const r = ((Number(f.rotation) || 0) / 90) % 2 === 1;
+    const w = r ? Number(f.height) : Number(f.width);
+    const h = r ? Number(f.width) : Number(f.height);
+    return { x0: Number(f.x) - w / 2, x1: Number(f.x) + w / 2, y0: Number(f.y) - h / 2, y1: Number(f.y) + h / 2 };
+  };
+  const A = ext(a);
+  const B = ext(b);
+  return A.x0 < B.x1 && B.x0 < A.x1 && A.y0 < B.y1 && B.y0 < A.y1;
 }

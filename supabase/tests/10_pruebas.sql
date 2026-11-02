@@ -585,6 +585,14 @@ select t.ok((select windguru_params from public.workspaces) = 's=48572&m=3&lng=e
 select t.throws($$update public.workspaces set windguru_params = 's=1&x=<script>', version = version + 1$$, 'check', 'Windguru: no acepta caracteres peligrosos');
 select t.throws($$update public.workspaces set windguru_params = 'm=3', version = version + 1$$, 'check', 'Windguru: exige el número de spot');
 
+-- 18. Capas del plano
+select t.ok((select layer from public.map_features where active and label = 'Bar') > (select layer from public.map_features where active and label = 'Parador'), 'Capas: el bar queda encima del edificio');
+select t.ok((select layer from public.map_features where active and label = 'Parador') > coalesce((select max(layer) from public.map_features where active and kind = 'sector'), -1), 'Capas: el edificio queda encima de los sectores');
+insert into public.map_features (workspace_id, kind, label, x, y, width, height) values (t.uid('ws'), 'instalacion', 'Kiosco', 100, 100, 50, 50);
+select t.ok((select layer from public.map_features where label = 'Kiosco') > (select max(layer) from public.map_features where active and label = 'Bar'), 'Capas: lo nuevo queda arriba de su tipo');
+update public.map_features set layer = -5, version = version + 1 where label = 'Kiosco';
+select t.ok((select layer from public.map_features where label = 'Kiosco') = -5, 'Capas: se puede enviar al fondo');
+
 reset role;
 \o
 -- Resultado ----------------------------------------------------------

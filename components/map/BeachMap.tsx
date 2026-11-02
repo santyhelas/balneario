@@ -24,6 +24,7 @@ export type MapFeature = {
   height: number;
   rotation: number;
   color: string | null;
+  layer?: number;
   version: number;
 };
 
@@ -35,7 +36,7 @@ type Drag =
   | { type: "pan"; startX: number; startY: number; view: View; moved: boolean; tap?: Selection }
   | { type: "space"; id: string; dx: number; dy: number; startX: number; startY: number; moved: boolean }
   | { type: "feature"; id: string; dx: number; dy: number; startX: number; startY: number; moved: boolean }
-  | { type: "resize"; id: string; startX: number; startY: number; moved: boolean }
+  | { type: "resize"; id: string; startX: number; startY: number; moved: boolean; hx: -1 | 0 | 1; hy: -1 | 0 | 1; g0: FeatureGeom; angle: number }
   | { type: "pinch"; lastDist: number; lastMid: { x: number; y: number } }
   | null;
 
@@ -220,11 +221,11 @@ export function BeachMap({
     drag.current = { type: "feature", id: f.id, dx: p.x - g.x, dy: p.y - g.y, startX: e.clientX, startY: e.clientY, moved: false };
   }
 
-  function onResizePointerDown(e: RPointerEvent<SVGCircleElement>, f: MapFeature) {
+  function onResizePointerDown(e: RPointerEvent<SVGElement>, f: MapFeature, hx: -1 | 0 | 1, hy: -1 | 0 | 1) {
     if (e.button !== 0) return;
     e.stopPropagation();
     capture(e);
-    drag.current = { type: "resize", id: f.id, startX: e.clientX, startY: e.clientY, moved: false };
+    drag.current = { type: "resize", id: f.id, startX: e.clientX, startY: e.clientY, moved: false, hx, hy, g0: featGeom(f), angle: ((Number(f.rotation) || 0) * Math.PI) / 180 };
   }
 
   function onPointerMove(e: RPointerEvent<SVGSVGElement>) {
@@ -272,19 +273,27 @@ export function BeachMap({
       const y = Math.round(Math.min(height, Math.max(0, p.y - d.dy)));
       setLocalFeatures((prev) => ({ ...prev, [d.id]: { ...g, x, y } }));
     } else if (d.type === "resize") {
-      const f = features.find((x) => x.id === d.id);
-      if (!f) return;
-      const g = featGeom(f);
-      // Se agranda simétricamente desde el centro, respetando la rotación del elemento.
-      const a = (-(Number(f.rotation) || 0) * Math.PI) / 180;
-      const vx = p.x - g.x;
-      const vy = p.y - g.y;
-      const lx = vx * Math.cos(a) - vy * Math.sin(a);
-      const ly = vx * Math.sin(a) + vy * Math.cos(a);
-      setLocalFeatures((prev) => ({
-        ...prev,
-        [d.id]: { ...g, width: Math.round(Math.max(MIN_FEATURE, Math.abs(lx) * 2)), height: Math.round(Math.max(MIN_FEATURE, Math.abs(ly) * 2)) },
-      }));
+      // Se estira desde el lado o la esquina tomada; el lado opuesto queda fijo. Respeta la rotación.
+      const { g0, angle, hx, hy } = d;
+      const vx = p.x - g0.x;
+      const vy = p.y - g0.y;
+      const lx = vx * Math.cos(-angle) - vy * Math.sin(-angle);
+      const ly = vx * Math.sin(-angle) + vy * Math.cos(-angle);
+      let w = g0.width;
+      let h = g0.height;
+      let cxL = 0;
+      let cyL = 0;
+      if (hx !== 0) {
+        w = Math.max(MIN_FEATURE, hx * lx + g0.width / 2);
+        cxL = -hx * (g0.width / 2) + hx * (w / 2);
+      }
+      if (hy !== 0) {
+        h = Math.max(MIN_FEATURE, hy * ly + g0.height / 2);
+        cyL = -hy * (g0.height / 2) + hy * (h / 2);
+      }
+      const cx = g0.x + cxL * Math.cos(angle) - cyL * Math.sin(angle);
+      const cy = g0.y + cxL * Math.sin(angle) + cyL * Math.cos(angle);
+      setLocalFeatures((prev) => ({ ...prev, [d.id]: { x: Math.round(cx), y: Math.round(cy), width: Math.round(w), height: Math.round(h) } }));
     }
   }
 
@@ -382,7 +391,7 @@ export function BeachMap({
           <text x={sea.x + sea.w / 2} y={sea.y + sea.h / 2} textAnchor="middle" dominantBaseline="middle" fill="var(--foam)"
             fontSize={56} fontWeight={700} opacity={0.6} pointerEvents="none" letterSpacing={18}>MAR</text>
 
-          {features.map((f) => (
+          {[...features].sort((a, b) => (a.layer ?? 0) - (b.layer ?? 0)).map((f) => (
             <FeatureShape
               key={f.id}
               f={f}
@@ -391,7 +400,7 @@ export function BeachMap({
               selected={selFeature === f.id}
               saving={saving === f.id}
               onPointerDown={(e) => onFeaturePointerDown(e, f)}
-              onResizeDown={(e) => onResizePointerDown(e, f)}
+              onResizeDown={(e, hx, hy) => onResizePointerDown(e, f, hx, hy)}
             />
           ))}
 
@@ -433,7 +442,7 @@ export function BeachMap({
       {(zoomed || editMode) && (
         <p className="pointer-events-none absolute bottom-3 left-3 rounded-lg bg-surface/90 px-2 py-1 text-[11px] text-muted print:hidden">
           {zoomed && "Arrastrá para recorrer el plano. "}
-          {editMode && "Arrastrá carpas y elementos para ubicarlos; agrandá un elemento desde el círculo de su esquina. Esc cancela."}
+          {editMode && "Arrastrá carpas y elementos para ubicarlos. Para estirar un elemento, tirá de las agarraderas de sus lados o esquinas. Esc cancela."}
         </p>
       )}
     </div>
@@ -469,7 +478,7 @@ export const FEATURE_KIND_LABEL: Record<MapFeature["kind"], string> = {
 function FeatureShape({ f, g, editable, selected, saving, onPointerDown, onResizeDown }: {
   f: MapFeature; g: FeatureGeom; editable: boolean; selected: boolean; saving: boolean;
   onPointerDown: (e: RPointerEvent<SVGGElement>) => void;
-  onResizeDown: (e: RPointerEvent<SVGCircleElement>) => void;
+  onResizeDown: (e: RPointerEvent<SVGElement>, hx: -1 | 0 | 1, hy: -1 | 0 | 1) => void;
 }) {
   const w = g.width;
   const h = g.height;
@@ -494,9 +503,36 @@ function FeatureShape({ f, g, editable, selected, saving, onPointerDown, onResiz
       {editable && selected && (
         <>
           <rect x={-w / 2 - 6} y={-h / 2 - 6} width={w + 12} height={h + 12} rx={14} fill="none" stroke="var(--accent)" strokeWidth={4} strokeDasharray="12 8" pointerEvents="none" />
-          <circle cx={w / 2 + 6} cy={h / 2 + 6} r={18} fill="var(--accent)" stroke="#fff" strokeWidth={4} className="cursor-nwse-resize" onPointerDown={onResizeDown} />
+          {HANDLES.map(([hx, hy]) => {
+            const side = hx === 0 || hy === 0;
+            const px = (hx * (w + 12)) / 2;
+            const py = (hy * (h + 12)) / 2;
+            return (
+              <g key={`${hx}${hy}`} transform={`translate(${px} ${py})`} onPointerDown={(e) => onResizeDown(e, hx, hy)} style={{ cursor: handleCursor(hx, hy, Number(f.rotation) || 0) }}>
+                {/* zona de agarre amplia e invisible */}
+                <circle r={34} fill="transparent" />
+                {side
+                  ? <rect x={hx === 0 ? -26 : -11} y={hy === 0 ? -26 : -11} width={hx === 0 ? 52 : 22} height={hy === 0 ? 52 : 22} rx={8} fill="#fff" stroke="var(--accent)" strokeWidth={5} />
+                  : <circle r={14} fill="var(--accent)" stroke="#fff" strokeWidth={4} />}
+              </g>
+            );
+          })}
         </>
       )}
     </g>
   );
+}
+
+const HANDLES: [-1 | 0 | 1, -1 | 0 | 1][] = [
+  [-1, 0], [1, 0], [0, -1], [0, 1],
+  [-1, -1], [1, -1], [-1, 1], [1, 1],
+];
+
+function handleCursor(hx: number, hy: number, rotation: number): string {
+  // Ángulo de la agarradera en pantalla para elegir la flecha de cursor adecuada.
+  const a = ((Math.atan2(hy, hx) * 180) / Math.PI + rotation + 360) % 180;
+  if (a < 22.5 || a >= 157.5) return "ew-resize";
+  if (a < 67.5) return "nwse-resize";
+  if (a < 112.5) return "ns-resize";
+  return "nesw-resize";
 }
