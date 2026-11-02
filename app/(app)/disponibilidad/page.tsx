@@ -17,8 +17,12 @@ type Item = {
 };
 type Block = { start: number; len: number; item: Item };
 
-const WEEKDAY = ["D", "L", "M", "M", "J", "V", "S"];
-const COL = 34; // ancho de cada día en píxeles
+// Miércoles con "X" para no confundirlo con martes.
+const WEEKDAY = ["D", "L", "M", "X", "J", "V", "S"];
+const COL = 48; // ancho de cada día en píxeles
+const LABEL_W = 96; // ancho de la columna del número de espacio
+const FREE = "bg-green-500 hover:bg-green-600"; // libre: verde intenso
+const TAKEN = "bg-red-600 text-white"; // reservada / ocupada: rojo intenso
 
 export default function DisponibilidadPage() {
   const { ws } = useWorkspace();
@@ -26,7 +30,7 @@ export default function DisponibilidadPage() {
   const today = todayISO(ws.timezone);
   const [from, setFrom] = useState(today);
   const [span, setSpan] = useState(21);
-  const [kind, setKind] = useState<"todas" | "carpa" | "sombrilla">("carpa");
+  const [kind, setKind] = useState<"todas" | "carpa" | "sombrilla">("todas");
   const [search, setSearch] = useState("");
   const to = addDays(from, span - 1);
   const days = useMemo(() => daysOf(from, to), [from, to]);
@@ -68,12 +72,13 @@ export default function DisponibilidadPage() {
             {[7, 14, 21, 31, 45, 60].map((d) => <option key={d} value={d}>{d} días</option>)}
           </Select>
         </Field>
-        <Field label="Tipo">
-          <Select value={kind} onChange={(e) => setKind(e.target.value as typeof kind)} className="w-auto">
-            <option value="carpa">Carpas</option>
-            <option value="sombrilla">Sombrillas</option>
-            <option value="todas">Todas</option>
-          </Select>
+        <Field label="Mostrar">
+          <div className="flex overflow-hidden rounded-lg border border-line" role="group" aria-label="Tipo de espacio">
+            {([["todas", "Todas"], ["carpa", "Carpas"], ["sombrilla", "Sombrillas"]] as const).map(([k, l]) => (
+              <button key={k} type="button" onClick={() => setKind(k)} aria-pressed={kind === k}
+                className={cx("px-3 py-2 text-sm font-medium", kind === k ? "bg-accent text-accent-fg" : "bg-surface hover:bg-surface-2")}>{l}</button>
+            ))}
+          </div>
         </Field>
         <Field label="Buscar N°"><Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Ej: 17" className="w-24" /></Field>
         <Button variant="secondary" onClick={() => setFrom(addDays(from, -span))} aria-label="Período anterior">←</Button>
@@ -81,56 +86,62 @@ export default function DisponibilidadPage() {
         <Button variant="secondary" onClick={() => setFrom(addDays(from, span))} aria-label="Período siguiente">→</Button>
         {q.loading && <Spinner small />}
       </div>
-      <div className="mb-3 flex flex-wrap gap-x-4 gap-y-1 text-xs">
-        <Legend cls="bg-ok-soft border-ok/40" label="Libre" />
-        <Legend cls="bg-danger/80 border-danger" label="Reservada / ocupada" />
+      <div className="mb-3 flex flex-wrap gap-x-5 gap-y-1 text-sm">
+        <Legend cls="bg-green-500 border-green-600" label="Libre" />
+        <Legend cls="bg-red-600 border-red-700" label="Reservada / ocupada" />
         <Legend cls="bg-violet-500/80 border-violet-500" label="Cortesía" />
         <Legend cls="bg-zinc-500/80 border-zinc-500" label="Mantenimiento" />
-        <Legend cls="bg-danger/80 border-white border-dashed" label="Con cambio de ubicación" />
+        <Legend cls="bg-red-600 border-white border-dashed" label="Con cambio de ubicación" />
       </div>
       <SyncNotice error={q.error} stale={q.stale} updatedAt={q.updatedAt} onRetry={q.reload} />
 
       {!q.data ? (q.loading && <div className="flex items-center gap-2 text-muted"><Spinner small /> Cargando…</div>) : (
-        <div className="overflow-auto rounded-xl border border-line bg-surface" style={{ maxHeight: "70dvh" }}>
-          <div style={{ width: 72 + days.length * COL }}>
+        <div className="overflow-auto rounded-xl border border-line bg-surface" style={{ maxHeight: "80dvh" }}>
+          <div style={{ width: LABEL_W + days.length * COL }}>
             {/* Encabezado de días */}
             <div className="sticky top-0 z-20 flex border-b border-line bg-surface">
-              <div className="sticky left-0 z-30 w-[72px] shrink-0 border-r border-line bg-surface px-2 py-1 text-xs font-semibold text-muted">Espacio</div>
+              <div style={{ width: LABEL_W }} className="sticky left-0 z-30 shrink-0 border-r border-line bg-surface px-2 py-2 text-sm font-semibold text-muted">Espacio</div>
               {days.map((d) => {
                 const wd = new Date(d + "T00:00:00Z").getUTCDay();
                 return (
-                  <div key={d} style={{ width: COL }} className={cx("shrink-0 py-1 text-center text-[10px] leading-tight", d === today ? "bg-accent text-accent-fg" : wd === 0 || wd === 6 ? "bg-surface-2" : "")}>
-                    <div className="font-semibold">{WEEKDAY[wd]}</div>
+                  <div key={d} style={{ width: COL }} className={cx("shrink-0 py-1.5 text-center text-xs leading-tight", d === today ? "bg-accent text-accent-fg" : wd === 0 || wd === 6 ? "bg-surface-2" : "")}>
+                    <div className="text-sm font-bold">{WEEKDAY[wd]}</div>
                     <div>{d.slice(8, 10)}{d.slice(8, 10) === "01" || d === from ? `/${d.slice(5, 7)}` : ""}</div>
                   </div>
                 );
               })}
             </div>
             {rows.length === 0 && <p className="p-4 text-sm text-muted">No hay espacios con ese filtro.</p>}
-            {rows.map(({ space, blocks, busy }) => (
-              <div key={space.id} className="flex border-b border-line last:border-0">
-                <div className={cx("sticky left-0 z-10 flex w-[72px] shrink-0 items-center gap-1 border-r border-line bg-surface px-2 text-sm font-semibold", !space.active && "text-muted line-through")}>
-                  <span className="text-[10px] font-normal text-muted">{space.kind === "carpa" ? "C" : "S"}</span>{space.code}
+            {rows.map(({ space, blocks, busy }, ri) => (
+              <div key={space.id}>
+              {kind === "todas" && (ri === 0 || rows[ri - 1].space.kind !== space.kind) && (
+                <div className="border-b border-line bg-surface-2 py-1.5 text-sm font-bold" style={{ width: LABEL_W + days.length * COL }}>
+                  <span className="sticky left-0 px-3">{space.kind === "carpa" ? "⛺ Carpas" : "⛱️ Sombrillas"} ({rows.filter((r) => r.space.kind === space.kind).length})</span>
                 </div>
-                <div className="relative grid h-9 shrink-0" style={{ gridTemplateColumns: `repeat(${days.length}, ${COL}px)` }}>
+              )}
+              <div className="flex border-b border-line">
+                <div style={{ width: LABEL_W }} className={cx("sticky left-0 z-10 flex shrink-0 items-center gap-1.5 border-r border-line bg-surface px-2 text-base font-bold", !space.active && "text-muted line-through")}>
+                  <span className="text-xs font-normal text-muted">{space.kind === "carpa" ? "Carpa" : "Sombr."}</span>{space.code}
+                </div>
+                <div className="relative grid h-12 shrink-0" style={{ gridTemplateColumns: `repeat(${days.length}, ${COL}px)` }}>
                   {days.map((d, i) => busy.has(i) ? null : (
                     space.active && d >= today ? (
                       <Link key={d} href={`/reservas/nueva?espacio=${space.id}&desde=${d}`} style={{ gridColumn: i + 1, gridRow: 1 }}
-                        className="m-0.5 rounded bg-ok-soft hover:bg-ok/30" title={`${space.code} libre el ${formatDate(d)} · tocá para reservar`} aria-label={`Reservar ${space.code} desde el ${formatDate(d)}`} />
+                        className={cx("m-1 rounded", FREE)} title={`${space.code} libre el ${formatDate(d)} · tocá para reservar`} aria-label={`Reservar ${space.code} desde el ${formatDate(d)}`} />
                     ) : (
-                      <div key={d} style={{ gridColumn: i + 1, gridRow: 1 }} className={cx("m-0.5 rounded", space.active ? "bg-surface-2" : "bg-surface-2 opacity-40")} />
+                      <div key={d} style={{ gridColumn: i + 1, gridRow: 1 }} className={cx("m-1 rounded", space.active ? "bg-surface-2" : "bg-surface-2 opacity-40")} />
                     )
                   ))}
                   {blocks.map((b, k) => {
                     const it = b.item;
                     const common = { gridColumn: `${b.start + 1} / span ${b.len}`, gridRow: 1 } as const;
                     if (it.item_type === "mantenimiento") {
-                      return <div key={k} style={common} className="m-0.5 truncate rounded bg-zinc-500/80 px-1 text-[11px] leading-7 text-white" title={`Mantenimiento: ${it.label} (${formatDate(it.start_date)} al ${formatDate(it.end_date)})`}>🔧 {it.label}</div>;
+                      return <div key={k} style={common} className="m-1 truncate rounded bg-zinc-500 px-1.5 text-sm leading-[2.5rem] text-white" title={`Mantenimiento: ${it.label} (${formatDate(it.start_date)} al ${formatDate(it.end_date)})`}>🔧 {it.label}</div>;
                     }
                     return (
                       <Link key={k} href={`/reservas/${it.reservation_id}`} style={common}
-                        className={cx("m-0.5 truncate rounded px-1 text-[11px] font-medium leading-7 hover:opacity-90",
-                          it.is_courtesy ? "bg-violet-500/90 text-white" : "bg-danger text-bg", it.is_relocation && "border-2 border-dashed border-surface")}
+                        className={cx("m-1 truncate rounded px-1.5 text-sm font-semibold leading-[2.5rem] hover:opacity-90",
+                          it.is_courtesy ? "bg-violet-600 text-white" : TAKEN, it.is_relocation && "border-2 border-dashed border-surface")}
                         title={`#${it.reservation_number} ${it.customer_name} · ${formatDate(it.start_date)} al ${formatDate(it.end_date)}${it.is_relocation ? " · reserva con cambio de ubicación" : ""} (estadía ${formatDate(it.reservation_start)} al ${formatDate(it.reservation_end)})`}>
                         {it.customer_name}
                       </Link>
@@ -138,13 +149,14 @@ export default function DisponibilidadPage() {
                   })}
                 </div>
               </div>
+              </div>
             ))}
           </div>
         </div>
       )}
       {q.data && (
-        <p className="mt-2 text-xs text-muted">
-          {rows.filter((r) => r.freeCount === days.length && r.space.active).length} {kind === "sombrilla" ? "sombrillas" : "espacios"} libres todo el período ({formatDate(from)} al {formatDate(to)}).
+        <p className="mt-2 text-sm text-muted">
+          {rows.filter((r) => r.freeCount === days.length && r.space.active).length} {kind === "sombrilla" ? "sombrillas" : kind === "carpa" ? "carpas" : "espacios"} libres todo el período ({formatDate(from)} al {formatDate(to)}).
         </p>
       )}
     </>
@@ -152,5 +164,5 @@ export default function DisponibilidadPage() {
 }
 
 function Legend({ cls, label }: { cls: string; label: string }) {
-  return <span className="flex items-center gap-1.5"><span className={cx("inline-block h-3 w-5 rounded border", cls)} />{label}</span>;
+  return <span className="flex items-center gap-1.5"><span className={cx("inline-block h-4 w-6 rounded border", cls)} />{label}</span>;
 }
