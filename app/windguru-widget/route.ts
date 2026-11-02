@@ -22,7 +22,8 @@ export function GET(req: Request) {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <base target="_blank">
 <title>Windguru</title>
-<style>html,body{margin:0;padding:0;width:100%;background:#fff;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}</style>
+<style>html,body{margin:0;padding:0;width:100%;background:#fff;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+#wg-status{padding:16px;color:#56666f;font-size:14px}#wg-status.err{color:#b42318}#wg-status ul{margin:6px 0 0;padding-left:18px;font-size:12px}</style>
 <script>
 (function () {
   // En un recuadro aislado el navegador bloquea el almacenamiento: se reemplaza por uno en memoria
@@ -31,13 +32,31 @@ export function GET(req: Request) {
   ["localStorage", "sessionStorage"].forEach(function (n) { try { window[n].getItem("x"); } catch (e) { try { Object.defineProperty(window, n, { value: mem(), configurable: true }); } catch (_) {} } });
   try { void document.cookie; } catch (e) { try { var c = ""; Object.defineProperty(document, "cookie", { get: function () { return c; }, set: function () {}, configurable: true }); } catch (_) {} }
 
-  function send(type, detail) { try { parent.postMessage({ wg: type, detail: detail == null ? "" : String(detail) }, "*"); } catch (_) {} }
-  window.addEventListener("error", function (e) { send("error", (e.message || "Error") + (e.filename ? " (" + e.filename.split("?")[0] + ")" : "")); }, true);
+  var log = [];
+  function show(msg, isErr) {
+    var el = document.getElementById("wg-status");
+    if (!el) return;
+    if (isErr) { el.className = "err"; log.push(msg); el.innerHTML = "No se pudo mostrar el pronóstico de Windguru:<ul>" + log.map(function (l) { return "<li>" + String(l).replace(/[<>&]/g, "") + "</li>"; }).join("") + "</ul>"; }
+    else if (!log.length) el.textContent = msg;
+  }
+  function send(type, detail) {
+    try { parent.postMessage({ wg: type, detail: detail == null ? "" : String(detail) }, "*"); } catch (_) {}
+    if (type === "error") show(detail, true);
+    if (type === "timeout") show("Windguru no respondió en 12 segundos (" + location.hostname + ", aislado: " + (self.origin === "null" ? "sí" : "no") + ").", true);
+  }
+  window.addEventListener("error", function (e) {
+    var t = e.target;
+    if (t && t !== window && (t.src || t.href)) { send("error", "No cargó el recurso " + String(t.src || t.href).split("?")[0]); return; }
+    send("error", (e.message || "Error") + (e.filename ? " (" + e.filename.split("?")[0] + ":" + e.lineno + ")" : ""));
+  }, true);
+  window.addEventListener("unhandledrejection", function (e) { send("error", "Promesa rechazada: " + (e.reason && e.reason.message || e.reason)); });
+  var _fetch = window.fetch;
+  if (_fetch) window.fetch = function () { return _fetch.apply(this, arguments).catch(function (err) { send("error", "Consulta bloqueada: " + (arguments[0] && arguments[0].url || "") + " " + err); throw err; }); };
   var done = false;
   function check() {
     var h = document.documentElement.scrollHeight;
     send("height", h);
-    if (!done && document.body && document.body.querySelectorAll("table, canvas").length > 0) { done = true; send("ok"); }
+    if (!done && document.body && document.body.querySelectorAll("table, canvas").length > 0) { done = true; send("ok"); var st = document.getElementById("wg-status"); if (st) st.remove(); }
   }
   setInterval(check, 1000);
   setTimeout(function () { if (!done) send("timeout"); }, 12000);
@@ -45,12 +64,14 @@ export function GET(req: Request) {
 </script>
 </head>
 <body>
+<div id="wg-status">Cargando el pronóstico de Windguru (spot ${spot})…</div>
 <script id="${uid}">
 (function () {
   var arg = ${args};
   var s = document.createElement("script");
   s.src = "https://www.windguru.cz/js/widget.php?" + arg.join("&");
-  s.onerror = function () { parent.postMessage({ wg: "error", detail: "No se pudo descargar el widget de windguru.cz" }, "*"); };
+  s.onerror = function () { parent.postMessage({ wg: "error", detail: "No se pudo descargar el widget de windguru.cz" }, "*"); var el = document.getElementById("wg-status"); if (el) { el.className = "err"; el.textContent = "No se pudo descargar el widget de windguru.cz (¿bloqueado por el navegador o un bloqueador de anuncios?)."; } };
+  s.onload = function () { var el = document.getElementById("wg-status"); if (el && el.className !== "err") el.textContent = "Widget descargado, esperando la tabla…"; };
   var t = document.getElementsByTagName("script")[0];
   t.parentNode.insertBefore(s, t);
 })();
