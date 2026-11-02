@@ -6,6 +6,8 @@ import { useWorkspace } from "@/components/workspace";
 import { cx } from "@/components/ui";
 
 export type Weather = {
+  /** Medición real del SMN (si hay una de las últimas 3 horas cerca del balneario). */
+  medido?: { estacion: string; hora: string; distancia_km: number; cielo: string | null } | null;
   fuente: string;
   actualizado: string;
   hora_dato: string;
@@ -180,13 +182,12 @@ export function WeatherStrip({ className }: { className?: string }) {
   const rainToday = d.proximas.reduce((s, p) => s + (p.precip ?? 0), 0);
   const maxProb = d.proximas.reduce<number | null>((m, p) => (p.prob == null ? m : Math.max(m ?? 0, p.prob)), null);
   const stale = w.error !== null;
-  const ageMin = Math.round((Date.now() - Date.parse(d.actualizado)) / 60_000);
 
   return (
     <div className={cx("flex flex-col gap-2", className)}>
       {windy && (
         <div role="alert" className="rounded-xl border border-warn/50 bg-warn-soft px-3 py-2 text-sm font-medium">
-          💨 Viento fuerte ({d.viento_kmh} km/h{d.rafagas_kmh ? `, ráfagas de ${d.rafagas_kmh}` : ""}): revisá amarres de carpas y cerrá sombrillas.
+          Viento fuerte ({d.viento_kmh} km/h{d.rafagas_kmh ? `, ráfagas de ${d.rafagas_kmh}` : ""}): revisá amarres de carpas y cerrá sombrillas.
         </div>
       )}
       <div className="flex flex-wrap items-stretch gap-x-6 gap-y-2 rounded-2xl border border-line bg-surface px-4 py-3">
@@ -229,8 +230,17 @@ export function WeatherStrip({ className }: { className?: string }) {
           </Metric>
         )}
         <div className="ml-auto flex flex-col justify-center text-right text-[11px] text-muted">
-          <span className={cx(stale && "text-danger")}>{stale ? "No se pudo actualizar · " : ""}Pronóstico de las {hhmm(d.actualizado, ws.timezone)}{ageMin > 180 ? " (viejo)" : ""}{w.fetchedAt ? ` · revisado ${hhmm(w.fetchedAt.toISOString(), ws.timezone)}` : ""}</span>
-          <a href="https://www.met.no/en" target="_blank" rel="noopener noreferrer" className="hover:underline">Datos: MET Norway (CC BY 4.0)</a>
+          <span className={cx(stale && "text-danger")}>
+            {stale ? "No se pudo actualizar · " : ""}
+            {d.medido
+              ? `Medido a las ${hhmm(d.medido.hora, ws.timezone)} en ${d.medido.estacion}${d.medido.distancia_km > 15 ? ` (a ${d.medido.distancia_km} km)` : ""}`
+              : `Pronóstico para las ${hhmm(d.hora_dato, ws.timezone)} (calculado ${hhmm(d.actualizado, ws.timezone)})`}
+            {w.fetchedAt ? ` · revisado ${hhmm(w.fetchedAt.toISOString(), ws.timezone)}` : ""}
+          </span>
+          <span>
+            {d.medido && <><a href="https://www.smn.gob.ar/" target="_blank" rel="noopener noreferrer" className="hover:underline">Medición: SMN</a> · </>}
+            <a href="https://www.met.no/en" target="_blank" rel="noopener noreferrer" className="hover:underline">{d.medido ? "Pronóstico" : "Datos"}: MET Norway (CC BY 4.0)</a>
+          </span>
         </div>
       </div>
     </div>

@@ -1,4 +1,5 @@
 import { json } from "@/lib/auth-server";
+import { parseTiepre, unzipFirst, type Observacion } from "@/lib/smn";
 
 // Clima de la ubicación del balneario, desde MET Norway (Instituto Meteorológico de Noruega).
 // Datos abiertos (licencia CC BY 4.0, uso comercial permitido con mención de la fuente).
@@ -47,6 +48,41 @@ async function getForecast(url: string): Promise<MetBody> {
   return body;
 }
 
+// Mediciones reales del SMN (se publican cada hora). Se guardan 10 minutos.
+let smnCache: { at: number; text: string } | null = null;
+async function getSmnText(): Promise<string | null> {
+  if (smnCache && Date.now() - smnCache.at < 10 * 60_000) return smnCache.text;
+  try {
+    const res = await fetch("https://ssl.smn.gob.ar/dpd/zipopendata.php?dato=tiepre", {
+      headers: { "User-Agent": "BalnearioGestion/1.0" }, cache: "no-store", signal: AbortSignal.timeout(10_000),
+    });
+    if (!res.ok) return smnCache?.text ?? null;
+    const raw = unzipFirst(Buffer.from(await res.arrayBuffer()));
+    if (!raw) return smnCache?.text ?? null;
+    smnCache = { at: Date.now(), text: new TextDecoder("latin1").decode(raw) };
+    return smnCache.text;
+  } catch {
+    return smnCache?.text ?? null;
+  }
+}
+
+/** Estado del cielo del SMN → código de ícono (mismo formato que MET Norway). */
+function skyToSymbol(cielo: string | null, hourLocal: number): string | null {
+  if (!cielo) return null;
+  const c = cielo.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const dn = hourLocal >= 7 && hourLocal < 20 ? "_day" : "_night";
+  if (c.includes("tormenta")) return "rainandthunder";
+  if (c.includes("chaparr")) return "rainshowers" + dn;
+  if (c.includes("llovizna")) return "lightrain";
+  if (c.includes("lluvia")) return "rain";
+  if (c.includes("niebla") || c.includes("neblina")) return "fog";
+  if (c.includes("despejado")) return "clearsky" + dn;
+  if (c.includes("algo nublado")) return "fair" + dn;
+  if (c.includes("parcialmente")) return "partlycloudy" + dn;
+  if (c.includes("nublado") || c.includes("cubierto")) return "cloudy";
+  return null;
+}
+
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const lat = Number(searchParams.get("lat"));
@@ -56,8 +92,13 @@ export async function GET(req: Request) {
   }
   const url = `https://api.met.no/weatherapi/locationforecast/2.0/complete?lat=${lat.toFixed(4)}&lon=${lon.toFixed(4)}`;
   let body: MetBody;
+  let medido: Observacion | null = null;
   try {
-    body = await getForecast(url);
+    const [forecast, smnText] = await Promise.all([getForecast(url), getSmnText()]);
+    body = forecast;
+    medido = smnText ? parseTiepre(smnText, lat, lon) : null;
+    // Una medición de hace más de 3 horas ya no sirve como "ahora".
+    if (medido && Date.now() - Date.parse(medido.hora) > 3 * 3600_000) medido = null;
   } catch (e) {
     return json({ error: e instanceof Error ? e.message : "El servicio del clima no responde en este momento." }, 502);
   }
@@ -85,16 +126,33 @@ export async function GET(req: Request) {
     symbol: s.data.next_1_hours!.summary.symbol_code,
   }));
 
-  return json({
-    fuente: "MET Norway",
-    actualizado: body.properties.meta.updated_at,
-    hora_dato: cur.time,
+  // Si hay medición real del SMN, manda para "ahora"; el pronóstico queda para lluvia y próximas horas.
+  const fc = {
     temperatura: d.air_temperature ?? null,
     humedad: d.relative_humidity ?? null,
     viento_kmh: kmh(d.wind_speed),
-    rafagas_kmh: kmh(d.wind_speed_of_gust),
     viento_desde: d.wind_from_direction ?? null,
     simbolo: n1?.summary.symbol_code ?? n6?.summary.symbol_code ?? null,
+  };
+  const hourLocal = medido ? Number(medido.hora.slice(11, 13)) : 12;
+  const now_ = medido
+    ? {
+        temperatura: medido.temperatura ?? fc.temperatura,
+        humedad: medido.humedad ?? fc.humedad,
+        viento_kmh: medido.viento_kmh ?? fc.viento_kmh,
+        viento_desde: medido.viento_kmh === 0 ? null : medido.viento_desde ?? fc.viento_desde,
+        simbolo: skyToSymbol(medido.cielo, hourLocal) ?? fc.simbolo,
+      }
+    : fc;
+
+  return json({
+    medido: medido && { estacion: medido.estacion, hora: medido.hora, distancia_km: medido.distancia_km, cielo: medido.cielo },
+    ...now_,
+    fuente: "MET Norway",
+    actualizado: body.properties.meta.updated_at,
+    hora_dato: cur.time,
+    // El SMN no informa ráfagas: con medición real no se mezclan ráfagas pronosticadas.
+    rafagas_kmh: medido ? null : kmh(d.wind_speed_of_gust),
     lluvia_1h_mm: n1?.details.precipitation_amount ?? null,
     lluvia_1h_prob: n1?.details.probability_of_precipitation ?? null,
     lluvia_6h_mm: n6?.details.precipitation_amount ?? null,
