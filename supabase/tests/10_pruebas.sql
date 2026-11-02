@@ -635,6 +635,12 @@ select t.throws($$update public.workspaces set tent_style = '{"pattern":"liso","
 update public.workspaces set tent_style = null, version = version + 1;
 select t.ok((select tent_style is null from public.workspaces), 'Carpas: se vuelve al diseño clásico');
 
+-- 20. Avisos leídos (por usuario)
+insert into public.user_preferences (user_id) values ('11111111-1111-1111-1111-111111111111') on conflict (user_id) do nothing;
+update public.user_preferences set notices_read = '{"day":"2026-11-02","ids":["caja"]}' where user_id = auth.uid();
+select t.ok((select notices_read -> 'ids' ->> 0 from public.user_preferences where user_id = auth.uid()) = 'caja', 'Avisos: se guardan los avisos leídos del usuario');
+select t.throws($$update public.user_preferences set notices_read = '[1]' where user_id = auth.uid()$$, 'check', 'Avisos: formato inválido no se acepta');
+
 reset role;
 \o
 -- Resultado ----------------------------------------------------------

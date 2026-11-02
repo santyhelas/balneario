@@ -31,7 +31,10 @@ type StatusCtx = {
   summary: Summary | null;
   debts: Debt[];
   futureCount: number;
+  /** Avisos sin leer (los que el usuario ya abrió hoy no aparecen). */
   notices: Notice[];
+  /** Marca avisos como leídos: dejan de mostrarse hasta mañana. No cambia deudas ni pagos. */
+  markRead: (ids: string[]) => void;
   error: string | null;
   loading: boolean;
   updatedAt: Date | null;
@@ -49,9 +52,23 @@ export function useStatus(): StatusCtx {
 
 /** Estado general del día, compartido por el menú, los avisos y el panel. Se actualiza solo cada minuto. */
 export function StatusProvider({ children }: { children: ReactNode }) {
-  const { ws } = useWorkspace();
+  const { ws, userId } = useWorkspace();
   const sb = getSupabase();
   const [online, setOnline] = useState(true);
+  const [read, setRead] = useState<{ day: string; ids: string[] }>({ day: "", ids: [] });
+  const LS_KEY = `avisos-leidos:${userId}`;
+  // Se leen de la base (se sincronizan entre dispositivos); si falta la actualización 0017, del navegador.
+  useEffect(() => {
+    let alive = true;
+    sb.from("user_preferences").select("notices_read").eq("user_id", userId).maybeSingle().then(({ data, error }) => {
+      if (!alive) return;
+      let v: unknown = !error ? (data as { notices_read?: unknown } | null)?.notices_read : null;
+      if (error) { try { v = JSON.parse(localStorage.getItem(LS_KEY) ?? "null"); } catch { v = null; } }
+      const o = v as { day?: unknown; ids?: unknown } | null;
+      if (o && typeof o.day === "string" && Array.isArray(o.ids)) setRead({ day: o.day, ids: o.ids.filter((x): x is string => typeof x === "string") });
+    });
+    return () => { alive = false; };
+  }, [sb, userId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const q = useLoader(async () => {
     const summary = unwrap(await sb.rpc("dashboard_summary", { p_workspace_id: ws.id })) as Summary;
@@ -133,11 +150,24 @@ export function StatusProvider({ children }: { children: ReactNode }) {
     return list;
   }, [q.data]);
 
+  const today = q.data?.summary.fecha ?? "";
+  const readToday = useMemo(() => new Set(read.day === today ? read.ids : []), [read, today]);
+  const unread = useMemo(() => notices.filter((n) => !readToday.has(n.id)), [notices, readToday]);
+
+  function markRead(ids: string[]) {
+    if (!today || ids.length === 0) return;
+    const next = { day: today, ids: [...new Set([...(read.day === today ? read.ids : []), ...ids])].slice(-300) };
+    setRead(next);
+    try { localStorage.setItem(LS_KEY, JSON.stringify(next)); } catch { /* sin almacenamiento del navegador */ }
+    sb.from("user_preferences").upsert({ user_id: userId, notices_read: next }, { onConflict: "user_id" }).then(() => undefined, () => undefined);
+  }
+
   const value: StatusCtx = {
     summary: q.data?.summary ?? null,
     debts: q.data?.debts ?? [],
     futureCount: q.data?.futureCount ?? 0,
-    notices,
+    notices: unread,
+    markRead,
     error: q.error,
     loading: q.loading,
     updatedAt: q.updatedAt,

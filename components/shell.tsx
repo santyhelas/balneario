@@ -388,6 +388,7 @@ const DOT: Record<Notice["tone"], string> = { danger: "bg-danger", warn: "bg-war
 
 /** Campanita con los avisos operativos (cajas, deudas, ingresos del día). */
 function NoticesBell({ notices, count }: { notices: Notice[]; count: number }) {
+  const { markRead } = useStatus();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const pathname = usePathname();
@@ -408,15 +409,20 @@ function NoticesBell({ notices, count }: { notices: Notice[]; count: number }) {
       </button>
       {open && (
         <div className="fixed inset-x-3 top-16 z-50 max-h-[70dvh] overflow-y-auto rounded-xl border border-line bg-surface p-3 shadow-xl md:absolute md:inset-x-auto md:right-0 md:top-12 md:w-96">
-          <div className="mb-2 flex items-center justify-between">
+          <div className="mb-2 flex items-center justify-between gap-2">
             <strong className="text-sm">Avisos</strong>
-            <span className="rounded-full bg-surface-2 px-2 py-0.5 text-xs">{notices.length}</span>
+            <span className="flex items-center gap-2">
+              {notices.length > 0 && (
+                <button onClick={() => markRead(notices.map((n) => n.id))} className="text-xs text-accent hover:underline">Marcar todos como leídos</button>
+              )}
+              <span className="rounded-full bg-surface-2 px-2 py-0.5 text-xs">{notices.length}</span>
+            </span>
           </div>
-          {notices.length === 0 ? <p className="py-4 text-center text-sm text-muted">Sin avisos por ahora.</p> : (
+          {notices.length === 0 ? <p className="py-4 text-center text-sm text-muted">Sin avisos nuevos. Las deudas siguen en Cobros.</p> : (
             <ul className="flex flex-col gap-2">
               {notices.map((n) => (
                 <li key={n.id}>
-                  <Link href={n.href} className={cx("block rounded-lg border p-2.5 text-sm hover:opacity-90", NOTICE_TONE[n.tone])}>
+                  <Link href={n.href} onClick={() => markRead([n.id])} className={cx("block rounded-lg border p-2.5 text-sm hover:opacity-90", NOTICE_TONE[n.tone])}>
                     <div className="flex items-center gap-2 font-semibold"><span className={cx("h-2 w-2 shrink-0 rounded-full", DOT[n.tone])} />{n.title}</div>
                     <div className="pl-4 text-xs text-muted">{n.detail}</div>
                   </Link>

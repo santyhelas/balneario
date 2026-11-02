@@ -201,6 +201,7 @@ function Shortcut({ href, tone, icon, title, sub }: { href: string; tone: string
 }
 
 function NoticeList({ notices }: { notices: Notice[] }) {
+  const { markRead } = useStatus();
   if (notices.length === 0) return <p className="rounded-lg border border-dashed border-line py-6 text-center text-sm text-muted">Todo en orden: sin avisos pendientes.</p>;
   const cls = { danger: "border-danger/40 bg-danger-soft", warn: "border-warn/40 bg-warn-soft", info: "border-accent/30 bg-accent-soft" };
   const dot = { danger: "bg-danger", warn: "bg-warn", info: "bg-accent" };
@@ -208,7 +209,7 @@ function NoticeList({ notices }: { notices: Notice[] }) {
     <ul className="flex max-h-80 flex-col gap-2 overflow-y-auto">
       {notices.map((n) => (
         <li key={n.id}>
-          <Link href={n.href} className={cx("block rounded-xl border p-3 hover:opacity-90", cls[n.tone])}>
+          <Link href={n.href} onClick={() => markRead([n.id])} className={cx("block rounded-xl border p-3 hover:opacity-90", cls[n.tone])}>
             <div className="flex items-center gap-2 text-sm font-bold"><span className={cx("h-2 w-2 shrink-0 rounded-full", dot[n.tone])} />{n.title}</div>
             <div className="pl-4 text-xs text-muted">{n.detail}</div>
           </Link>
