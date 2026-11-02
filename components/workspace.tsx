@@ -96,8 +96,12 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         setProfile({ displayName: prefs.data.display_name ?? null, avatar: prefs.data.avatar_data ?? null });
       }
 
-      const memberQuery = (cols: string) =>
-        sb.from("workspace_members").select(`role, workspaces(${cols})`).eq("user_id", user.id).limit(1).maybeSingle();
+      type MemberRow = { role: string; workspaces: unknown };
+      const memberQuery = async (cols: string) =>
+        (await sb.from("workspace_members").select(`role, workspaces(${cols})` as "role").eq("user_id", user.id).limit(1).maybeSingle()) as unknown as {
+          data: MemberRow | null;
+          error: { code?: string; message: string } | null;
+        };
       let mem = await memberQuery("id, name, timezone, latitude, longitude, map_width, map_height, sea_side, logo_data, subtitle, version");
       if (mem.error?.code === "42703") {
         mem = await memberQuery("id, name, timezone, latitude, longitude, map_width, map_height, sea_side, version");
