@@ -22,6 +22,22 @@ export default function LoginPage() {
   async function google() {
     setBusy(true);
     setError(null);
+    // Antes de salir hacia Google, verificar que esté activado (si no, Supabase muestra una página técnica).
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/auth/v1/settings`, {
+        headers: { apikey: process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY! },
+      });
+      const settings = (await res.json()) as { external?: { google?: boolean } };
+      if (!settings.external?.google) {
+        setBusy(false);
+        setError("El inicio con Google todavía no está activado. Por ahora usá correo y contraseña.");
+        return;
+      }
+    } catch {
+      setBusy(false);
+      setError("No hay conexión con el servidor. Revisá internet.");
+      return;
+    }
     const { error } = await getSupabase().auth.signInWithOAuth({
       provider: "google",
       options: { redirectTo: `${window.location.origin}/auth/callback` },
