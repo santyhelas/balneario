@@ -7,7 +7,10 @@ export const PAYMENT_METHODS = [
   { value: "mercado_pago", label: "Mercado Pago / QR" },
 ] as const;
 
-export type PaymentMethod = (typeof PAYMENT_METHODS)[number]["value"] | "tarjeta";
+/** Medios para cobrar reservas: los anteriores + dólares (se convierten a pesos con la cotización). */
+export const COLLECT_METHODS = [...PAYMENT_METHODS, { value: "dolares", label: "Dólares (US$)" }] as const;
+
+export type PaymentMethod = (typeof COLLECT_METHODS)[number]["value"] | "tarjeta" | "voucher";
 
 export const METHOD_LABEL: Record<string, string> = {
   efectivo: "Efectivo",
@@ -16,6 +19,8 @@ export const METHOD_LABEL: Record<string, string> = {
   credito: "Crédito",
   mercado_pago: "Mercado Pago",
   tarjeta: "Tarjeta",
+  dolares: "Dólares",
+  voucher: "Voucher restaurante",
 };
 
 export const MONTHS = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];

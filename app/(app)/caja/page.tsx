@@ -130,9 +130,22 @@ export default function CajaPage() {
               )}
             </dl>
           </Card>
+          {summary.dolares && (Number(summary.dolares.entradas) > 0 || Number(summary.dolares.salidas) > 0) && (
+            <Card title="Dólares en caja" className="lg:col-span-3">
+              <dl className="grid gap-3 text-sm sm:grid-cols-3">
+                <Row label="Recibidos" value={`US$ ${Number(summary.dolares.entradas).toLocaleString("es-AR")}`} />
+                <Row label="Salidas / anulaciones" value={`US$ ${Number(summary.dolares.salidas).toLocaleString("es-AR")}`} />
+                <Row label="Dólares que tiene que haber" value={`US$ ${Number(summary.dolares.esperado).toLocaleString("es-AR")}`} strong />
+              </dl>
+              <p className="mt-2 text-xs text-muted">
+                Equivalen a {formatMoney(Number(summary.por_medio.dolares?.entradas ?? 0) - Number(summary.por_medio.dolares?.salidas ?? 0))} según la cotización de cada cobro.
+                Se cuentan aparte: no se suman al efectivo en pesos.
+              </p>
+            </Card>
+          )}
           <Card title="Otros medios (no son efectivo en caja)" className="lg:col-span-2">
             <div className="grid grid-cols-2 gap-3 text-sm md:grid-cols-4">
-              {Object.keys(summary.por_medio).filter((m) => m !== "efectivo" && (m !== "tarjeta" || summary.por_medio[m].entradas > 0 || summary.por_medio[m].salidas > 0)).map((m) => (
+              {Object.keys(summary.por_medio).filter((m) => m !== "efectivo" && m !== "dolares" && (m !== "tarjeta" || summary.por_medio[m].entradas > 0 || summary.por_medio[m].salidas > 0)).map((m) => (
                 <div key={m} className="rounded-lg bg-surface-2 p-3">
                   <div className="font-medium">{METHOD[m]}</div>
                   <div className="tabular mt-1 text-muted">Entradas {formatMoney(summary.por_medio[m].entradas)}</div>

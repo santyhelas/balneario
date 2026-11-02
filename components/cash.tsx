@@ -15,6 +15,8 @@ export type CashSummary = {
   opened_at: string;
   por_medio: Record<string, { entradas: number; salidas: number }>;
   efectivo_esperado: number;
+  /** Dólares en efectivo (desde la actualización 0016): se cuentan aparte de los pesos. */
+  dolares?: { entradas: number; salidas: number; esperado: number };
   closed_at: string | null;
   counted_cash: number | null;
   difference: number | null;
@@ -105,6 +107,9 @@ export function CloseCashModal({ open, summary, onClose, onDone }: { open: boole
         <form onSubmit={submit} className="flex flex-col gap-3">
           <div className="rounded-lg bg-surface-2 p-3 text-sm">
             <div className="flex justify-between"><span className="text-muted">Efectivo esperado</span><strong className="tabular">{formatMoney(summary.efectivo_esperado)}</strong></div>
+            {summary.dolares && Number(summary.dolares.esperado) !== 0 && (
+              <p className="text-xs text-muted">Contá solo los pesos. Aparte tiene que haber <strong>US$ {Number(summary.dolares.esperado).toLocaleString("es-AR")}</strong> en dólares.</p>
+            )}
             <p className="mt-1 text-xs text-muted">Apertura + cobros en efectivo − salidas en efectivo. Transferencias, tarjetas y Mercado Pago no se cuentan.</p>
           </div>
           <TextField label="Efectivo contado" inputMode="decimal" placeholder="Ej: 220.000" value={counted} onChange={(e) => setCounted(e.target.value)} required />

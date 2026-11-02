@@ -52,6 +52,12 @@ begin
   alter table public.cash_sessions disable trigger cash_sessions_no_delete;
   alter table public.audit_log disable trigger audit_log_immutable;
 
+  -- Vouchers del restaurante (existen desde la actualización 0016)
+  if to_regclass('public.restaurant_vouchers') is not null then
+    alter table public.restaurant_vouchers disable trigger restaurant_vouchers_no_delete;
+    delete from public.restaurant_vouchers where reservation_id = any(v_res);
+    alter table public.restaurant_vouchers enable trigger restaurant_vouchers_no_delete;
+  end if;
   delete from public.cash_movements where payment_id = any(v_pay) or expense_id = any(v_exp);
   update public.payments set voids_payment_id = null where id = any(v_pay);
   delete from public.payments where id = any(v_pay);

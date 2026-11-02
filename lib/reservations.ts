@@ -27,6 +27,8 @@ export type DiscountRow = { id: string; position: number; kind: string; label: s
 export type PaymentRow = {
   id: string; kind: "cobro" | "devolucion" | "anulacion"; amount: number; signed_amount: number; method: string;
   voids_payment_id: string | null; note: string | null; reason: string | null; created_at: string;
+  usd_amount?: number | null;
+  exchange_rate?: number | null;
 };
 export type ChangeRow = {
   id: string; kind: string; description: string; reason: string | null; at: string; actor_email: string | null;
@@ -53,7 +55,7 @@ export async function loadReservation(id: string): Promise<Full> {
     sb.from("reservation_segments").select("id, space_id, start_date, end_date, spaces(code, kind)").eq("reservation_id", id).eq("active", true).order("start_date"),
     sb.from("reservation_charges").select("id, position, description, amount").eq("reservation_id", id).order("position"),
     sb.from("reservation_discounts").select("id, position, kind, label, percent, amount, reason").eq("reservation_id", id).order("position"),
-    sb.from("payments").select("id, kind, amount, signed_amount, method, voids_payment_id, note, reason, created_at").eq("reservation_id", id).order("created_at"),
+    sb.from("payments").select("*").eq("reservation_id", id).order("created_at"),
     sb.from("reservation_changes").select("id, kind, description, reason, at, actor_email, reverted_by_change_id, reverts_change_id").eq("reservation_id", id).order("at", { ascending: false }),
     sb.from("reservation_balances").select("paid_amount, due_amount, credit_amount").eq("reservation_id", id).single(),
   ]);

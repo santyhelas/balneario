@@ -4,6 +4,9 @@ import { getSupabase } from "@/lib/supabase/client";
 import { friendlyError, isVersionConflict } from "@/lib/errors";
 import { useWorkspace } from "@/components/workspace";
 import { Alert, Button, Field, Modal, Textarea, TextField } from "@/components/ui";
+import { PhoneInput } from "@/components/phone-input";
+import { EMPTY_PHONE, formatPhone, parsePhone, phoneProblem, type PhoneParts } from "@/lib/phone";
+import { EMAIL_RE, emailSuggestion } from "@/lib/email";
 
 export type Customer = {
   id: string;
@@ -41,7 +44,8 @@ export function CustomerForm({
   const { ws } = useWorkspace();
   const [first, setFirst] = useState("");
   const [last, setLast] = useState("");
-  const [phone, setPhone] = useState("");
+  const [phoneParts, setPhoneParts] = useState<PhoneParts>(EMPTY_PHONE);
+  const phone = formatPhone(phoneParts) ?? "";
   const [email, setEmail] = useState("");
   const [locality, setLocality] = useState("");
   const [other, setOther] = useState("");
@@ -56,7 +60,7 @@ export function CustomerForm({
     const [f0, ...rest] = (initialName ?? "").trim().split(/\s+/);
     setFirst(customer?.first_name ?? f0 ?? "");
     setLast(customer?.last_name ?? rest.join(" "));
-    setPhone(customer?.phone ?? "");
+    setPhoneParts(parsePhone(customer?.phone));
     setEmail(customer?.email ?? "");
     setLocality(customer?.locality ?? "");
     setOther(customer?.other_contact ?? "");
@@ -70,8 +74,36 @@ export function CustomerForm({
     e.preventDefault();
     setError(null);
     const sb = getSupabase();
+    const pp = phoneProblem(phoneParts);
+    if (pp) return setError(`Teléfono: ${pp}`);
+    const mail = email.trim().toLowerCase();
+    if (mail) {
+      if (!EMAIL_RE.test(mail)) return setError("El correo no tiene un formato válido (ej: nombre@gmail.com).");
+      const sug = emailSuggestion(mail);
+      if (sug) return setError(`¿Quisiste escribir ${sug}? Corregilo o borrá el correo.`);
+    }
     setBusy(true);
     try {
+      if (mail && mail !== (customer?.email ?? "").toLowerCase()) {
+        // ¿El dominio existe y recibe correos?
+        const r = await fetch(`/api/verificar-email?email=${encodeURIComponent(mail)}`).then((x) => x.json()).catch(() => ({ ok: null }));
+        if (r.ok === false) {
+          setError(r.reason === "formato" ? "El correo no tiene un formato válido."
+            : `El correo no existe: el dominio "${r.domain}" no recibe correos. Revisá cómo está escrito.`);
+          return;
+        }
+        // ¿Ya lo tiene otro cliente?
+        if (!confirmedDup) {
+          let dq = sb.from("customers").select("id, first_name, last_name, phone").eq("workspace_id", ws.id).ilike("email", mail.replace(/[\\%_]/g, "\\$&")).limit(3);
+          if (customer) dq = dq.neq("id", customer.id);
+          const { data: same } = await dq;
+          if (same && same.length > 0) {
+            setSimilar((same as Omit<Similar, "motivo">[]).map((c) => ({ ...c, motivo: "Mismo correo" })));
+            setConfirmedDup(true);
+            return;
+          }
+        }
+      }
       if (!customer && !confirmedDup) {
         const { data, error } = await sb.rpc("find_similar_customers", {
           p_workspace_id: ws.id, p_first_name: first, p_last_name: last, p_phone: phone || null,
@@ -87,7 +119,7 @@ export function CustomerForm({
         first_name: first.trim(),
         last_name: last.trim(),
         phone: phone.trim() || null,
-        email: email.trim() || null,
+        email: mail || null,
         locality: locality.trim() || null,
         other_contact: other.trim() || null,
         notes: notes.trim() || null,
@@ -116,9 +148,9 @@ export function CustomerForm({
           <TextField label="Nombre" required maxLength={80} value={first} onChange={(e) => { setFirst(e.target.value); setConfirmedDup(false); setSimilar([]); }} />
           <TextField label="Apellido" maxLength={80} value={last} onChange={(e) => { setLast(e.target.value); setConfirmedDup(false); setSimilar([]); }} />
         </div>
-        <TextField label="Teléfono" type="tel" maxLength={40} value={phone} onChange={(e) => { setPhone(e.target.value); setConfirmedDup(false); setSimilar([]); }} />
+        <PhoneInput value={phoneParts} onChange={(p) => { setPhoneParts(p); setConfirmedDup(false); setSimilar([]); }} />
         <div className="grid grid-cols-2 gap-3">
-          <TextField label="Correo (opcional)" type="email" maxLength={150} value={email} onChange={(e) => setEmail(e.target.value)} />
+          <TextField label="Correo (opcional)" type="email" maxLength={150} value={email} onChange={(e) => { setEmail(e.target.value); setConfirmedDup(false); setSimilar([]); }} hint="Se verifica que exista el dominio." />
           <TextField label="Localidad (opcional)" maxLength={80} value={locality} onChange={(e) => setLocality(e.target.value)} />
         </div>
         <TextField label="Otro contacto (opcional)" maxLength={200} value={other} onChange={(e) => setOther(e.target.value)} placeholder="Ej: Instagram, teléfono de un familiar" />

@@ -491,6 +491,39 @@ select t.ok((public.cash_session_summary(t.uid('session')) ->> 'efectivo_esperad
 select t.ok(((public.cash_session_summary(t.uid('session')) -> 'por_medio' -> 'tarjeta' ->> 'entradas')::numeric) = 300000,
   'Caja: el cobro con tarjeta figura aparte');
 
+-- Dólares y vouchers del restaurante (no cambian el efectivo en pesos)
+select t.set('usd1', (public.register_payment_usd(t.uid('ws'), t.uid('resP'), 10, 1000, gen_random_uuid(), 'Pagó en dólares') ->> 'payment_id'));
+select t.ok((select amount = 10000 and usd_amount = 10 and exchange_rate = 1000 from public.payments where id = t.uid('usd1')), 'Dólares: US$ 10 a $1.000 = $10.000');
+select t.ok((select due_amount from public.reservation_balances where reservation_id = t.uid('resP')) = 12319, 'Dólares: descuenta el saldo en pesos (22.319 − 10.000)');
+select t.ok((public.cash_session_summary(t.uid('session')) -> 'dolares' ->> 'esperado')::numeric = 10, 'Caja: los dólares se cuentan aparte (US$ 10)');
+select t.ok((public.cash_session_summary(t.uid('session')) ->> 'efectivo_esperado')::numeric = 70000, 'Caja: los dólares no se suman al efectivo en pesos');
+select t.throws(format($$select public.register_payment_usd(%L, %L, 100, 1000, gen_random_uuid())$$, t.get('ws'), t.get('resP')), 'supera el saldo', 'Dólares: no deja cobrar más que el saldo');
+select t.throws(format($$select public.register_payment(%L, %L, 1000, 'dolares', gen_random_uuid())$$, t.get('ws'), t.get('resP')), 'monto en dólares', 'Dólares: exige monto en dólares y cotización');
+select t.throws(format($$select public.register_payment(%L, %L, 1000, 'voucher', gen_random_uuid())$$, t.get('ws'), t.get('resP')), 'solo se usa para devoluciones', 'Voucher: no sirve para cobrar');
+select t.throws(format($$select public.refund_payment(%L, %L, 1000, 'transferencia', gen_random_uuid(), 'Lluvia')$$, t.get('ws'), t.get('resP')), 'efectivo o con un voucher', 'Devolución: solo en efectivo o voucher');
+select t.set('vpay', (public.refund_payment(t.uid('ws'), t.uid('resP'), 5000, 'voucher', gen_random_uuid(), 'Día de lluvia') ->> 'payment_id'));
+select t.ok((select code ~ '^V-[0-9A-F]{6}$' and amount = 5000 and status = 'vigente' from public.restaurant_vouchers where payment_id = t.uid('vpay')), 'Voucher: se crea con código y queda vigente');
+select t.ok((select due_amount from public.reservation_balances where reservation_id = t.uid('resP')) = 17319, 'Voucher: cuenta como devolución (saldo 17.319)');
+select t.ok((public.cash_session_summary(t.uid('session')) ->> 'efectivo_esperado')::numeric = 70000, 'Voucher: no toca la caja');
+select t.ok(not exists (select 1 from public.cash_movements where payment_id = t.uid('vpay')), 'Voucher: no genera movimiento de caja');
+select t.set('vid', (select id::text from public.restaurant_vouchers where payment_id = t.uid('vpay')));
+select public.use_voucher(t.uid('vid'), 1);
+select t.ok((select status = 'usado' and used_at is not null from public.restaurant_vouchers where id = t.uid('vid')), 'Voucher: se marca como usado');
+select t.throws(format($$select public.use_voucher(%L, 2)$$, t.get('vid')), 'ya está usado', 'Voucher: no se usa dos veces');
+select t.throws(format($$select public.void_payment(%L, %L, gen_random_uuid(), 'Error')$$, t.get('ws'), t.get('vpay')), 'ya se usó', 'Voucher: usado no se puede anular');
+select t.set('vpay2', (public.refund_payment(t.uid('ws'), t.uid('resP'), 1000, 'voucher', gen_random_uuid(), 'Cortesía del bar') ->> 'payment_id'));
+select public.void_payment(t.uid('ws'), t.uid('vpay2'), gen_random_uuid(), 'Cargado por error');
+select t.ok((select status from public.restaurant_vouchers where payment_id = t.uid('vpay2')) = 'anulado', 'Voucher: al anular la devolución el voucher queda anulado');
+select public.void_payment(t.uid('ws'), t.uid('usd1'), gen_random_uuid(), 'Error de cotización');
+select t.ok((public.cash_session_summary(t.uid('session')) -> 'dolares' ->> 'esperado')::numeric = 0, 'Dólares: la anulación devuelve los dólares en la caja');
+select t.set('resUsd', (public.create_reservation_v2(t.uid('ws'), gen_random_uuid(), t.uid('luis'), '2027-03-05', '2027-03-06',
+  jsonb_build_array(jsonb_build_object('space_id', t.space('71'), 'start_date', '2027-03-05', 'end_date', '2027-03-06')),
+  '{"manual_base": 25000}'::jsonb, null,
+  jsonb_build_object('amount', 20000, 'method', 'dolares', 'usd_amount', 20, 'exchange_rate', 1000, 'idempotency_key', gen_random_uuid())) ->> 'reservation_id'));
+select t.ok((select p.usd_amount = 20 and b.due_amount = 5000 from public.payments p join public.reservation_balances b on b.reservation_id = p.reservation_id
+             where p.reservation_id = t.uid('resUsd')), 'Nueva reserva: seña de US$ 20 a $1.000, saldo 5.000');
+select t.ok(coalesce(current_setting('app.pay_usd', true), '') = '', 'Nueva reserva: no quedan datos de dólares en la sesión');
+
 select public.void_expense(t.uid('ws'), t.uid('gasto'), 'Era de otra caja');
 select t.ok((public.cash_session_summary(t.uid('session')) ->> 'efectivo_esperado')::numeric = 100000,
   'Gastos: anular un gasto en efectivo lo compensa en caja');

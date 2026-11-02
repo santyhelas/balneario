@@ -2,7 +2,7 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { getSupabase } from "@/lib/supabase/client";
 import { unwrap, useLoader } from "@/lib/data";
-import { formatDate, formatMoney } from "@/lib/format";
+import { addDays, formatDate, formatMoney } from "@/lib/format";
 import { useWorkspace } from "@/components/workspace";
 
 export type Counts = { total_activos: number; ocupados: number; cortesias: number; disponibles: number; mantenimiento: number; desactivados: number };
@@ -65,9 +65,21 @@ export function StatusProvider({ children }: { children: ReactNode }) {
         return r ? [{ reservation_id: r.id, number: r.number, customer: `${r.customers.first_name} ${r.customers.last_name}`.trim(), end_date: r.end_date, due: Number(b.due_amount) }] : [];
       });
     }
+    // Deudores que terminan mañana o pasado mañana (aviso 2 días y 1 día antes).
+    const soonRows = unwrap(await sb.from("reservations").select("id, number, end_date, customers(first_name, last_name)")
+      .eq("workspace_id", ws.id).eq("status", "confirmada")
+      .gte("end_date", addDays(summary.fecha, 1)).lte("end_date", addDays(summary.fecha, 2))) as unknown as { id: string; number: number; end_date: string; customers: { first_name: string; last_name: string } }[];
+    let endingSoon: Debt[] = [];
+    if (soonRows.length) {
+      const sb2 = unwrap(await sb.from("reservation_balances").select("reservation_id, due_amount").in("reservation_id", soonRows.map((r) => r.id)).gt("due_amount", 0)) as { reservation_id: string; due_amount: number }[];
+      const dueById = new Map(sb2.map((b) => [b.reservation_id, Number(b.due_amount)]));
+      endingSoon = soonRows.filter((r) => dueById.has(r.id)).map((r) => ({
+        reservation_id: r.id, number: r.number, customer: `${r.customers.first_name} ${r.customers.last_name}`.trim(), end_date: r.end_date, due: dueById.get(r.id)!,
+      })).sort((a, b) => a.end_date.localeCompare(b.end_date));
+    }
     const fut = await sb.from("reservations").select("id", { count: "exact", head: true }).eq("workspace_id", ws.id).eq("status", "confirmada").gt("start_date", summary.fecha);
     if (fut.error) throw fut.error;
-    return { summary, debts, futureCount: fut.count ?? 0 };
+    return { summary, debts, endingSoon, futureCount: fut.count ?? 0 };
   }, [ws.id], 60_000);
 
   // Copia de seguridad automática: una por día como máximo (la base controla que no se repita).
@@ -100,7 +112,17 @@ export function StatusProvider({ children }: { children: ReactNode }) {
         list.push({ id: `fin-${r.reservation_id}`, tone: "danger", title: `Termina hoy con deuda: ${r.customer}`, detail: `${r.spaces ?? ""} · Debe ${formatMoney(r.due_amount)}`, href: `/reservas/${r.reservation_id}` });
       }
     }
-    const endingIds = new Set(s.finalizan_hoy.map((r) => r.reservation_id));
+    const tomorrow = addDays(s.fecha, 1);
+    for (const d of q.data!.endingSoon) {
+      const one = d.end_date === tomorrow;
+      list.push({
+        id: `fin${one ? 1 : 2}-${d.reservation_id}`, tone: one ? "danger" : "warn",
+        title: `${one ? "Termina mañana" : "Termina en 2 días"} y debe: ${d.customer}`,
+        detail: `Reserva #${d.number} · último día ${formatDate(d.end_date)} · Debe ${formatMoney(d.due)}`,
+        href: `/reservas/${d.reservation_id}`,
+      });
+    }
+    const endingIds = new Set([...s.finalizan_hoy.map((r) => r.reservation_id), ...q.data!.endingSoon.map((d) => d.reservation_id)]);
     for (const d of q.data!.debts) {
       if (endingIds.has(d.reservation_id)) continue;
       list.push({ id: `deuda-${d.reservation_id}`, tone: "warn", title: `Saldo pendiente: ${d.customer}`, detail: `Reserva #${d.number} · Resta abonar ${formatMoney(d.due)}`, href: `/reservas/${d.reservation_id}` });

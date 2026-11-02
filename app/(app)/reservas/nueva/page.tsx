@@ -5,7 +5,8 @@ import { getSupabase } from "@/lib/supabase/client";
 import { newKey, unwrap } from "@/lib/data";
 import { friendlyError } from "@/lib/errors";
 import { addDays, formatDate, formatMoney, inclusiveDays, parseMoney, todayISO } from "@/lib/format";
-import { METHOD_LABEL, PAYMENT_METHODS } from "@/lib/methods";
+import { COLLECT_METHODS, METHOD_LABEL } from "@/lib/methods";
+import { DollarFields, type DollarValue } from "@/components/dollar";
 import { buildSegments, candidatesFor, daysOf, indexGrid, isFreeFor, splitDays, type GridRow, type Segment } from "@/lib/stay";
 import { useWorkspace } from "@/components/workspace";
 import { useStatus } from "@/components/status";
@@ -60,14 +61,18 @@ export default function NuevaReservaPage() {
   }, [custQuery, customer, ws.id]);
 
   // ---------- Fechas ----------
-  const [start, setStart] = useState(today);
+  // Por defecto se eligen entrada y salida; las duraciones (1, 5, 7, 15, 30 días) son un atajo que completa la salida.
+  const [start, setStartRaw] = useState(today);
+  const [end, setEnd] = useState(addDays(today, 6));
+  const nDays = end >= start ? inclusiveDays(start, end) : 0;
+  /** Al mover la entrada se conserva la cantidad de días elegida. */
+  function setStart(v: string) {
+    setStartRaw(v);
+    setEnd(addDays(v, Math.max(nDays, 1) - 1));
+  }
   useEffect(() => {
     if (prefill.from && /^\d{4}-\d{2}-\d{2}$/.test(prefill.from)) setStart(prefill.from);
-  }, [prefill.from]);
-  const [duration, setDuration] = useState<number | "otra">(7);
-  const [customEnd, setCustomEnd] = useState(addDays(start, 6));
-  const end = duration === "otra" ? customEnd : addDays(start, duration - 1);
-  const nDays = end >= start ? inclusiveDays(start, end) : 0;
+  }, [prefill.from]); // eslint-disable-line react-hooks/exhaustive-deps
   const datesOk = nDays >= 1 && nDays <= 120;
 
   // ---------- Disponibilidad ----------
@@ -216,8 +221,11 @@ export default function NuevaReservaPage() {
   const [payMode, setPayMode] = useState<PayMode>("pagada");
   const [method, setMethod] = useState("efectivo");
   const [deposit, setDeposit] = useState("");
+  const [usd, setUsd] = useState<DollarValue>({ usd: null, rate: null, ars: null });
   const total = quote?.ok ? Number(quote.total) : null;
-  const paidNow = courtesy || payMode === "despues" ? 0 : payMode === "pagada" ? total ?? 0 : parseMoney(deposit) ?? 0;
+  const paidNow = courtesy || payMode === "despues" ? 0
+    : method === "dolares" ? Math.min(usd.ars ?? 0, total ?? 0)
+    : payMode === "pagada" ? total ?? 0 : parseMoney(deposit) ?? 0;
   const debt = total === null ? null : Math.max(total - paidNow, 0);
 
   // ---------- Guardar ----------
@@ -236,7 +244,11 @@ export default function NuevaReservaPage() {
   else if (noAlternative) problems.push("No hay alternativas libres para algunos días: elegí otro espacio o cambiá las fechas.");
   if (quote && !quote.ok) problems.push("Faltan tarifas para esas fechas.");
   if (courtesy && beneficiary.trim().length < 2) problems.push("Indicá el familiar beneficiario de la cortesía.");
-  if (!courtesy && payMode === "sena") {
+  if (!courtesy && payMode !== "despues" && method === "dolares") {
+    if (!usd.usd || !usd.rate) problems.push("Ingresá los dólares recibidos y la cotización.");
+    else if (total !== null && (usd.ars ?? 0) - total >= Math.max(1, usd.rate * 0.01)) problems.push("Los dólares superan el total: bajá el monto y da el vuelto en pesos.");
+    else if (payMode === "pagada" && total !== null && total - (usd.ars ?? 0) >= 1) problems.push("Los dólares no cubren el total: elegí «Seña o pago parcial» o tocá «Todo el saldo».");
+  } else if (!courtesy && payMode === "sena") {
     const d = parseMoney(deposit);
     if (!d || d <= 0) problems.push("Ingresá el importe de la seña.");
     else if (total !== null && d > total) problems.push("La seña no puede superar el total.");
@@ -251,7 +263,9 @@ export default function NuevaReservaPage() {
     setSaving(true);
     setSaveError(null);
     const payment = !courtesy && payMode !== "despues" && paidNow > 0
-      ? { amount: paidNow, method, idempotency_key: paymentKey }
+      ? method === "dolares"
+        ? { amount: paidNow, method, idempotency_key: paymentKey, usd_amount: usd.usd, exchange_rate: usd.rate }
+        : { amount: paidNow, method, idempotency_key: paymentKey }
       : null;
     const { data, error } = await sb.rpc("create_reservation_v2", {
       p_workspace_id: ws.id,
@@ -364,25 +378,20 @@ export default function NuevaReservaPage() {
               <Field label="Entrada">
                 <Input type="date" value={start} onChange={(e) => e.target.value && setStart(e.target.value)} className="w-auto" />
               </Field>
-              <Field label="Duración">
-                <div className="flex flex-wrap gap-1">
-                  {DURATIONS.map((d) => (
-                    <button key={d} type="button" onClick={() => setDuration(d)}
-                      className={cx("rounded-lg border px-3 py-2 text-sm", duration === d ? "border-accent bg-accent-soft text-accent" : "border-line hover:bg-surface-2")}>
-                      {d} {d === 1 ? "día" : "días"}
-                    </button>
-                  ))}
-                  <button type="button" onClick={() => { setDuration("otra"); setCustomEnd(end); }}
-                    className={cx("rounded-lg border px-3 py-2 text-sm", duration === "otra" ? "border-accent bg-accent-soft text-accent" : "border-line hover:bg-surface-2")}>
-                    Otra
-                  </button>
-                </div>
+              <Field label="Salida (último día)">
+                <Input type="date" value={end} min={start} onChange={(e) => e.target.value && setEnd(e.target.value)} className="w-auto" />
               </Field>
-              {duration === "otra" && (
-                <Field label="Salida (último día)">
-                  <Input type="date" value={customEnd} min={start} onChange={(e) => e.target.value && setCustomEnd(e.target.value)} className="w-auto" />
-                </Field>
-              )}
+            </div>
+            <div className="mt-3">
+              <div className="mb-1 text-xs text-muted">O elegí una duración desde la entrada:</div>
+              <div className="flex flex-wrap gap-1">
+                {DURATIONS.map((d) => (
+                  <button key={d} type="button" onClick={() => setEnd(addDays(start, d - 1))}
+                    className={cx("rounded-lg border px-3 py-2 text-sm", nDays === d ? "border-accent bg-accent-soft text-accent" : "border-line hover:bg-surface-2")}>
+                    {d} {d === 1 ? "día" : "días"}
+                  </button>
+                ))}
+              </div>
             </div>
             <p className="mt-3 text-sm">
               {datesOk ? <>Del <strong>{formatDate(start)}</strong> al <strong>{formatDate(end)}</strong> · {nDays} {nDays === 1 ? "día" : "días"}</> : <span className="text-danger">{nDays > 120 ? "Máximo 120 días." : "La salida no puede ser anterior a la entrada."}</span>}
@@ -585,7 +594,17 @@ export default function NuevaReservaPage() {
                   </label>
                 ))}
               </div>
-              {payMode !== "despues" && (
+              {payMode !== "despues" && method === "dolares" && (
+                <div className="flex flex-col gap-3">
+                  <Field label="Medio de pago">
+                    <Select value={method} onChange={(e) => setMethod(e.target.value)}>
+                      {COLLECT_METHODS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
+                    </Select>
+                  </Field>
+                  <DollarFields due={total ?? 0} onChange={setUsd} />
+                </div>
+              )}
+              {payMode !== "despues" && method !== "dolares" && (
                 <div className="grid grid-cols-2 gap-3">
                   {payMode === "sena" ? (
                     <TextField label="Importe recibido" inputMode="decimal" value={deposit} onChange={(e) => setDeposit(e.target.value)} />
@@ -594,7 +613,7 @@ export default function NuevaReservaPage() {
                   )}
                   <Field label="Medio de pago">
                     <Select value={method} onChange={(e) => setMethod(e.target.value)}>
-                      {PAYMENT_METHODS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
+                      {COLLECT_METHODS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
                     </Select>
                   </Field>
                 </div>
@@ -668,7 +687,7 @@ export default function NuevaReservaPage() {
             {!courtesy && (
               <>
                 <dt className="text-muted">Pago</dt>
-                <dd>{payMode === "despues" ? "Cobrar después" : `${formatMoney(paidNow)} en ${METHOD_LABEL[method]}`}</dd>
+                <dd>{payMode === "despues" ? "Cobrar después" : `${formatMoney(paidNow)} en ${METHOD_LABEL[method]}${method === "dolares" && usd.usd ? ` (US$ ${usd.usd} a ${formatMoney(usd.rate ?? 0)})` : ""}`}</dd>
                 <dt className="text-muted">Saldo</dt><dd className="tabular">{formatMoney(debt)}</dd>
               </>
             )}

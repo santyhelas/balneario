@@ -6,7 +6,8 @@ import { getSupabase } from "@/lib/supabase/client";
 import { newKey, useLoader } from "@/lib/data";
 import { friendlyError } from "@/lib/errors";
 import { addDays, formatDate, formatDateTime, formatMoney, inclusiveDays, parseMoney, todayISO } from "@/lib/format";
-import { METHOD_LABEL, PAYMENT_METHODS } from "@/lib/methods";
+import { METHOD_LABEL } from "@/lib/methods";
+import { VoucherList } from "@/components/vouchers";
 import { loadReservation, spacesSummary, whatsappLink, type Full, type PaymentRow } from "@/lib/reservations";
 import { daysOf, indexGrid, isFreeFor, type GridRow } from "@/lib/stay";
 import { useWorkspace } from "@/components/workspace";
@@ -122,7 +123,7 @@ export default function ReservaPage() {
                       <div className="font-medium">
                         {p.kind === "cobro" ? "Cobro" : p.kind === "devolucion" ? "Devolución" : "Anulación"} · {METHOD_LABEL[p.method] ?? p.method}
                       </div>
-                      <div className="text-xs text-muted">{formatDateTime(p.created_at, ws.timezone)}{p.reason ? ` · ${p.reason}` : ""}{p.note ? ` · ${p.note}` : ""}</div>
+                      <div className="text-xs text-muted">{formatDateTime(p.created_at, ws.timezone)}{p.usd_amount ? ` · US$ ${p.usd_amount} a ${formatMoney(Number(p.exchange_rate))}` : ""}{p.reason ? ` · ${p.reason}` : ""}{p.note ? ` · ${p.note}` : ""}</div>
                     </div>
                     <div className="flex items-center gap-3">
                       <span className={cx("tabular font-medium", Number(p.signed_amount) >= 0 ? "text-ok" : "text-danger")}>
@@ -138,6 +139,12 @@ export default function ReservaPage() {
             </ul>
           )}
         </Card>
+
+        {payments.some((p) => p.method === "voucher") && (
+          <Card title="Vouchers del restaurante">
+            <VoucherList reservationId={r.id} reloadKey={payments.length} />
+          </Card>
+        )}
 
         <Card title="Historial">
           {changes.length === 0 ? <EmptyState>Sin cambios.</EmptyState> : (
@@ -184,20 +191,35 @@ function RefundModal({ open, full, onClose, onDone }: { open: boolean; full: Ful
     if (reason.trim().length < 3) return a.setError("Indicá el motivo.");
     a.run(
       () => getSupabase().rpc("refund_payment", { p_workspace_id: ws.id, p_reservation_id: full.r.id, p_amount: v, p_method: method, p_idempotency_key: key, p_reason: reason }),
-      () => { setKey(newKey()); setAmount(""); setReason(""); onDone(`Devolución de ${formatMoney(v)} registrada.`); },
+      () => {
+        setKey(newKey()); setAmount(""); setReason("");
+        onDone(method === "voucher"
+          ? `Voucher para el restaurante por ${formatMoney(v)} creado. Su código figura en la reserva, en "Vouchers del restaurante".`
+          : `Devolución en efectivo de ${formatMoney(v)} registrada en la caja de hoy.`);
+      },
     );
   }
   return (
     <Modal open={open} onClose={onClose} title="Registrar devolución al cliente" busy={a.busy}>
       <form onSubmit={submit} className="flex flex-col gap-3">
-        <p className="text-sm text-muted">Dinero que se le devuelve al cliente. Sale de la caja de hoy. Cobrado hasta ahora: {formatMoney(full.balance.paid_amount)}.</p>
+        <p className="text-sm text-muted">Cobrado hasta ahora: {formatMoney(full.balance.paid_amount)}.</p>
+        <Field label="¿Cómo se devuelve?">
+          <div className="grid grid-cols-2 gap-2">
+            {([["efectivo", "Efectivo", "Sale de la caja de hoy."], ["voucher", "Voucher restaurante", "Crédito para consumir en el restaurante. No toca la caja."]] as const).map(([v, l, d]) => (
+              <button key={v} type="button" onClick={() => setMethod(v)} aria-pressed={method === v}
+                className={`rounded-lg border p-2 text-left text-sm ${method === v ? "border-accent bg-accent-soft" : "border-line hover:bg-surface-2"}`}>
+                <div className="font-semibold">{l}</div>
+                <div className="text-xs text-muted">{d}</div>
+              </button>
+            ))}
+          </div>
+        </Field>
         <TextField label="Importe" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} required />
-        <Field label="Medio"><Select value={method} onChange={(e) => setMethod(e.target.value)}>{PAYMENT_METHODS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}</Select></Field>
         <TextField label="Motivo" value={reason} onChange={(e) => setReason(e.target.value)} required maxLength={300} />
         {a.error && <Alert tone="danger">{a.error}</Alert>}
         <div className="flex justify-end gap-2">
           <Button type="button" variant="secondary" onClick={onClose} disabled={a.busy}>Cancelar</Button>
-          <Button type="submit" variant="danger" loading={a.busy}>Registrar devolución</Button>
+          <Button type="submit" variant="danger" loading={a.busy}>{method === "voucher" ? "Crear voucher" : "Registrar devolución"}</Button>
         </div>
       </form>
     </Modal>
