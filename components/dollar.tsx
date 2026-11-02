@@ -59,20 +59,20 @@ export function DollarFields({ due, onChange }: { due: number; onChange: (v: Dol
       <div className="text-sm">
         {q.loading && !q.data ? (
           <span className="flex items-center gap-2 text-muted"><Spinner small /> Consultando la cotización del Banco Nación…</span>
-        ) : q.data ? (
+        ) : q.data ? ((d) => (
           <>
-            <div className="font-medium">Dólar Banco Nación{q.data.fecha ? ` (${q.data.fecha.split("-").reverse().join("/")})` : ""}</div>
+            <div className="font-medium">Dólar Banco Nación{d.fecha ? ` (${d.fecha.split("-").reverse().join("/")})` : ""}</div>
             <div className="mt-1 flex flex-wrap gap-2">
               {(["compra", "venta"] as const).map((k) => (
                 <button key={k} type="button" onClick={() => { setWhich(k); setManualRate(""); }}
                   className={`rounded-lg border px-2 py-1 text-xs ${which === k && !manualRate ? "border-accent bg-accent-soft font-semibold" : "border-line"}`}>
-                  {k === "compra" ? "Compra" : "Venta"} {formatMoney(q.data[k])}
+                  {k === "compra" ? "Compra" : "Venta"} {formatMoney(d[k])}
                 </button>
               ))}
             </div>
-            <div className="mt-1 text-xs text-muted">Fuente: {q.data.fuente}. Se actualiza sola cada 5 minutos.</div>
+            <div className="mt-1 text-xs text-muted">Fuente: {d.fuente}. Se actualiza sola cada 5 minutos.</div>
           </>
-        ) : (
+        ))(q.data) : (
           <Alert tone="warn">{q.error} Cargá la cotización a mano.</Alert>
         )}
       </div>
