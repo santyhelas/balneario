@@ -76,16 +76,16 @@ export function Shell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const [confirmLogout, setConfirmLogout] = useState(false);
   // Menú lateral: cerrado por defecto (pantalla limpia); se abre con el botón de tres rayas.
-  const [menuOpen, setMenuOpen] = useState(false);
-  useEffect(() => setMenuOpen(false), [pathname]);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  useEffect(() => setDrawerOpen(false), [pathname]);
   useEffect(() => {
-    if (!menuOpen) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setMenuOpen(false); };
+    if (!drawerOpen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setDrawerOpen(false); };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [menuOpen]);
+  }, [drawerOpen]);
   const menuButton = (
-    <button onClick={() => setMenuOpen(true)} className="rounded-lg p-2 hover:bg-surface-2" aria-label="Abrir menú" title="Menú" aria-expanded={menuOpen}>
+    <button onClick={() => setDrawerOpen(true)} className="rounded-lg p-2 hover:bg-surface-2" aria-label="Abrir menú" title="Menú" aria-expanded={drawerOpen}>
       <Icon d="M4 6h16M4 12h16M4 18h16" />
     </button>
   );
@@ -122,14 +122,14 @@ export function Shell({ children }: { children: ReactNode }) {
   return (
     <div className="flex min-h-dvh">
       {/* ---------------- Menú lateral (se abre con las tres rayas) ---------------- */}
-      {menuOpen && <div className="fixed inset-0 z-50 bg-black/40 print:hidden" onClick={() => setMenuOpen(false)} aria-hidden="true" />}
+      {drawerOpen && <div className="fixed inset-0 z-50 bg-black/40 print:hidden" onClick={() => setDrawerOpen(false)} aria-hidden="true" />}
       <aside
         className={cx(
           "pt-safe-2 fixed inset-y-0 left-0 z-50 flex w-72 max-w-[85vw] flex-col border-r border-line bg-surface shadow-2xl transition-transform duration-200 print:!hidden",
-          menuOpen ? "translate-x-0" : "-translate-x-full invisible",
+          drawerOpen ? "translate-x-0" : "-translate-x-full invisible",
         )}
         aria-label="Menú"
-        aria-hidden={!menuOpen}
+        aria-hidden={!drawerOpen}
       >
         <div className="flex items-start">
         <Link href="/configuracion" className="flex min-w-0 flex-1 items-center gap-3 px-4 pb-3 pt-4 hover:opacity-90" title="Cambiar nombre y foto en Configuración">
@@ -139,7 +139,7 @@ export function Shell({ children }: { children: ReactNode }) {
             <div className="truncate text-xs font-medium text-accent">{ws.subtitle || "Gestión del balneario"}</div>
           </div>
         </Link>
-        <button onClick={() => setMenuOpen(false)} className="m-2 rounded-lg p-2 text-muted hover:bg-surface-2" aria-label="Cerrar menú" title="Cerrar">
+        <button onClick={() => setDrawerOpen(false)} className="m-2 rounded-lg p-2 text-muted hover:bg-surface-2" aria-label="Cerrar menú" title="Cerrar">
           <Icon d="M6 6l12 12M18 6L6 18" />
         </button>
         </div>
