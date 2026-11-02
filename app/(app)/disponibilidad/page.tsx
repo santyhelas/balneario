@@ -7,7 +7,7 @@ import { addDays, formatDate, todayISO } from "@/lib/format";
 import { daysOf } from "@/lib/stay";
 import { useWorkspace } from "@/components/workspace";
 import { PageHeader, SyncNotice } from "@/components/shell";
-import { Button, Field, Input, Select, Spinner, cx } from "@/components/ui";
+import { Button, Field, Input, Spinner, cx } from "@/components/ui";
 
 type Space = { id: string; code: string; kind: "carpa" | "sombrilla"; active: boolean };
 type Item = {
@@ -29,10 +29,15 @@ export default function DisponibilidadPage() {
   const sb = getSupabase();
   const today = todayISO(ws.timezone);
   const [from, setFrom] = useState(today);
-  const [span, setSpan] = useState(21);
+  const [toInput, setToInput] = useState(addDays(today, 20));
   const [kind, setKind] = useState<"todas" | "carpa" | "sombrilla">("todas");
   const [search, setSearch] = useState("");
-  const to = addDays(from, span - 1);
+  // "Hasta" lo elige el usuario; si queda antes de "Desde", se muestra solo ese día. Máximo un año para que la grilla no se vuelva inmanejable.
+  const MAX_DAYS = 366;
+  const toClamped = toInput < from ? from : toInput;
+  const to = toClamped > addDays(from, MAX_DAYS - 1) ? addDays(from, MAX_DAYS - 1) : toClamped;
+  const span = daysOf(from, to).length;
+  const shift = (n: number) => { setFrom(addDays(from, n)); setToInput(addDays(to, n)); };
   const days = useMemo(() => daysOf(from, to), [from, to]);
 
   const q = useLoader(async () => {
@@ -67,11 +72,8 @@ export default function DisponibilidadPage() {
       <PageHeader title="Disponibilidad" subtitle="Planificación por espacio y por día. Tocá un día libre para reservar desde esa fecha." actions={<Link href="/reservas/nueva"><Button>Nueva reserva</Button></Link>} />
       <div className="mb-3 flex flex-wrap items-end gap-2">
         <Field label="Desde"><Input type="date" value={from} onChange={(e) => e.target.value && setFrom(e.target.value)} className="w-auto" /></Field>
-        <Field label="Días">
-          <Select value={span} onChange={(e) => setSpan(Number(e.target.value))} className="w-auto">
-            {[7, 14, 21, 31, 45, 60].map((d) => <option key={d} value={d}>{d} días</option>)}
-          </Select>
-        </Field>
+        <Field label="Hasta"><Input type="date" value={to} min={from} onChange={(e) => e.target.value && setToInput(e.target.value)} className="w-auto" /></Field>
+        <span className="pb-2 text-sm text-muted">{span} {span === 1 ? "día" : "días"}</span>
         <Field label="Mostrar">
           <div className="flex overflow-hidden rounded-lg border border-line" role="group" aria-label="Tipo de espacio">
             {([["todas", "Todas"], ["carpa", "Carpas"], ["sombrilla", "Sombrillas"]] as const).map(([k, l]) => (
@@ -81,11 +83,12 @@ export default function DisponibilidadPage() {
           </div>
         </Field>
         <Field label="Buscar N°"><Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Ej: 17" className="w-24" /></Field>
-        <Button variant="secondary" onClick={() => setFrom(addDays(from, -span))} aria-label="Período anterior">←</Button>
-        <Button variant="secondary" onClick={() => setFrom(today)} disabled={from === today}>Hoy</Button>
-        <Button variant="secondary" onClick={() => setFrom(addDays(from, span))} aria-label="Período siguiente">→</Button>
+        <Button variant="secondary" onClick={() => shift(-span)} aria-label="Período anterior">←</Button>
+        <Button variant="secondary" onClick={() => { setFrom(today); setToInput(addDays(today, span - 1)); }} disabled={from === today}>Hoy</Button>
+        <Button variant="secondary" onClick={() => shift(span)} aria-label="Período siguiente">→</Button>
         {q.loading && <Spinner small />}
       </div>
+      {toClamped > to && <p className="mb-2 text-sm text-muted">Se muestra hasta un año por vez: del {formatDate(from)} al {formatDate(to)}.</p>}
       <div className="mb-3 flex flex-wrap gap-x-5 gap-y-1 text-sm">
         <Legend cls="bg-green-500 border-green-600" label="Libre" />
         <Legend cls="bg-red-600 border-red-700" label="Reservada / ocupada" />
