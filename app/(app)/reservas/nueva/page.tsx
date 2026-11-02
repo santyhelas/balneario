@@ -8,6 +8,7 @@ import { addDays, formatDate, formatMoney, inclusiveDays, parseMoney, todayISO }
 import { METHOD_LABEL, PAYMENT_METHODS } from "@/lib/methods";
 import { buildSegments, candidatesFor, daysOf, indexGrid, isFreeFor, splitDays, type GridRow, type Segment } from "@/lib/stay";
 import { useWorkspace } from "@/components/workspace";
+import { useStatus } from "@/components/status";
 import { PageHeader } from "@/components/shell";
 import { Alert, Badge, Button, Card, Field, Input, Modal, Select, Spinner, Textarea, TextField, cx } from "@/components/ui";
 import { CustomerForm, searchCustomers, type Customer } from "@/components/customers";
@@ -29,6 +30,7 @@ const MONTHS_SHORT = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "s
 
 export default function NuevaReservaPage() {
   const { ws, isAdmin } = useWorkspace();
+  const status = useStatus();
   const sb = getSupabase();
   const today = todayISO(ws.timezone);
 
@@ -271,6 +273,7 @@ export default function NuevaReservaPage() {
     const res = data as { reservation_id: string; number: number };
     setConfirmOpen(false);
     setDone({ id: res.reservation_id, number: res.number });
+    status.reload();
   }
 
   function reset() {

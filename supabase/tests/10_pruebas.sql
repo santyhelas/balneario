@@ -514,6 +514,39 @@ select t.ok((public.dashboard_summary(t.uid('ws')) -> 'espacios' -> 'carpa' ->> 
 select t.ok((public.dashboard_summary(t.uid('ws')) -> 'caja' ->> 'estado') = 'cerrada', 'Panel: estado de caja');
 select t.ok((public.dashboard_summary(t.uid('ws')) ->> 'gastos_hoy')::numeric = 12000, 'Panel: gastos del día excluyen los anulados');
 
+-- =====================================================================
+-- 15. Configuración, copias de seguridad e informes
+-- =====================================================================
+update public.workspaces set name = 'Balneario Eólico', subtitle = 'Gestión Costa Atlántica',
+  logo_data = 'data:image/png;base64,AAAA', version = version + 1;
+select t.ok((select name = 'Balneario Eólico' and logo_data like 'data:image/%' from public.workspaces), 'Configuración: se cambian nombre y logo');
+select t.throws($$update public.workspaces set logo_data = 'http://otro.sitio/logo.png', version = version + 1$$, 'check', 'Configuración: el logo debe ser una imagen guardada en la base');
+insert into public.user_preferences (user_id, display_name) values ('11111111-1111-1111-1111-111111111111', 'Santi')
+  on conflict (user_id) do update set display_name = excluded.display_name;
+select t.ok((select display_name from public.user_preferences where user_id = '11111111-1111-1111-1111-111111111111') = 'Santi', 'Perfil: nombre visible del usuario');
+
+select t.set('bk', public.create_backup(t.uid('ws'), 'manual', 'Prueba')::text);
+select t.ok((t.get('bk')::jsonb -> 'counts' ->> 'reservations')::int = (select count(*) from public.reservations), 'Copia: incluye todas las reservas');
+select t.ok((t.get('bk')::jsonb -> 'counts' ->> 'payments')::int = (select count(*) from public.payments), 'Copia: incluye todos los pagos');
+select t.ok((select data ? 'reservation_segments' and data ? 'cash_movements' and data ? 'rates' from public.backups limit 1), 'Copia: incluye tramos, caja y tarifas');
+select t.ok((public.create_backup(t.uid('ws'), 'automatica') ->> 'creada')::boolean, 'Copia automática: se crea la primera del día');
+select t.ok(not (public.create_backup(t.uid('ws'), 'automatica') ->> 'creada')::boolean, 'Copia automática: no se repite en el mismo día');
+select t.throws($$delete from public.backups$$, 'permission denied', 'Copia: no se pueden borrar desde la aplicación');
+
+select t.set('rep', public.report_summary(t.uid('ws'), '2027-01-01', '2027-01-31')::text);
+select t.ok((select count(*) from jsonb_array_elements(t.get('rep')::jsonb -> 'ocupacion')) = 31, 'Informe: ocupación día por día');
+select t.ok((select (x ->> 'carpas')::int from jsonb_array_elements(t.get('rep')::jsonb -> 'ocupacion') x where x ->> 'dia' = '2027-01-15') >= 1, 'Informe: cuenta las carpas ocupadas');
+select t.ok((t.get('rep')::jsonb -> 'contratado' ->> 'total')::numeric > 0, 'Informe: total contratado');
+select t.ok(jsonb_array_length(t.get('rep')::jsonb -> 'deudas') = (select count(*) from public.reservation_balances where due_amount > 0), 'Informe: deudas pendientes coinciden con los saldos');
+select t.ok(exists (select 1 from jsonb_array_elements(t.get('rep')::jsonb -> 'descuentos') d where d ->> 'tipo' = 'convenio'), 'Informe: descuentos por convenio');
+select t.throws(format($$select public.report_summary(%L, '2027-01-01', '2029-01-01')$$, t.get('ws')), 'período válido', 'Informe: período máximo 400 días');
+
+select set_config('request.jwt.claims', '{"sub":"33333333-3333-3333-3333-333333333333","email":"operador@test.com"}', false);
+select t.throws(format($$select public.create_backup(%L, 'manual')$$, t.get('ws')), 'No tenés permiso', 'Permisos: un operador no crea copias manuales');
+update public.workspaces set name = 'X', version = version + 1;
+select t.ok((select name from public.workspaces) = 'Balneario Eólico', 'Permisos: un operador no cambia el nombre del balneario');
+select set_config('request.jwt.claims', '{"sub":"11111111-1111-1111-1111-111111111111","email":"duenio@test.com"}', false);
+
 reset role;
 \o
 -- Resultado ----------------------------------------------------------

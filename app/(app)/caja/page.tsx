@@ -5,9 +5,10 @@ import { newKey, unwrap, useLoader } from "@/lib/data";
 import { friendlyError } from "@/lib/errors";
 import { formatDate, formatDateTime, formatMoney, formatTime, parseMoney, todayISO } from "@/lib/format";
 import { useWorkspace } from "@/components/workspace";
+import { useStatus } from "@/components/status";
 import { PageHeader, SyncNotice } from "@/components/shell";
 import { Alert, Button, Card, ConfirmDialog, EmptyState, Field, Input, Modal, Select, Spinner, Textarea, TextField } from "@/components/ui";
-import { CloseCashModal, OpenCashModal, type CashSummary } from "@/components/cash";
+import { CloseCashModal, ExpenseModal, IncomeModal, OpenCashModal, type CashSummary } from "@/components/cash";
 import { METHOD_LABEL, PAYMENT_METHODS } from "@/lib/methods";
 
 type Session = { id: string; business_date: string; opening_cash: number; closed_at: string | null; expected_cash: number | null; counted_cash: number | null; difference: number | null };
@@ -37,6 +38,7 @@ const CATEGORY: Record<string, string> = {
 
 export default function CajaPage() {
   const { ws, isAdmin } = useWorkspace();
+  const status = useStatus();
   const sb = getSupabase();
   const today = todayISO(ws.timezone);
 
@@ -200,11 +202,11 @@ export default function CajaPage() {
         </Card>
       )}
 
-      <OpenCashModal open={openCash} workspaceId={ws.id} onClose={() => setOpenCash(false)} onDone={() => { setOpenCash(false); reload(); }} />
-      <CloseCashModal open={closeCash} summary={summary} onClose={() => setCloseCash(false)} onDone={() => { setCloseCash(false); reload(); }} />
-      <ExpenseModal open={expenseOpen} categories={data?.categories ?? []} today={today} onClose={() => setExpenseOpen(false)} onDone={() => { setExpenseOpen(false); reload(); }} />
-      <IncomeModal open={incomeOpen} onClose={() => setIncomeOpen(false)} onDone={() => { setIncomeOpen(false); reload(); }} />
-      <VoidExpense movement={voiding} onClose={() => setVoiding(null)} onDone={() => { setVoiding(null); reload(); }} />
+      <OpenCashModal open={openCash} workspaceId={ws.id} onClose={() => setOpenCash(false)} onDone={() => { setOpenCash(false); reload(); status.reload(); }} />
+      <CloseCashModal open={closeCash} summary={summary} onClose={() => setCloseCash(false)} onDone={() => { setCloseCash(false); reload(); status.reload(); }} />
+      <ExpenseModal open={expenseOpen} categories={data?.categories ?? []} today={today} onClose={() => setExpenseOpen(false)} onDone={() => { setExpenseOpen(false); reload(); status.reload(); }} />
+      <IncomeModal open={incomeOpen} onClose={() => setIncomeOpen(false)} onDone={() => { setIncomeOpen(false); reload(); status.reload(); }} />
+      <VoidExpense movement={voiding} onClose={() => setVoiding(null)} onDone={() => { setVoiding(null); reload(); status.reload(); }} />
     </>
   );
 }
@@ -215,122 +217,6 @@ function Row({ label, value, strong, tone }: { label: string; value: string; str
       <dt className="text-muted">{label}</dt>
       <dd className={`tabular ${strong ? "font-semibold" : ""} ${tone === "warn" ? "text-warn" : ""}`}>{value}</dd>
     </div>
-  );
-}
-
-function MethodSelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  return (
-    <Field label="Medio de pago">
-      <Select value={value} onChange={(e) => onChange(e.target.value)}>
-        {PAYMENT_METHODS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
-      </Select>
-    </Field>
-  );
-}
-
-function ExpenseModal({ open, categories, today, onClose, onDone }: { open: boolean; categories: Category[]; today: string; onClose: () => void; onDone: () => void }) {
-  const { ws } = useWorkspace();
-  const [amount, setAmount] = useState("");
-  const [concept, setConcept] = useState("");
-  const [categoryId, setCategoryId] = useState("");
-  const [method, setMethod] = useState("efectivo");
-  const [supplier, setSupplier] = useState("");
-  const [notes, setNotes] = useState("");
-  const [spentOn, setSpentOn] = useState(today);
-  const [key, setKey] = useState(newKey);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  function reset() {
-    setAmount(""); setConcept(""); setCategoryId(""); setMethod("efectivo"); setSupplier(""); setNotes(""); setSpentOn(today); setKey(newKey()); setError(null);
-  }
-
-  async function submit(e: FormEvent) {
-    e.preventDefault();
-    const value = parseMoney(amount);
-    if (!value || value <= 0) return setError("Ingresá un importe válido.");
-    if (!categoryId) return setError("Elegí una categoría.");
-    setBusy(true);
-    setError(null);
-    // La misma clave en cada reintento: si la primera vez sí se guardó, no se duplica.
-    const { error } = await getSupabase().rpc("register_expense", {
-      p_workspace_id: ws.id, p_idempotency_key: key, p_amount: value, p_spent_on: spentOn, p_concept: concept,
-      p_category_id: categoryId, p_method: method, p_supplier: supplier || null, p_notes: notes || null,
-    });
-    setBusy(false);
-    if (error) return setError(friendlyError(error));
-    reset();
-    onDone();
-  }
-
-  return (
-    <Modal open={open} onClose={() => { reset(); onClose(); }} title="Registrar salida / gasto" busy={busy}>
-      <form onSubmit={submit} className="flex flex-col gap-3">
-        <p className="text-xs text-muted">Solo gastos ya pagados. Si se pagó con transferencia o tarjeta, no se descuenta del efectivo de la caja.</p>
-        <TextField label="Importe" inputMode="decimal" placeholder="Ej: 30.000" value={amount} onChange={(e) => setAmount(e.target.value)} required />
-        <TextField label="Concepto" value={concept} onChange={(e) => setConcept(e.target.value)} required minLength={2} maxLength={200} placeholder="Ej: Bolsas de residuo" />
-        <Field label="Categoría">
-          <Select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} required>
-            <option value="">Elegí…</option>
-            {categories.filter((c) => c.active).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-          </Select>
-        </Field>
-        <MethodSelect value={method} onChange={setMethod} />
-        <Field label="Fecha del gasto">
-          <Input type="date" value={spentOn} max={today} onChange={(e) => setSpentOn(e.target.value)} required />
-        </Field>
-        <TextField label="Proveedor (opcional)" value={supplier} onChange={(e) => setSupplier(e.target.value)} maxLength={120} />
-        <Field label="Observaciones (opcional)"><Textarea value={notes} onChange={(e) => setNotes(e.target.value)} maxLength={1000} /></Field>
-        {error && <Alert tone="danger">{error}</Alert>}
-        <div className="flex justify-end gap-2">
-          <Button type="button" variant="secondary" onClick={() => { reset(); onClose(); }} disabled={busy}>Cancelar</Button>
-          <Button type="submit" loading={busy}>Guardar gasto</Button>
-        </div>
-      </form>
-    </Modal>
-  );
-}
-
-function IncomeModal({ open, onClose, onDone }: { open: boolean; onClose: () => void; onDone: () => void }) {
-  const { ws } = useWorkspace();
-  const [amount, setAmount] = useState("");
-  const [concept, setConcept] = useState("");
-  const [method, setMethod] = useState("efectivo");
-  const [key, setKey] = useState(newKey);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  function reset() { setAmount(""); setConcept(""); setMethod("efectivo"); setKey(newKey()); setError(null); }
-
-  async function submit(e: FormEvent) {
-    e.preventDefault();
-    const value = parseMoney(amount);
-    if (!value || value <= 0) return setError("Ingresá un importe válido.");
-    setBusy(true);
-    setError(null);
-    const { error } = await getSupabase().rpc("register_other_income", {
-      p_workspace_id: ws.id, p_idempotency_key: key, p_amount: value, p_method: method, p_concept: concept,
-    });
-    setBusy(false);
-    if (error) return setError(friendlyError(error));
-    reset();
-    onDone();
-  }
-
-  return (
-    <Modal open={open} onClose={() => { reset(); onClose(); }} title="Registrar otro ingreso" busy={busy}>
-      <form onSubmit={submit} className="flex flex-col gap-3">
-        <p className="text-xs text-muted">Para ingresos que no son pagos de una reserva. Los cobros de reservas se registran desde la reserva.</p>
-        <TextField label="Importe" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} required />
-        <TextField label="Concepto" value={concept} onChange={(e) => setConcept(e.target.value)} required minLength={3} maxLength={200} />
-        <MethodSelect value={method} onChange={setMethod} />
-        {error && <Alert tone="danger">{error}</Alert>}
-        <div className="flex justify-end gap-2">
-          <Button type="button" variant="secondary" onClick={() => { reset(); onClose(); }} disabled={busy}>Cancelar</Button>
-          <Button type="submit" loading={busy}>Guardar ingreso</Button>
-        </div>
-      </form>
-    </Modal>
   );
 }
 

@@ -1,46 +1,85 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { getSupabase } from "@/lib/supabase/client";
-import { useWorkspace, type ThemePref } from "@/components/workspace";
+import { useWorkspace, type ThemePref, type Workspace } from "@/components/workspace";
+import { useStatus, type Notice } from "@/components/status";
+import { useUndo } from "@/components/undo";
 import { ConfirmDialog, cx } from "@/components/ui";
 
-const NAV = [
-  { href: "/", label: "Panel", icon: "M3 12l9-8 9 8M5 10v10h5v-6h4v6h5V10" },
-  { href: "/mapa", label: "Mapa", icon: "M9 4L3 6v14l6-2 6 2 6-2V4l-6 2-6-2zM9 4v14M15 6v14" },
-  { href: "/caja", label: "Caja", icon: "M3 7h18v12H3zM3 11h18M7 15h3" },
-  { href: "/reservas", label: "Reservas", icon: "M8 3v3M16 3v3M4 8h16M5 5h14v15H5zM9 13h2M13 13h2M9 16h2" },
+type NavItem = { href: string; label: string; icon: string };
+
+// Las 13 secciones del sistema, en el orden del menú.
+export const NAV: NavItem[] = [
+  { href: "/", label: "Inicio / Panel", icon: "M4 4h7v7H4zM13 4h7v4h-7zM13 10h7v10h-7zM4 13h7v7H4z" },
+  { href: "/mapa", label: "Mapa del balneario", icon: "M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21zM12 12a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z" },
+  { href: "/disponibilidad", label: "Disponibilidad", icon: "M8 3v3M16 3v3M4 8h16M5 5h14v15H5zM8 12h2M12 12h2M16 12h0M8 16h2M12 16h2" },
+  { href: "/reservas", label: "Reservas", icon: "M6 3h12v18l-6-4-6 4z" },
   { href: "/tarifas", label: "Tarifario", icon: "M20 12l-8 8-9-9V3h8l9 9zM7.5 7.5h.01" },
-  { href: "/clientes", label: "Clientes", icon: "M16 19v-1a4 4 0 00-4-4H7a4 4 0 00-4 4v1M9.5 10a3.5 3.5 0 100-7 3.5 3.5 0 000 7zM21 19v-1a4 4 0 00-3-3.9M16 3.1a3.5 3.5 0 010 6.8" },
+  { href: "/convenios", label: "Convenios y descuentos", icon: "M8 12l3 3 5-6M3 12a9 9 0 1 0 18 0 9 9 0 0 0-18 0" },
+  { href: "/clientes", label: "Clientes", icon: "M16 19v-1a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v1M9.5 10a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM21 19v-1a4 4 0 0 0-3-3.9M16 3.1a3.5 3.5 0 0 1 0 6.8" },
+  { href: "/cobros", label: "Cobros y señas", icon: "M12 3v18M16.5 7.5c0-1.7-2-3-4.5-3s-4.5 1.3-4.5 3S9.5 10.5 12 11s4.5 1.3 4.5 3-2 3-4.5 3-4.5-1.3-4.5-3" },
+  { href: "/caja", label: "Caja diaria", icon: "M3 7h18v12H3zM3 11h18M7 15h3" },
+  { href: "/gastos", label: "Gastos", icon: "M3 7l6 6 4-4 8 8M15 17h6v-6" },
+  { href: "/reportes", label: "Reportes", icon: "M4 20V10M10 20V4M16 20v-7M22 20H2" },
+  { href: "/copias", label: "Copias de seguridad", icon: "M4 6c0-1.7 3.6-3 8-3s8 1.3 8 3-3.6 3-8 3-8-1.3-8-3zM4 6v6c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6" },
+  { href: "/configuracion", label: "Configuración", icon: "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" },
 ];
 
 const byHref = (h: string) => NAV.find((n) => n.href === h)!;
-const TABS = [
-  byHref("/"),
-  byHref("/mapa"),
-  { href: "/reservas/nueva", label: "Reservar", icon: "" },
-  byHref("/reservas"),
-  { href: "#mas", label: "Más", icon: "M5 12h.01M12 12h.01M19 12h.01" },
-];
-const MORE = [byHref("/caja"), byHref("/clientes"), byHref("/tarifas")];
+const TABS = ["/", "/mapa", "+", "/reservas", "#mas"];
+const MORE = NAV.filter((n) => !["/", "/mapa", "/reservas"].includes(n.href));
 
-function Icon({ d, className }: { d: string; className?: string }) {
+const ICON_SUN = "M12 3v1M12 20v1M4.2 4.2l.7.7M19.1 19.1l.7.7M3 12h1M20 12h1M4.2 19.8l.7-.7M19.1 4.9l.7-.7M12 7a5 5 0 1 0 0 10 5 5 0 0 0 0-10z";
+const ICON_MOON = "M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z";
+const ICON_AUTO = "M12 3a9 9 0 1 0 0 18V3zM12 3a9 9 0 0 1 0 18";
+const ICON_BELL = "M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0";
+const ICON_LOGOUT = "M15 4h4v16h-4M10 8l-4 4 4 4M6 12h11";
+
+export function Icon({ d, className }: { d: string; className?: string }) {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className={cx("h-5 w-5", className)} aria-hidden>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className={cx("h-5 w-5 shrink-0", className)} aria-hidden>
       <path d={d} />
     </svg>
   );
 }
 
 const THEME_LABEL: Record<ThemePref, string> = { claro: "Claro", oscuro: "Oscuro", sistema: "Automático" };
+const THEME_ICON: Record<ThemePref, string> = { claro: ICON_SUN, oscuro: ICON_MOON, sistema: ICON_AUTO };
+
+/** Logo del balneario (el que se cargó en Configuración, o el ícono por defecto). */
+export function BrandLogo({ ws, className }: { ws: Workspace; className?: string }) {
+  // eslint-disable-next-line @next/next/no-img-element
+  return <img src={ws.logo_data || "/icon.svg"} alt="" className={cx("shrink-0 rounded-xl object-cover", className)} />;
+}
+
+function Avatar({ src, name, className }: { src: string | null; name: string; className?: string }) {
+  if (src) {
+    // eslint-disable-next-line @next/next/no-img-element
+    return <img src={src} alt="" className={cx("shrink-0 rounded-full object-cover", className)} />;
+  }
+  const initials = name.split(/[\s@.]+/).filter(Boolean).slice(0, 2).map((w) => w[0]?.toUpperCase()).join("");
+  return <span className={cx("flex shrink-0 items-center justify-center rounded-full bg-accent-soft text-xs font-semibold text-accent", className)}>{initials || "?"}</span>;
+}
+
+function longDate(iso: string, timeZone: string) {
+  const [y, m, d] = iso.split("-").map(Number);
+  const s = new Intl.DateTimeFormat("es-AR", { weekday: "long", day: "2-digit", month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(Date.UTC(y, m - 1, d)));
+  void timeZone;
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
 
 export function Shell({ children }: { children: ReactNode }) {
-  const { ws, email, theme, setTheme, role } = useWorkspace();
+  const { ws, email, theme, setTheme, role, profile } = useWorkspace();
+  const status = useStatus();
   const pathname = usePathname();
   const [confirmLogout, setConfirmLogout] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const undo = useUndo(() => status.reload());
+
+  useEffect(() => setMenuOpen(false), [pathname]);
 
   async function logout() {
     setLoggingOut(true);
@@ -60,73 +99,130 @@ export function Shell({ children }: { children: ReactNode }) {
     });
   }
 
-  const nav = (
-    <nav className="flex flex-col gap-1">
-      {NAV.map((item) => {
-        const active = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
-        return (
-          <Link
-            key={item.href}
-            href={item.href}
-            onClick={() => setMenuOpen(false)}
-            className={cx(
-              "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium",
-              active ? "bg-accent-soft text-accent" : "text-fg hover:bg-surface-2",
-            )}
-          >
-            <Icon d={item.icon} />
-            {item.label}
-          </Link>
-        );
-      })}
-    </nav>
-  );
+  const isActive = (href: string) => (href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(href + "/")) && !(href === "/reservas" && pathname.startsWith("/reservas/nueva"));
+  const alerts = status.notices.filter((n) => n.tone !== "info").length;
+  const carpa = status.summary?.espacios.carpa;
+  const sombrilla = status.summary?.espacios.sombrilla;
+  const userName = profile.displayName || email || "";
 
   return (
     <div className="flex min-h-dvh">
-      <aside className="sticky top-0 hidden h-dvh print:!hidden w-56 shrink-0 flex-col border-r border-line bg-surface p-3 md:flex">
-        <div className="mb-5 flex items-center gap-2 px-2 pt-1">
-          <img src="/icon.svg" alt="" className="h-8 w-8" />
-          <span className="truncate font-semibold" title={ws.name}>{ws.name}</span>
-        </div>
-        {nav}
-        <div className="mt-auto flex flex-col gap-1 border-t border-line pt-3 text-sm">
-          <button onClick={cycleTheme} className="flex items-center gap-3 rounded-lg px-3 py-2 text-left hover:bg-surface-2">
-            <Icon d="M12 3v1M12 20v1M4.2 4.2l.7.7M19.1 19.1l.7.7M3 12h1M20 12h1M4.2 19.8l.7-.7M19.1 4.9l.7-.7M12 7a5 5 0 100 10 5 5 0 000-10z" />
-            Tema: {THEME_LABEL[theme]}
-          </button>
-          <div className="truncate px-3 py-1 text-xs text-muted" title={email ?? ""}>
-            {email} · {role}
+      {/* ---------------- Menú lateral (computadora) ---------------- */}
+      <aside className="sticky top-0 hidden h-dvh w-64 shrink-0 flex-col border-r border-line bg-surface print:!hidden md:flex">
+        <Link href="/configuracion" className="flex items-center gap-3 px-4 pb-3 pt-4 hover:opacity-90" title="Cambiar nombre y foto en Configuración">
+          <BrandLogo ws={ws} className="h-12 w-12" />
+          <div className="min-w-0">
+            <div className="truncate font-bold uppercase tracking-wide">{ws.name}</div>
+            <div className="truncate text-xs font-medium text-accent">{ws.subtitle || "Gestión del balneario"}</div>
           </div>
-          <button onClick={() => setConfirmLogout(true)} className="flex items-center gap-3 rounded-lg px-3 py-2 text-left text-danger hover:bg-surface-2">
-            <Icon d="M15 4h4v16h-4M10 8l-4 4 4 4M6 12h11" />
+        </Link>
+        <div className="mx-4 mb-2 flex items-center justify-between border-y border-line py-2 text-xs">
+          <span className="text-muted">{carpa?.total_activos ?? "–"} Carpas · {sombrilla?.total_activos ?? "–"} Sombrillas</span>
+          <span className="font-mono font-semibold text-ok">{(carpa?.total_activos ?? 0) + (sombrilla?.total_activos ?? 0)} Activas</span>
+        </div>
+        <nav className="flex-1 overflow-y-auto px-2 pb-2" aria-label="Secciones">
+          {NAV.map((item, i) => {
+            const active = isActive(item.href);
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={cx(
+                  "mb-0.5 flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium",
+                  active ? "bg-accent text-accent-fg" : "text-fg hover:bg-surface-2",
+                )}
+                aria-current={active ? "page" : undefined}
+              >
+                <Icon d={item.icon} className="h-[18px] w-[18px]" />
+                <span className="flex-1 truncate">{i + 1}. {item.label}</span>
+                {item.href === "/" && alerts > 0 && (
+                  <span className="rounded-full bg-warn px-1.5 text-xs font-bold text-bg">{alerts}</span>
+                )}
+              </Link>
+            );
+          })}
+        </nav>
+        <div className="flex items-center gap-2 border-t border-line px-3 py-2">
+          <Link href="/configuracion" className="flex min-w-0 flex-1 items-center gap-2 rounded-lg p-1 hover:bg-surface-2" title={email ?? ""}>
+            <Avatar src={profile.avatar} name={userName} className="h-8 w-8" />
+            <div className="min-w-0 text-xs">
+              <div className="truncate font-semibold">{userName}</div>
+              <div className="truncate text-muted">{role}</div>
+            </div>
+          </Link>
+          <button onClick={cycleTheme} className="rounded-lg border border-line p-2 hover:bg-surface-2" title={`Tema: ${THEME_LABEL[theme]}`} aria-label={`Tema: ${THEME_LABEL[theme]}`}>
+            <Icon d={THEME_ICON[theme]} className="h-4 w-4" />
+          </button>
+        </div>
+        <div className="px-3 pb-3">
+          <button onClick={() => setConfirmLogout(true)} className="flex w-full items-center justify-center gap-2 rounded-lg bg-surface-2 py-2 text-sm font-medium hover:opacity-80">
+            <Icon d={ICON_LOGOUT} className="h-4 w-4 text-danger" />
             Cerrar sesión
           </button>
         </div>
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        {/* Barra superior en el celular */}
-        <header className="pt-safe-2 sticky top-0 z-30 flex items-center justify-between gap-2 border-b border-line bg-surface/95 px-3 pb-2 backdrop-blur print:hidden md:hidden">
-          <div className="flex min-w-0 items-center gap-2">
-            <img src="/icon.svg" alt="" className="h-7 w-7 shrink-0" />
-            <span className="truncate font-semibold">{ws.name}</span>
+        {/* ---------------- Barra superior (computadora) ---------------- */}
+        <header className="sticky top-0 z-30 hidden items-center gap-2 border-b border-line bg-surface/95 px-4 py-2 backdrop-blur print:hidden md:flex">
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-[11px] font-semibold uppercase tracking-wider text-muted">{ws.name}</div>
+            <div className="truncate text-sm font-bold">{status.summary ? longDate(status.summary.fecha, ws.timezone) : "…"}</div>
           </div>
-          <button onClick={cycleTheme} className="rounded-lg p-2 hover:bg-surface-2" aria-label={`Tema: ${THEME_LABEL[theme]}`}>
-            <Icon d="M12 3v1M12 20v1M4.2 4.2l.7.7M19.1 19.1l.7.7M3 12h1M20 12h1M4.2 19.8l.7-.7M19.1 4.9l.7-.7M12 7a5 5 0 100 10 5 5 0 000-10z" />
+          <SyncChip />
+          <CashChip />
+          <Link href="/reservas/nueva" className="flex items-center gap-1.5 rounded-lg bg-accent px-3 py-2 text-sm font-semibold text-accent-fg hover:opacity-90" title="Nueva reserva">
+            <Icon d="M12 5v14M5 12h14" className="h-4 w-4" /><span className="hidden xl:inline">Nueva reserva</span>
+          </Link>
+          <Link href="/cobros" className="flex items-center gap-1.5 rounded-lg bg-ok px-3 py-2 text-sm font-semibold text-bg hover:opacity-90" title="Registrar cobro">
+            <Icon d={byHref("/cobros").icon} className="h-4 w-4" /><span className="hidden xl:inline">Registrar cobro</span>
+          </Link>
+          <Link href="/gastos?nuevo=1" className="flex items-center gap-1.5 rounded-lg border border-line bg-surface-2 px-3 py-2 text-sm font-semibold hover:opacity-90" title="Nuevo gasto">
+            <Icon d="M5 12h14" className="h-4 w-4" /><span className="hidden xl:inline">Nuevo gasto</span>
+          </Link>
+          <button onClick={undo.start} className="flex items-center gap-1.5 rounded-lg border border-line bg-surface-2 px-3 py-2 text-sm font-semibold hover:opacity-90" title="Deshacer último cambio">
+            <Icon d="M9 14L4 9l5-5M4 9h11a5 5 0 0 1 0 10h-3" className="h-4 w-4" /><span className="hidden 2xl:inline">Deshacer cambio</span>
+          </button>
+          <button onClick={cycleTheme} className="rounded-lg p-2 hover:bg-surface-2" title={`Tema: ${THEME_LABEL[theme]}`} aria-label={`Tema: ${THEME_LABEL[theme]}`}>
+            <Icon d={THEME_ICON[theme]} />
+          </button>
+          <NoticesBell notices={status.notices} count={alerts} />
+          <Link href="/configuracion" className="flex items-center gap-2 rounded-lg p-1 pr-2 hover:bg-surface-2" title={email ?? ""}>
+            <Avatar src={profile.avatar} name={userName} className="h-8 w-8" />
+            <span className="hidden max-w-32 truncate text-sm font-semibold lg:inline">{userName}</span>
+          </Link>
+          <button onClick={() => setConfirmLogout(true)} className="rounded-lg p-2 text-muted hover:bg-surface-2 hover:text-danger" title="Cerrar sesión" aria-label="Cerrar sesión">
+            <Icon d={ICON_LOGOUT} />
           </button>
         </header>
+
+        {/* ---------------- Barra superior (celular) ---------------- */}
+        <header className="pt-safe-2 sticky top-0 z-30 flex items-center justify-between gap-2 border-b border-line bg-surface/95 px-3 pb-2 backdrop-blur print:hidden md:hidden">
+          <Link href="/" className="flex min-w-0 items-center gap-2">
+            <BrandLogo ws={ws} className="h-8 w-8 rounded-lg" />
+            <div className="min-w-0 leading-tight">
+              <div className="truncate text-sm font-bold uppercase">{ws.name}</div>
+              <div className="truncate text-[11px] text-muted">{status.summary ? longDate(status.summary.fecha, ws.timezone) : ""}</div>
+            </div>
+          </Link>
+          <div className="flex items-center">
+            <button onClick={cycleTheme} className="rounded-lg p-2" aria-label={`Tema: ${THEME_LABEL[theme]}`}><Icon d={THEME_ICON[theme]} /></button>
+            <NoticesBell notices={status.notices} count={alerts} />
+          </div>
+        </header>
+
         <InstallBanner />
+        {undo.message && <div className="px-safe pt-3">{undo.message}</div>}
         <main className="px-safe pb-tabbar mx-auto w-full max-w-7xl flex-1 pt-4 md:pt-6 print:p-0">{children}</main>
       </div>
 
-      {/* Barra inferior en el celular: lo más usado al alcance del pulgar */}
+      {/* ---------------- Barra inferior (celular) ---------------- */}
       <nav className="pb-safe-1 fixed inset-x-0 bottom-0 z-40 border-t border-line bg-surface/95 backdrop-blur print:hidden md:hidden" aria-label="Navegación principal">
         <div className="mx-auto grid max-w-md grid-cols-5 items-end px-1 pt-1">
           {TABS.map((t) => {
-            if (t.href === "/reservas/nueva") {
+            if (t === "+") {
               return (
-                <Link key={t.href} href={t.href} onClick={() => setMenuOpen(false)} className="flex flex-col items-center gap-0.5 pb-1 text-[11px] font-medium text-accent" aria-label="Nueva reserva">
+                <Link key={t} href="/reservas/nueva" className="flex flex-col items-center gap-0.5 pb-1 text-[11px] font-medium text-accent" aria-label="Nueva reserva">
                   <span className="-mt-4 flex h-12 w-12 items-center justify-center rounded-full bg-accent text-accent-fg shadow-lg">
                     <Icon d="M12 5v14M5 12h14" className="h-6 w-6" />
                   </span>
@@ -134,55 +230,67 @@ export function Shell({ children }: { children: ReactNode }) {
                 </Link>
               );
             }
-            if (t.href === "#mas") {
-              const active = menuOpen || MORE.some((m) => pathname.startsWith(m.href));
+            if (t === "#mas") {
+              const active = menuOpen || MORE.some((m) => isActive(m.href));
               return (
-                <button key={t.href} onClick={() => setMenuOpen((v) => !v)} className={cx("flex flex-col items-center gap-0.5 py-1.5 text-[11px] font-medium", active ? "text-accent" : "text-muted")} aria-expanded={menuOpen}>
-                  <Icon d={t.icon} className="h-6 w-6" />
-                  {t.label}
+                <button key={t} onClick={() => setMenuOpen((v) => !v)} className={cx("flex flex-col items-center gap-0.5 py-1.5 text-[11px] font-medium", active ? "text-accent" : "text-muted")} aria-expanded={menuOpen}>
+                  <Icon d="M5 12h.01M12 12h.01M19 12h.01" className="h-6 w-6" />
+                  Más
                 </button>
               );
             }
-            const active = t.href === "/" ? pathname === "/" : pathname.startsWith(t.href) && !pathname.startsWith("/reservas/nueva");
+            const item = byHref(t);
+            const active = isActive(t);
+            const short = t === "/" ? "Panel" : t === "/mapa" ? "Mapa" : "Reservas";
             return (
-              <Link key={t.href} href={t.href} onClick={() => setMenuOpen(false)} className={cx("flex flex-col items-center gap-0.5 py-1.5 text-[11px] font-medium", active ? "text-accent" : "text-muted")} aria-current={active ? "page" : undefined}>
-                <Icon d={t.icon} className="h-6 w-6" />
-                {t.label}
+              <Link key={t} href={t} className={cx("relative flex flex-col items-center gap-0.5 py-1.5 text-[11px] font-medium", active ? "text-accent" : "text-muted")} aria-current={active ? "page" : undefined}>
+                <Icon d={item.icon} className="h-6 w-6" />
+                {short}
+                {t === "/" && alerts > 0 && <span className="absolute right-3 top-0.5 rounded-full bg-warn px-1 text-[10px] font-bold text-bg">{alerts}</span>}
               </Link>
             );
           })}
         </div>
       </nav>
 
-      {/* Menú "Más" del celular */}
+      {/* Menú "Más" del celular: el resto de las secciones */}
       {menuOpen && (
         <div className="fixed inset-0 z-30 bg-black/40 md:hidden" onClick={() => setMenuOpen(false)}>
-          <div className="bottom-tabbar absolute inset-x-0 rounded-t-2xl border-t border-line bg-surface p-3" onClick={(e) => e.stopPropagation()}>
+          <div className="bottom-tabbar absolute inset-x-0 max-h-[75dvh] overflow-y-auto rounded-t-2xl border-t border-line bg-surface p-3" onClick={(e) => e.stopPropagation()}>
+            <Link href="/configuracion" className="mb-3 flex items-center gap-3 rounded-xl bg-surface-2 p-3">
+              <BrandLogo ws={ws} className="h-10 w-10" />
+              <div className="min-w-0">
+                <div className="truncate font-bold uppercase">{ws.name}</div>
+                <div className="truncate text-xs text-muted">{carpa?.total_activos ?? "–"} carpas · {sombrilla?.total_activos ?? "–"} sombrillas activas</div>
+              </div>
+            </Link>
             <nav className="grid grid-cols-3 gap-2">
               {MORE.map((m) => (
-                <Link key={m.href} href={m.href} onClick={() => setMenuOpen(false)}
-                  className={cx("flex flex-col items-center gap-1 rounded-xl border p-3 text-sm font-medium", pathname.startsWith(m.href) ? "border-accent bg-accent-soft text-accent" : "border-line")}>
+                <Link key={m.href} href={m.href}
+                  className={cx("flex flex-col items-center gap-1 rounded-xl border p-2.5 text-center text-xs font-medium", isActive(m.href) ? "border-accent bg-accent-soft text-accent" : "border-line")}>
                   <Icon d={m.icon} className="h-6 w-6" />
                   {m.label}
                 </Link>
               ))}
             </nav>
             <div className="mt-3 flex flex-col gap-1 border-t border-line pt-3 text-sm">
-              <button onClick={cycleTheme} className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-left hover:bg-surface-2">
-                <Icon d="M12 3v1M12 20v1M4.2 4.2l.7.7M19.1 19.1l.7.7M3 12h1M20 12h1M4.2 19.8l.7-.7M19.1 4.9l.7-.7M12 7a5 5 0 100 10 5 5 0 000-10z" />
-                Tema: {THEME_LABEL[theme]}
+              <button onClick={() => { setMenuOpen(false); undo.start(); }} className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-left hover:bg-surface-2">
+                <Icon d="M9 14L4 9l5-5M4 9h11a5 5 0 0 1 0 10h-3" /> Deshacer último cambio
               </button>
               <InstallButton onDone={() => setMenuOpen(false)} />
-              <div className="truncate px-3 py-1 text-xs text-muted">{email} · {role}</div>
+              <Link href="/configuracion" className="flex items-center gap-3 rounded-lg px-3 py-2">
+                <Avatar src={profile.avatar} name={userName} className="h-7 w-7" />
+                <span className="min-w-0 truncate text-xs text-muted">{userName} · {role}</span>
+              </Link>
               <button onClick={() => { setMenuOpen(false); setConfirmLogout(true); }} className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-left text-danger hover:bg-surface-2">
-                <Icon d="M15 4h4v16h-4M10 8l-4 4 4 4M6 12h11" />
-                Cerrar sesión
+                <Icon d={ICON_LOGOUT} /> Cerrar sesión
               </button>
             </div>
           </div>
         </div>
       )}
 
+      {undo.dialog}
       <ConfirmDialog
         open={confirmLogout}
         title="¿Cerrar sesión?"
@@ -193,6 +301,90 @@ export function Shell({ children }: { children: ReactNode }) {
         onConfirm={logout}
         onCancel={() => setConfirmLogout(false)}
       />
+    </div>
+  );
+}
+
+/** Estado de la conexión con la base: si falla, se avisa (no se muestran datos viejos como actuales). */
+function SyncChip() {
+  const s = useStatus();
+  const ok = s.online && !s.error;
+  const label = !s.online ? "Sin conexión" : s.error ? "Error al sincronizar" : "Nube sincronizada";
+  const time = s.updatedAt?.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" });
+  return (
+    <button onClick={s.reload} title={ok ? `Actualizado ${time ?? ""}. Tocá para actualizar.` : `${s.error ?? "Sin conexión a internet"}. Tocá para reintentar.`}
+      className={cx("hidden items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold lg:flex", ok ? "border-ok/40 bg-ok-soft text-ok" : "border-danger/40 bg-danger-soft text-danger")}>
+      <span className={cx("h-2 w-2 rounded-full", ok ? "bg-ok" : "bg-danger", s.loading && "animate-pulse")} />
+      {label}
+    </button>
+  );
+}
+
+function CashChip() {
+  const s = useStatus();
+  const c = s.summary?.caja.estado;
+  const prev = s.summary?.caja_anterior_sin_cerrar;
+  const [text, tone] = prev ? ["Caja anterior sin cerrar", "danger"] as const
+    : c === "abierta" ? ["Caja abierta", "ok"] as const
+    : c === "cerrada" ? ["Caja cerrada (hoy)", "muted"] as const
+    : ["Caja cerrada (abrir turno)", "warn"] as const;
+  const cls = { ok: "border-ok/40 bg-ok-soft text-ok", warn: "border-warn/40 bg-warn-soft text-warn", danger: "border-danger/40 bg-danger-soft text-danger", muted: "border-line bg-surface-2 text-muted" }[tone];
+  if (!s.summary) return null;
+  return (
+    <Link href="/caja" className={cx("hidden items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold lg:flex", cls)}>
+      <Icon d={byHref("/caja").icon} className="h-4 w-4" />
+      {text}
+    </Link>
+  );
+}
+
+const NOTICE_TONE: Record<Notice["tone"], string> = {
+  danger: "border-danger/40 bg-danger-soft",
+  warn: "border-warn/40 bg-warn-soft",
+  info: "border-accent/30 bg-accent-soft",
+};
+const DOT: Record<Notice["tone"], string> = { danger: "bg-danger", warn: "bg-warn", info: "bg-accent" };
+
+/** Campanita con los avisos operativos (cajas, deudas, ingresos del día). */
+function NoticesBell({ notices, count }: { notices: Notice[]; count: number }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const pathname = usePathname();
+  useEffect(() => setOpen(false), [pathname]);
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => { document.removeEventListener("mousedown", onDown); document.removeEventListener("keydown", onKey); };
+  }, [open]);
+  return (
+    <div className="relative" ref={ref}>
+      <button onClick={() => setOpen((v) => !v)} className="relative rounded-lg p-2 hover:bg-surface-2" aria-label={`Avisos (${count})`} aria-expanded={open}>
+        <Icon d={ICON_BELL} />
+        {count > 0 && <span className="absolute right-0.5 top-0.5 min-w-4 rounded-full bg-danger px-1 text-center text-[10px] font-bold leading-4 text-bg">{count}</span>}
+      </button>
+      {open && (
+        <div className="fixed inset-x-3 top-16 z-50 max-h-[70dvh] overflow-y-auto rounded-xl border border-line bg-surface p-3 shadow-xl md:absolute md:inset-x-auto md:right-0 md:top-12 md:w-96">
+          <div className="mb-2 flex items-center justify-between">
+            <strong className="text-sm">Avisos</strong>
+            <span className="rounded-full bg-surface-2 px-2 py-0.5 text-xs">{notices.length}</span>
+          </div>
+          {notices.length === 0 ? <p className="py-4 text-center text-sm text-muted">Sin avisos por ahora.</p> : (
+            <ul className="flex flex-col gap-2">
+              {notices.map((n) => (
+                <li key={n.id}>
+                  <Link href={n.href} className={cx("block rounded-lg border p-2.5 text-sm hover:opacity-90", NOTICE_TONE[n.tone])}>
+                    <div className="flex items-center gap-2 font-semibold"><span className={cx("h-2 w-2 shrink-0 rounded-full", DOT[n.tone])} />{n.title}</div>
+                    <div className="pl-4 text-xs text-muted">{n.detail}</div>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
     </div>
   );
 }

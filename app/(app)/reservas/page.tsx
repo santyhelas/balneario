@@ -7,6 +7,7 @@ import { friendlyError } from "@/lib/errors";
 import { formatDate, formatDateTime, formatMoney, todayISO } from "@/lib/format";
 import { useWorkspace } from "@/components/workspace";
 import { PageHeader, SyncNotice } from "@/components/shell";
+import { useUndo } from "@/components/undo";
 import { Alert, Badge, Button, Card, ConfirmDialog, EmptyState, Input, Select, Spinner, cx } from "@/components/ui";
 
 type Filter = "hoy" | "proximas" | "deuda" | "finalizadas" | "canceladas" | "todas";
@@ -16,7 +17,6 @@ type Row = {
   reservation_segments: { active: boolean; start_date: string; spaces: { code: string } }[];
 };
 type Bal = { reservation_id: string; paid_amount: number; due_amount: number; credit_amount: number };
-type LastChange = { change_id: string; reservation_number: number; description: string; at: string; actor_email: string | null } | null;
 
 const FILTERS: [Filter, string][] = [["hoy", "En curso hoy"], ["proximas", "Próximas"], ["deuda", "Con deuda"], ["finalizadas", "Finalizadas"], ["canceladas", "Canceladas"], ["todas", "Todas"]];
 
@@ -63,29 +63,7 @@ export default function ReservasPage() {
     return { rows, bal: Object.fromEntries(bal.map((b) => [b.reservation_id, b])) as Record<string, Bal> };
   }, [ws.id, filter, debounced, today]);
 
-  // Deshacer último cambio
-  const [undo, setUndo] = useState<LastChange>(null);
-  const [undoOpen, setUndoOpen] = useState(false);
-  const [undoBusy, setUndoBusy] = useState(false);
-  const [msg, setMsg] = useState<{ tone: "ok" | "danger"; text: string } | null>(null);
-  async function openUndo() {
-    setMsg(null);
-    const { data, error } = await sb.rpc("last_reversible_change", { p_workspace_id: ws.id });
-    if (error) return setMsg({ tone: "danger", text: friendlyError(error) });
-    if (!data) return setMsg({ tone: "danger", text: "No hay cambios para deshacer." });
-    setUndo(data as LastChange);
-    setUndoOpen(true);
-  }
-  async function doUndo() {
-    if (!undo) return;
-    setUndoBusy(true);
-    const { error } = await sb.rpc("revert_change", { p_change_id: undo.change_id, p_reason: "Deshacer último cambio" });
-    setUndoBusy(false);
-    setUndoOpen(false);
-    if (error) return setMsg({ tone: "danger", text: friendlyError(error) });
-    setMsg({ tone: "ok", text: `Se deshizo: ${undo.description} (reserva #${undo.reservation_number}).` });
-    list.reload();
-  }
+  const undo = useUndo(() => list.reload());
 
   return (
     <>
@@ -93,13 +71,13 @@ export default function ReservasPage() {
         title="Reservas"
         actions={
           <>
-            <Button variant="secondary" onClick={openUndo}>Deshacer último cambio</Button>
+            <Button variant="secondary" onClick={undo.start}>Deshacer último cambio</Button>
             <Link href="/reservas/nueva"><Button>Nueva reserva</Button></Link>
           </>
         }
       />
       <SyncNotice error={list.error} stale={list.stale} updatedAt={list.updatedAt} onRetry={list.reload} />
-      {msg && <Alert tone={msg.tone} className="mb-3">{msg.text}</Alert>}
+      {undo.message}
 
       <Card>
         <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -175,15 +153,7 @@ export default function ReservasPage() {
         )}
       </Card>
 
-      <ConfirmDialog
-        open={undoOpen}
-        title="Deshacer último cambio"
-        message={undo ? <>Se va a revertir: <strong className="text-fg">{undo.description}</strong> (reserva #{undo.reservation_number}), hecho el {formatDateTime(undo.at, ws.timezone)}{undo.actor_email ? ` por ${undo.actor_email}` : ""}. El cambio original queda en el historial.</> : null}
-        confirmLabel="Deshacer"
-        busy={undoBusy}
-        onConfirm={doUndo}
-        onCancel={() => setUndoOpen(false)}
-      />
+      {undo.dialog}
     </>
   );
 }

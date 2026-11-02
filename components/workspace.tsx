@@ -16,8 +16,12 @@ export type Workspace = {
   map_width: number;
   map_height: number;
   sea_side: "top" | "bottom" | "left" | "right";
+  logo_data: string | null;
+  subtitle: string | null;
   version: number;
 };
+
+export type Profile = { displayName: string | null; avatar: string | null };
 
 type Ctx = {
   ws: Workspace;
@@ -25,11 +29,13 @@ type Ctx = {
   isAdmin: boolean;
   userId: string;
   email: string | null;
+  profile: Profile;
   theme: ThemePref;
   tempUnit: "C" | "F";
   setTheme: (t: ThemePref) => Promise<void>;
   setTempUnit: (u: "C" | "F") => Promise<void>;
   reloadWorkspace: () => Promise<void>;
+  saveProfile: (p: Partial<{ display_name: string | null; avatar_data: string | null }>) => Promise<void>;
 };
 
 const WorkspaceContext = createContext<Ctx | null>(null);
@@ -65,6 +71,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<State>({ kind: "loading" });
   const [theme, setThemeState] = useState<ThemePref>("sistema");
   const [tempUnit, setTempUnitState] = useState<"C" | "F">("C");
+  const [profile, setProfile] = useState<Profile>({ displayName: null, avatar: null });
 
   const load = useCallback(async () => {
     const sb = getSupabase();
@@ -76,20 +83,25 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       }
       const user = auth.user;
 
-      const prefs = await sb.from("user_preferences").select("theme, temperature_unit").eq("user_id", user.id).maybeSingle();
+      // Si la base todavía no tiene la actualización 0010, se piden solo las columnas anteriores.
+      let prefs = await sb.from("user_preferences").select("theme, temperature_unit, display_name, avatar_data").eq("user_id", user.id).maybeSingle();
+      if (prefs.error?.code === "42703") {
+        prefs = (await sb.from("user_preferences").select("theme, temperature_unit").eq("user_id", user.id).maybeSingle()) as typeof prefs;
+      }
       if (prefs.error) throw prefs.error;
       if (prefs.data) {
         setThemeState(prefs.data.theme as ThemePref);
         setTempUnitState(prefs.data.temperature_unit as "C" | "F");
         applyTheme(prefs.data.theme as ThemePref);
+        setProfile({ displayName: prefs.data.display_name ?? null, avatar: prefs.data.avatar_data ?? null });
       }
 
-      const mem = await sb
-        .from("workspace_members")
-        .select("role, workspaces(id, name, timezone, latitude, longitude, map_width, map_height, sea_side, version)")
-        .eq("user_id", user.id)
-        .limit(1)
-        .maybeSingle();
+      const memberQuery = (cols: string) =>
+        sb.from("workspace_members").select(`role, workspaces(${cols})`).eq("user_id", user.id).limit(1).maybeSingle();
+      let mem = await memberQuery("id, name, timezone, latitude, longitude, map_width, map_height, sea_side, logo_data, subtitle, version");
+      if (mem.error?.code === "42703") {
+        mem = await memberQuery("id, name, timezone, latitude, longitude, map_width, map_height, sea_side, version");
+      }
       if (mem.error) throw mem.error;
       if (!mem.data) {
         setState({ kind: "onboarding", userId: user.id, email: user.email ?? null });
@@ -106,7 +118,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     load();
   }, [load]);
 
-  const savePrefs = useCallback(async (patch: { theme?: ThemePref; temperature_unit?: "C" | "F" }) => {
+  const savePrefs = useCallback(async (patch: { theme?: ThemePref; temperature_unit?: "C" | "F"; display_name?: string | null; avatar_data?: string | null }) => {
     const sb = getSupabase();
     const { data: auth } = await sb.auth.getUser();
     if (!auth.user) return;
@@ -120,6 +132,14 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     applyTheme(t);
     setThemeState(t);
     await savePrefs({ theme: t });
+  }, [savePrefs]);
+
+  const saveProfile = useCallback(async (p: Partial<{ display_name: string | null; avatar_data: string | null }>) => {
+    await savePrefs(p);
+    setProfile((prev) => ({
+      displayName: p.display_name !== undefined ? p.display_name : prev.displayName,
+      avatar: p.avatar_data !== undefined ? p.avatar_data : prev.avatar,
+    }));
   }, [savePrefs]);
 
   const setTempUnit = useCallback(async (u: "C" | "F") => {
@@ -161,11 +181,13 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     isAdmin: state.role === "propietario" || state.role === "administrador",
     userId: state.userId,
     email: state.email,
+    profile,
     theme,
     tempUnit,
     setTheme,
     setTempUnit,
     reloadWorkspace: load,
+    saveProfile,
   };
   return <WorkspaceContext.Provider value={value}>{children}</WorkspaceContext.Provider>;
 }
