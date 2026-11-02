@@ -224,9 +224,6 @@ export default function MapaPage() {
         </div>
       )}
 
-        </div>
-      )}
-
       <div className="relative">
         {data ? (
           <BeachMap
