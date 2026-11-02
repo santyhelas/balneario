@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as RPointerEvent, type ReactNode } from "react";
-import { SpaceNumber, STATE_COLOR, TENT_H, TENT_W, TentIcon, UMBRELLA_R, UmbrellaIcon, type SpaceState, type TentStyle } from "./icons";
+import { designForState, SpaceNumber, SpaceSurname, STATE_COLOR, TENT_H, TENT_W, TentIcon, UMBRELLA_R, UmbrellaIcon, type SpaceState, type TentStyle } from "./icons";
 import { cx } from "@/components/ui";
 
 export type MapSpace = {
@@ -12,6 +12,8 @@ export type MapSpace = {
   rotation: number;
   state: SpaceState;
   version: number;
+  /** Apellido de quien la ocupa ese día (se muestra en el plano). */
+  surname?: string | null;
 };
 
 export type MapFeature = {
@@ -410,6 +412,8 @@ export function BeachMap({
           {spaces.map((s) => {
             const pos = spacePos(s);
             const color = STATE_COLOR[s.state];
+            const dsg = designForState(s.state, design);
+            const surname = (s.state === "ocupada" || s.state === "cortesia") && s.surname ? s.surname : null;
             return (
               <g
                 key={s.space_id}
@@ -424,10 +428,11 @@ export function BeachMap({
               >
                 <g transform={`rotate(${Number(s.rotation) || 0})`}>
                   {s.kind === "carpa"
-                    ? <TentIcon color={color} selected={selSpace === s.space_id} dashed={s.state === "desactivada"} design={design} />
-                    : <UmbrellaIcon color={color} selected={selSpace === s.space_id} dashed={s.state === "desactivada"} design={design} />}
+                    ? <TentIcon color={color} selected={selSpace === s.space_id} dashed={s.state === "desactivada"} design={dsg} />
+                    : <UmbrellaIcon color={color} selected={selSpace === s.space_id} dashed={s.state === "desactivada"} design={dsg} />}
                 </g>
-                <SpaceNumber code={s.code} color={color} design={design} />
+                <SpaceNumber code={s.code} color={color} design={dsg} dy={surname ? -9 : 0} />
+                {surname && <SpaceSurname name={surname} kind={s.kind} />}
               </g>
             );
           })}

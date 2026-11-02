@@ -15,7 +15,7 @@ export const STATE_LABEL: Record<SpaceState, string> = {
   disponible: "Disponible",
   ocupada: "Ocupada",
   cortesia: "Cortesía familiar",
-  reservada_futura: "Libre, con reserva futura",
+  reservada_futura: "Libre hoy, se ocupa mañana",
   mantenimiento: "En mantenimiento",
   desactivada: "Desactivada",
 };
@@ -241,15 +241,38 @@ function StateDot({ x, y, color }: { x: number; y: number; color: string }) {
 }
 
 /** Número del espacio, encima del dibujo (no gira con la carpa). */
-export function SpaceNumber({ code, color, design }: { code: string; color: string; design?: TentStyle | null }) {
+export function SpaceNumber({ code, color, design, dy = 0 }: { code: string; color: string; design?: TentStyle | null; dy?: number }) {
   const st = design ?? DEFAULT_TENT_STYLE;
   const bg = st.numberBg === "ninguno" ? null : pick(st.numberBg, color);
   const fg = pick(st.numberText, color);
   return (
-    <g pointerEvents="none">
+    <g pointerEvents="none" transform={dy ? `translate(0 ${dy})` : undefined}>
       {bg && <rect x={-26} y={-16} width={52} height={32} rx={8} fill={bg} opacity={0.95} stroke={st.numberBg === "estado" ? "#ffffff" : color} strokeWidth={2} />}
       <text y={1.5} textAnchor="middle" dominantBaseline="middle" fontSize={bg ? 22 : 26} fontWeight={800} fill={fg}
         stroke={bg ? undefined : "#ffffff"} strokeWidth={bg ? undefined : 4} paintOrder="stroke">{code}</text>
     </g>
+  );
+}
+
+/**
+ * Diseño que se dibuja según el estado del día: el diseño elegido vale para las libres;
+ * alquilada, cortesía y "se ocupa mañana" se pintan enteras del color del estado.
+ */
+const FULL_COLOR: TentStyle = {
+  pattern: "liso", fill: "estado", accent: "estado", border: "#ffffff", borderWidth: 2,
+  numberBg: "#ffffff", numberText: "#111111", stateDot: false,
+};
+export function designForState(state: SpaceState, design: TentStyle | null | undefined): TentStyle | null {
+  if (state === "ocupada" || state === "cortesia" || state === "reservada_futura") return FULL_COLOR;
+  return design ?? null;
+}
+
+/** Apellido del cliente que ocupa el espacio ese día, debajo del número. */
+export function SpaceSurname({ name, kind }: { name: string; kind: "carpa" | "sombrilla" }) {
+  const max = kind === "carpa" ? 11 : 9;
+  const text = name.length > max ? name.slice(0, max - 1) + "…" : name;
+  return (
+    <text y={kind === "carpa" ? 24 : 22} textAnchor="middle" dominantBaseline="middle" fontSize={14} fontWeight={800}
+      fill="#ffffff" stroke="rgba(0,0,0,0.35)" strokeWidth={2.5} paintOrder="stroke" pointerEvents="none">{text}</text>
   );
 }

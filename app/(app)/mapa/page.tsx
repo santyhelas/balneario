@@ -43,7 +43,23 @@ export default function MapaPage() {
   const [adding, setAdding] = useState(false);
 
   const { data, error, loading, reload, stale, updatedAt } = useLoader<DayStatus[]>(
-    async () => unwrap(await sb.rpc("map_day_status", { p_workspace_id: ws.id, p_day: day })) as DayStatus[],
+    async () => {
+      const rows = unwrap(await sb.rpc("map_day_status", { p_workspace_id: ws.id, p_day: day })) as DayStatus[];
+      // Amarillo solo el día anterior a que empiece la reserva; antes de eso se ve libre.
+      const tomorrow = addDays(day, 1);
+      for (const r of rows) {
+        if (r.state === "reservada_futura" && r.next_start !== tomorrow) r.state = "disponible";
+      }
+      // Apellido de quien ocupa cada espacio ese día.
+      const ids = [...new Set(rows.filter((r) => r.reservation_id && (r.state === "ocupada" || r.state === "cortesia")).map((r) => r.reservation_id!))];
+      if (ids.length) {
+        const res = unwrap(await sb.from("reservations").select("id, customers(last_name, first_name)").in("id", ids)) as unknown as
+          { id: string; customers: { last_name: string | null; first_name: string } | null }[];
+        const byId = new Map(res.map((x) => [x.id, (x.customers?.last_name || x.customers?.first_name || "").replace(/\s*\(.*\)\s*$/, "").trim()]));
+        for (const r of rows) if (r.reservation_id) r.surname = byId.get(r.reservation_id) || null;
+      }
+      return rows;
+    },
     [ws.id, day],
   );
 

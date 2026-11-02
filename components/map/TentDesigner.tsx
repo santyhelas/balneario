@@ -6,6 +6,8 @@ import {
   PATTERN_LABEL,
   STATE_COLOR,
   STATE_LABEL,
+  designForState,
+  SpaceSurname,
   SpaceNumber,
   TENT_H,
   TENT_PRESETS,
@@ -109,7 +111,7 @@ export function TentDesigner({
             <input type="checkbox" checked={st.stateDot} onChange={(e) => set("stateDot", e.target.checked)} className="h-4 w-4" />
             Mostrar un punto de color con el estado en la esquina
           </label>
-          <Alert tone="info">Con cualquier diseño, cada carpa y sombrilla lleva un marco grueso del color del estado: verde libre, rojo ocupada, naranja reservada para otra fecha. Si elegís el borde "Según el estado", el marco es el mismo borde.</Alert>
+          <Alert tone="info">Este diseño es el de las carpas y sombrillas libres. Las alquiladas se ven enteras en rojo con el apellido del cliente, y las que se ocupan al día siguiente, enteras en amarillo.</Alert>
         </div>
 
         <div className="lg:sticky lg:top-0 lg:self-start">
@@ -122,12 +124,14 @@ export function TentDesigner({
               <div key={state} className="flex flex-col items-center">
                 <svg viewBox="-60 -55 120 110" className="h-20 w-full">
                   <defs><clipPath id="tent-clip"><rect x={-TENT_W / 2} y={-TENT_H / 2} width={TENT_W} height={TENT_H} rx={8} /></clipPath></defs>
-                  <TentIcon color={STATE_COLOR[state]} selected={false} dashed={false} design={st} />
-                  <SpaceNumber code={String(12 + i)} color={STATE_COLOR[state]} design={st} />
+                  <TentIcon color={STATE_COLOR[state]} selected={false} dashed={false} design={designForState(state, st)} />
+                  <SpaceNumber code={String(12 + i)} color={STATE_COLOR[state]} design={designForState(state, st)} dy={state === "ocupada" ? -9 : 0} />
+                  {state === "ocupada" && <SpaceSurname name="Pérez" kind="carpa" />}
                 </svg>
                 <svg viewBox="-50 -50 100 100" className="h-14 w-full">
-                  <UmbrellaIcon color={STATE_COLOR[state]} selected={false} dashed={false} design={st} />
-                  <SpaceNumber code={String(80 + i)} color={STATE_COLOR[state]} design={st} />
+                  <UmbrellaIcon color={STATE_COLOR[state]} selected={false} dashed={false} design={designForState(state, st)} />
+                  <SpaceNumber code={String(80 + i)} color={STATE_COLOR[state]} design={designForState(state, st)} dy={state === "ocupada" ? -9 : 0} />
+                  {state === "ocupada" && <SpaceSurname name="Gómez" kind="sombrilla" />}
                 </svg>
                 <span className="mt-1 text-center text-[11px] font-medium text-slate-800">{STATE_LABEL[state]}</span>
               </div>
