@@ -285,7 +285,7 @@ export function WindCompass({ seaSide }: { seaSide: "top" | "bottom" | "left" | 
 
   if (w.noLocation) return null;
   return (
-    <div className="pointer-events-none absolute bottom-2 right-2 hidden items-center sm:flex gap-1.5 rounded-xl bg-surface/90 p-1.5 shadow-md backdrop-blur sm:bottom-3 sm:right-3 sm:gap-3 sm:rounded-2xl sm:p-3 print:hidden" aria-label="Orientación, viento y sol">
+    <div className="pointer-events-none absolute bottom-2 right-2 flex items-center gap-1.5 rounded-xl bg-surface/90 p-1.5 shadow-md backdrop-blur sm:bottom-3 sm:right-3 sm:gap-3 sm:rounded-2xl sm:p-3 print:hidden" aria-label="Orientación, viento y sol">
       <svg viewBox="-50 -50 100 100" className="h-12 w-12 sm:h-28 sm:w-28 lg:h-40 lg:w-40">
         <circle r="46" fill="none" stroke="var(--line)" strokeWidth="2" />
         {/* de qué lado está el mar */}
