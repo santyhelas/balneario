@@ -7,7 +7,7 @@ import { cx } from "@/components/ui";
 
 export type Weather = {
   /** Medición real del SMN (si hay una de las últimas 3 horas cerca del balneario). */
-  medido?: { estacion: string; hora: string; distancia_km: number; cielo: string | null } | null;
+  medido?: { fuente?: "OpenWeather" | "SMN"; estacion: string; hora: string; distancia_km: number; cielo: string | null } | null;
   fuente: string;
   actualizado: string;
   hora_dato: string;
@@ -58,7 +58,7 @@ export function WeatherProvider({ children }: { children: ReactNode }) {
   }, [lat, lon, noLocation, tick]);
 
   useEffect(() => {
-    const id = window.setInterval(() => { if (document.visibilityState === "visible") setTick((t) => t + 1); }, 2 * 60_000);
+    const id = window.setInterval(() => { if (document.visibilityState === "visible") setTick((t) => t + 1); }, 60_000);
     return () => window.clearInterval(id);
   }, []);
 
@@ -233,12 +233,16 @@ export function WeatherStrip({ className }: { className?: string }) {
           <span className={cx(stale && "text-danger")}>
             {stale ? "No se pudo actualizar · " : ""}
             {d.medido
-              ? `Medido a las ${hhmm(d.medido.hora, ws.timezone)} en ${d.medido.estacion}${d.medido.distancia_km > 15 ? ` (a ${d.medido.distancia_km} km)` : ""}`
+              ? d.medido.fuente === "OpenWeather"
+                ? `Clima actual de las ${hhmm(d.medido.hora, ws.timezone)}`
+                : `Medido a las ${hhmm(d.medido.hora, ws.timezone)} en ${d.medido.estacion}${d.medido.distancia_km > 15 ? ` (a ${d.medido.distancia_km} km)` : ""}`
               : `Pronóstico para las ${hhmm(d.hora_dato, ws.timezone)} (calculado ${hhmm(d.actualizado, ws.timezone)})`}
             {w.fetchedAt ? ` · revisado ${hhmm(w.fetchedAt.toISOString(), ws.timezone)}` : ""}
           </span>
           <span>
-            {d.medido && <><a href="https://www.smn.gob.ar/" target="_blank" rel="noopener noreferrer" className="hover:underline">Medición: SMN</a> · </>}
+            {d.medido?.fuente === "OpenWeather"
+              ? <><a href="https://openweathermap.org/" target="_blank" rel="noopener noreferrer" className="hover:underline">Weather data © OpenWeather</a> · </>
+              : d.medido && <><a href="https://www.smn.gob.ar/" target="_blank" rel="noopener noreferrer" className="hover:underline">Medición: SMN</a> · </>}
             <a href="https://www.met.no/en" target="_blank" rel="noopener noreferrer" className="hover:underline">{d.medido ? "Pronóstico" : "Datos"}: MET Norway (CC BY 4.0)</a>
           </span>
         </div>

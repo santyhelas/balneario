@@ -1,5 +1,6 @@
 import { json } from "@/lib/auth-server";
 import { parseTiepre, unzipFirst, type Observacion } from "@/lib/smn";
+import { parseOw, type Ahora, type OwCurrent } from "@/lib/openweather";
 
 // Clima de la ubicación del balneario, desde MET Norway (Instituto Meteorológico de Noruega).
 // Datos abiertos (licencia CC BY 4.0, uso comercial permitido con mención de la fuente).
@@ -66,6 +67,28 @@ async function getSmnText(): Promise<string | null> {
   }
 }
 
+// OpenWeather: clima actual cada ~10 minutos. Se consulta como máximo una vez por minuto.
+const owCache = new Map<string, { at: number; data: Ahora | null }>();
+async function getOpenWeather(lat: number, lon: number): Promise<Ahora | null> {
+  const key = process.env.OPENWEATHER_API_KEY;
+  if (!key) return null;
+  const k = `${lat.toFixed(3)},${lon.toFixed(3)}`;
+  const hit = owCache.get(k);
+  if (hit && Date.now() - hit.at < 60_000) return hit.data;
+  try {
+    const res = await fetch(
+      `https://api.openweathermap.org/data/2.5/weather?lat=${lat.toFixed(4)}&lon=${lon.toFixed(4)}&units=metric&lang=es&appid=${encodeURIComponent(key)}`,
+      { cache: "no-store", signal: AbortSignal.timeout(8000) },
+    );
+    if (!res.ok) return hit?.data ?? null;
+    const data = parseOw((await res.json()) as OwCurrent);
+    owCache.set(k, { at: Date.now(), data });
+    return data;
+  } catch {
+    return hit?.data ?? null;
+  }
+}
+
 /** Estado del cielo del SMN → código de ícono (mismo formato que MET Norway). */
 function skyToSymbol(cielo: string | null, hourLocal: number): string | null {
   if (!cielo) return null;
@@ -93,9 +116,11 @@ export async function GET(req: Request) {
   const url = `https://api.met.no/weatherapi/locationforecast/2.0/complete?lat=${lat.toFixed(4)}&lon=${lon.toFixed(4)}`;
   let body: MetBody;
   let medido: Observacion | null = null;
+  let ow: Ahora | null = null;
   try {
-    const [forecast, smnText] = await Promise.all([getForecast(url), getSmnText()]);
+    const [forecast, smnText, owData] = await Promise.all([getForecast(url), getSmnText(), getOpenWeather(lat, lon)]);
     body = forecast;
+    ow = owData && Date.now() - Date.parse(owData.hora) < 60 * 60_000 ? owData : null;
     medido = smnText ? parseTiepre(smnText, lat, lon) : null;
     // Una medición de hace más de 3 horas ya no sirve como "ahora".
     if (medido && Date.now() - Date.parse(medido.hora) > 3 * 3600_000) medido = null;
@@ -135,7 +160,16 @@ export async function GET(req: Request) {
     simbolo: n1?.summary.symbol_code ?? n6?.summary.symbol_code ?? null,
   };
   const hourLocal = medido ? Number(medido.hora.slice(11, 13)) : 12;
-  const now_ = medido
+  // Prioridad para "ahora": OpenWeather (cada ~10 min) → medición del SMN (cada hora) → pronóstico.
+  const now_ = ow
+    ? {
+        temperatura: ow.temperatura,
+        humedad: ow.humedad ?? fc.humedad,
+        viento_kmh: ow.viento_kmh ?? fc.viento_kmh,
+        viento_desde: ow.viento_kmh === 0 ? null : ow.viento_desde ?? fc.viento_desde,
+        simbolo: ow.simbolo ?? fc.simbolo,
+      }
+    : medido
     ? {
         temperatura: medido.temperatura ?? fc.temperatura,
         humedad: medido.humedad ?? fc.humedad,
@@ -146,13 +180,15 @@ export async function GET(req: Request) {
     : fc;
 
   return json({
-    medido: medido && { estacion: medido.estacion, hora: medido.hora, distancia_km: medido.distancia_km, cielo: medido.cielo },
+    medido: ow
+      ? { fuente: "OpenWeather", estacion: ow.lugar ?? "la zona del balneario", hora: ow.hora, distancia_km: 0, cielo: ow.cielo }
+      : medido && { fuente: "SMN", estacion: medido.estacion, hora: medido.hora, distancia_km: medido.distancia_km, cielo: medido.cielo },
     ...now_,
     fuente: "MET Norway",
     actualizado: body.properties.meta.updated_at,
     hora_dato: cur.time,
     // El SMN no informa ráfagas: con medición real no se mezclan ráfagas pronosticadas.
-    rafagas_kmh: medido ? null : kmh(d.wind_speed_of_gust),
+    rafagas_kmh: ow ? ow.rafagas_kmh : medido ? null : kmh(d.wind_speed_of_gust),
     lluvia_1h_mm: n1?.details.precipitation_amount ?? null,
     lluvia_1h_prob: n1?.details.probability_of_precipitation ?? null,
     lluvia_6h_mm: n6?.details.precipitation_amount ?? null,
