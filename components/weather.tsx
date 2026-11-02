@@ -209,8 +209,8 @@ export function WindCompass({ seaSide }: { seaSide: "top" | "bottom" | "left" | 
 
   if (w.noLocation) return null;
   return (
-    <div className="pointer-events-none absolute bottom-3 right-3 flex items-center gap-2 rounded-xl bg-surface/90 p-2 shadow-sm backdrop-blur print:hidden" aria-label="Orientación, viento y sol">
-      <svg viewBox="-50 -50 100 100" className="h-20 w-20 sm:h-24 sm:w-24">
+    <div className="pointer-events-none absolute bottom-3 right-3 flex items-center gap-3 rounded-2xl bg-surface/90 p-3 shadow-md backdrop-blur print:hidden" aria-label="Orientación, viento y sol">
+      <svg viewBox="-50 -50 100 100" className="h-28 w-28 sm:h-40 sm:w-40">
         <circle r="46" fill="none" stroke="var(--line)" strokeWidth="2" />
         {["N", "E", "S", "O"].map((l, i) => {
           const a = (screen(i * 90) * Math.PI) / 180;
@@ -227,14 +227,16 @@ export function WindCompass({ seaSide }: { seaSide: "top" | "bottom" | "left" | 
           return <circle cx={Math.sin(a) * 46} cy={-Math.cos(a) * 46} r="7" fill="#f6b73c" stroke="#fff" strokeWidth="2" />;
         })()}
       </svg>
-      <div className="text-xs leading-tight">
+      <div className="text-sm leading-snug sm:text-base">
         {w.data?.viento_kmh != null ? (
           <>
-            <div className="font-bold">💨 {w.data.viento_kmh} km/h</div>
-            <div className="text-muted">del {cardinal(w.data.viento_desde ?? 0)}</div>
+            <div className="text-lg font-bold sm:text-xl">💨 {w.data.viento_kmh} km/h</div>
+            <div className="text-muted">viene del {cardinal(w.data.viento_desde ?? 0)}{w.data.rafagas_kmh != null ? ` · ráfagas ${w.data.rafagas_kmh}` : ""}</div>
           </>
         ) : <div className="text-muted">Sin datos de viento</div>}
-        {sun && sun.elevation > 0 && <div className="mt-1 text-muted"><span className="text-[#e0a020]">●</span> sol del {cardinal(sun.azimuth)}</div>}
+        {sun && (sun.elevation > 0
+          ? <div className="mt-1.5"><span className="text-[#e0a020]">●</span> <strong>Sol del {cardinal(sun.azimuth)}</strong><div className="text-muted">{Math.round(sun.elevation)}° de altura</div></div>
+          : <div className="mt-1.5 text-muted">El sol ya se puso</div>)}
       </div>
     </div>
   );
