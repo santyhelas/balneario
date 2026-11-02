@@ -1,9 +1,9 @@
 "use client";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { getSupabase } from "@/lib/supabase/client";
 import { cardinal, sunPosition, sunTimes } from "@/lib/sun";
-import { spotOf, widgetDocument } from "@/lib/windguru";
+import { spotOf } from "@/lib/windguru";
 import { useWorkspace } from "@/components/workspace";
 import { cx } from "@/components/ui";
 
@@ -35,7 +35,7 @@ function useWindguruParams() {
  * Pronóstico oficial de Windguru para el spot del balneario.
  * Se muestra en un recuadro aislado (sin acceso a la sesión ni a los datos del sistema).
  */
-export function WindguruWidget({ className, height = 400 }: { className?: string; height?: number }) {
+export function WindguruWidget({ className, height = 360 }: { className?: string; height?: number }) {
   const { ws, isAdmin } = useWorkspace();
   const wg = useWindguruParams();
   const [now] = useState(() => new Date());
@@ -43,7 +43,27 @@ export function WindguruWidget({ className, height = 400 }: { className?: string
     () => (ws.latitude != null && ws.longitude != null ? sunTimes(now, Number(ws.latitude), Number(ws.longitude)) : null),
     [now, ws.latitude, ws.longitude],
   );
-  const doc = useMemo(() => (wg.params ? widgetDocument(wg.params) : null), [wg.params]);
+  const src = wg.params ? `/windguru-widget?p=${encodeURIComponent(wg.params)}` : null;
+  const frameRef = useRef<HTMLIFrameElement>(null);
+  const [frameHeight, setFrameHeight] = useState(height);
+  const [status, setStatus] = useState<{ kind: "loading" | "ok" | "error" | "timeout"; detail?: string }>({ kind: "loading" });
+
+  // Mensajes de la página del widget: si cargó, su alto real y los errores.
+  useEffect(() => {
+    setStatus({ kind: "loading" });
+    const onMsg = (e: MessageEvent) => {
+      if (!frameRef.current || e.source !== frameRef.current.contentWindow) return;
+      const m = e.data as { wg?: string; detail?: string };
+      if (m?.wg === "height") {
+        const h = Number(m.detail);
+        if (h > 80) setFrameHeight(Math.min(Math.max(h, 160), 900));
+      } else if (m?.wg === "ok") setStatus({ kind: "ok" });
+      else if (m?.wg === "error") setStatus((s) => (s.kind === "ok" ? s : { kind: "error", detail: m.detail }));
+      else if (m?.wg === "timeout") setStatus((s) => (s.kind === "ok" ? s : { kind: "timeout" }));
+    };
+    window.addEventListener("message", onMsg);
+    return () => window.removeEventListener("message", onMsg);
+  }, [src]);
   const spot = spotOf(wg.params);
 
   return (
@@ -59,21 +79,31 @@ export function WindguruWidget({ className, height = 400 }: { className?: string
         <p className="px-1 py-6 text-center text-sm text-muted">Cargando…</p>
       ) : wg.error ? (
         <p className="px-1 py-4 text-sm text-danger">{wg.error}</p>
-      ) : !doc ? (
+      ) : !src ? (
         <p className="px-1 py-4 text-sm text-muted">
           Todavía no está configurado el spot de Windguru.{" "}
           {isAdmin ? <Link href="/configuracion" className="text-accent underline">Cargalo en Configuración</Link> : "Pedile al propietario que lo cargue en Configuración."}
         </p>
       ) : (
-        <iframe
-          title="Pronóstico de Windguru"
-          srcDoc={doc}
-          sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox"
-          referrerPolicy="no-referrer"
-          loading="lazy"
-          className="w-full rounded-xl border-0 bg-white"
-          style={{ height }}
-        />
+        <>
+          <iframe
+            ref={frameRef}
+            key={src}
+            title="Pronóstico de Windguru"
+            src={src}
+            sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox"
+            className="w-full rounded-xl border-0 bg-white"
+            style={{ height: frameHeight }}
+          />
+          {status.kind !== "ok" && status.kind !== "loading" && (
+            <p className="mt-2 px-1 text-sm text-warn">
+              {status.kind === "timeout"
+                ? "El pronóstico de Windguru está tardando o no cargó."
+                : `Windguru no pudo cargarse: ${status.detail ?? "error desconocido"}.`}{" "}
+              {spot && <a className="text-accent underline" href={`https://www.windguru.cz/${spot}`} target="_blank" rel="noopener noreferrer">Abrirlo en Windguru</a>}
+            </p>
+          )}
+        </>
       )}
     </section>
   );
