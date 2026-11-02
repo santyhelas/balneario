@@ -9,6 +9,17 @@ Aplicación web para administrar carpas, sombrillas, reservas, pagos, caja y gas
 - **Frontend:** Next.js + TypeScript + Tailwind (siguiente etapa), publicado en Vercel.
 - **Autenticación:** Supabase Auth con Google.
 
+## Instalación y ejecución
+
+1. Base de datos: en Supabase → SQL Editor, pegar y ejecutar `supabase/instalar.sql` (una sola vez).
+   Las migraciones nuevas se agregan en `supabase/migrations/` y se aplican en orden.
+2. Variables: copiar `.env.example` a `.env.local` con la URL y la clave pública (publishable) del proyecto.
+3. `npm install` y `npm run dev` → http://localhost:3000
+4. Publicación: Vercel importa este repositorio; cargar las dos variables en Settings → Environment Variables.
+
+Entornos: usar un proyecto de Supabase distinto para pruebas y otro para producción, para no mezclar
+datos de prueba con datos reales. La verificación automática (GitHub Actions) usa una base temporal propia.
+
 ## Estructura
 
 ```
@@ -39,6 +50,13 @@ supabase/
 2. **Combinación de descuentos:** si se pueden sumar (por ejemplo, efectivo 10% y Parque Bonito 30%) y en qué orden.
 3. **Dinero de una reserva cancelada:** por ahora queda como saldo a favor hasta registrar una devolución.
 4. **Cobros con la caja cerrada:** por ahora todo cobro o gasto requiere la caja del día abierta.
+5. **Cliente frecuente:** criterio provisorio en pantalla (3+ alquileres o 2+ temporadas).
+6. **Caja anterior sin cerrar:** por ahora hay que cerrarla antes de abrir la del día.
+
+## Respaldo (pendiente de implementar en la aplicación)
+
+Mientras tanto: Supabase → Database → Backups (plan pago) o exportar con `pg_dump` usando la cadena de
+conexión del proyecto. Nunca guardar la contraseña de la base en el repositorio.
 
 ## Pruebas locales
 

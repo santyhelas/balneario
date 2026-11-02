@@ -1,0 +1,49 @@
+name: Verificación
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  base-de-datos:
+    name: Pruebas de la base de datos
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      PGHOST: localhost
+      PGPORT: "5432"
+      PGPASSWORD: postgres
+    steps:
+      - uses: actions/checkout@v4
+      - name: Instalar cliente psql
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
+      - name: Aplicar migraciones y correr pruebas
+        run: |
+          ./supabase/tests/run.sh | tee resultado.txt
+          grep -E "^\s+[0-9]+ \|\s+0$" resultado.txt
+
+  aplicacion:
+    name: Compilar la aplicación
+    runs-on: ubuntu-latest
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: https://ejemplo.supabase.co
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_ejemplo
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --no-audit --no-fund
+      - name: Pruebas de formatos
+        run: npm test
+      - name: Verificación de tipos
+        run: npm run typecheck
+      - name: Compilación
+        run: npm run build
