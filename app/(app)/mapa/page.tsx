@@ -7,7 +7,7 @@ import { addDays, formatDate, formatMoney, todayISO } from "@/lib/format";
 import { useWorkspace } from "@/components/workspace";
 import { PageHeader, SyncNotice } from "@/components/shell";
 import { Alert, Badge, Button, Card, ConfirmDialog, Field, Input, Modal, Select, Spinner, Textarea, TextField } from "@/components/ui";
-import { BeachMap, type MapSpace } from "@/components/map/BeachMap";
+import { BeachMap, type MapFeature, type MapSpace } from "@/components/map/BeachMap";
 import { STATE_COLOR, STATE_LABEL, type SpaceState } from "@/components/map/icons";
 
 type DayStatus = MapSpace & {
@@ -28,10 +28,12 @@ type DayStatus = MapSpace & {
 const STATES: SpaceState[] = ["disponible", "ocupada", "reservada_futura", "cortesia", "mantenimiento", "desactivada"];
 
 export default function MapaPage() {
-  const { ws, isAdmin } = useWorkspace();
+  const { ws, isAdmin, reloadWorkspace } = useWorkspace();
   const sb = getSupabase();
   const today = todayISO(ws.timezone);
   const [day, setDay] = useState(today);
+  const [layoutConfirm, setLayoutConfirm] = useState(false);
+  const [layoutBusy, setLayoutBusy] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editMode, setEditMode] = useState(false);
   const [message, setMessage] = useState<{ tone: "danger" | "ok"; text: string } | null>(null);
@@ -41,6 +43,25 @@ export default function MapaPage() {
     async () => unwrap(await sb.rpc("map_day_status", { p_workspace_id: ws.id, p_day: day })) as DayStatus[],
     [ws.id, day],
   );
+
+  const featuresQ = useLoader<MapFeature[]>(
+    async () => unwrap(await sb.from("map_features").select("id, kind, label, x, y, width, height, rotation, color")
+      .eq("workspace_id", ws.id).eq("active", true)) as MapFeature[],
+    [ws.id],
+    0,
+  );
+
+  async function applyLayout() {
+    setLayoutBusy(true);
+    const { data: res, error } = await sb.rpc("apply_parador_layout", { p_workspace_id: ws.id });
+    setLayoutBusy(false);
+    setLayoutConfirm(false);
+    if (error) return setMessage({ tone: "danger", text: friendlyError(error) });
+    setMessage({ tone: "ok", text: `Listo: se ubicaron ${(res as { espacios_ubicados: number }).espacios_ubicados} espacios según el plano del parador.` });
+    await reloadWorkspace();
+    featuresQ.reload();
+    reload();
+  }
 
   const spaces = data ?? [];
   const selected = spaces.find((s) => s.space_id === selectedId) ?? null;
@@ -72,6 +93,7 @@ export default function MapaPage() {
         actions={
           isAdmin ? (
             <>
+              {editMode && <Button variant="secondary" onClick={() => setLayoutConfirm(true)}>Diseño Parador</Button>}
               {editMode && <Button variant="secondary" onClick={() => setAdding(true)}>Agregar espacio</Button>}
               <Button variant={editMode ? "primary" : "secondary"} onClick={() => setEditMode((v) => !v)}>
                 {editMode ? "Terminar edición" : "Editar ubicaciones"}
@@ -112,6 +134,7 @@ export default function MapaPage() {
             height={ws.map_height}
             seaSide={ws.sea_side}
             spaces={spaces}
+            features={featuresQ.data ?? []}
             selectedId={selectedId}
             editMode={editMode}
             onSelect={setSelectedId}
@@ -126,6 +149,15 @@ export default function MapaPage() {
         <SpacePanel space={selected} day={day} today={today} isAdmin={isAdmin} onChanged={reload} onCheckDate={setDay} />
       </div>
 
+      <ConfirmDialog
+        open={layoutConfirm}
+        title="Aplicar el Diseño Parador"
+        message="Todas las carpas y sombrillas cuyo número figura en el plano oficial vuelven a su lugar original, y se redibujan el parador, las pasarelas y los juegos. No se crean ni se borran espacios, y las reservas no cambian."
+        confirmLabel="Aplicar diseño"
+        busy={layoutBusy}
+        onConfirm={applyLayout}
+        onCancel={() => setLayoutConfirm(false)}
+      />
       {isAdmin && <AddSpaceModal open={adding} onClose={() => setAdding(false)} onDone={(id) => { setAdding(false); reload(); setSelectedId(id); }} mapW={ws.map_width} mapH={ws.map_height} />}
     </>
   );
@@ -140,6 +172,18 @@ function SpacePanel({ space, day, today, isAdmin, onChanged, onCheckDate }: { sp
 
   if (!space) {
     return <Card><p className="text-sm text-muted">Tocá una carpa o sombrilla para ver su estado el {formatDate(day)}.</p></Card>;
+  }
+
+  async function rotate() {
+    if (!space) return;
+    setBusy(true);
+    setError(null);
+    const { error } = await getSupabase().from("spaces")
+      .update({ rotation: ((Number(space.rotation) || 0) + 90) % 360, version: space.version + 1 })
+      .eq("id", space.space_id).select("id").single();
+    setBusy(false);
+    if (error) return setError(friendlyError(error));
+    onChanged();
   }
 
   async function toggleActive() {
@@ -191,6 +235,7 @@ function SpacePanel({ space, day, today, isAdmin, onChanged, onCheckDate }: { sp
       {isAdmin && (
         <div className="flex flex-wrap gap-2 border-t border-line pt-3">
           <Button variant="secondary" onClick={() => setRenaming(true)}>Cambiar identificación</Button>
+          <Button variant="secondary" onClick={rotate} loading={busy}>Girar 90°</Button>
           {space.active && <Button variant="secondary" onClick={() => setMaint(true)}>Bloquear por mantenimiento</Button>}
           <Button variant={space.active ? "danger" : "secondary"} onClick={() => setToggling(true)}>{space.active ? "Desactivar" : "Reactivar"}</Button>
         </div>
@@ -309,7 +354,7 @@ function AddSpaceModal({ open, onClose, onDone, mapW, mapH }: { open: boolean; o
             <option value="sombrilla">Sombrilla</option>
           </Select>
         </Field>
-        <TextField label="Identificación" value={code} onChange={(e) => setCode(e.target.value)} required maxLength={20} placeholder={kind === "carpa" ? "Ej: C91" : "Ej: S11"} />
+        <TextField label="Identificación" value={code} onChange={(e) => setCode(e.target.value)} required maxLength={20} placeholder={kind === "carpa" ? "Ej: 90" : "Ej: 91"} />
         <p className="text-xs text-muted">Aparece en el centro del mapa; después arrastralo a su lugar.</p>
         {error && <Alert tone="danger">{error}</Alert>}
         <div className="flex justify-end gap-2">

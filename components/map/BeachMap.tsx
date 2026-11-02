@@ -9,8 +9,21 @@ export type MapSpace = {
   kind: "carpa" | "sombrilla";
   x: number;
   y: number;
+  rotation: number;
   state: SpaceState;
   version: number;
+};
+
+export type MapFeature = {
+  id: string;
+  kind: "camino" | "pasillo" | "area_comun" | "instalacion" | "sector";
+  label: string | null;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  rotation: number;
+  color: string | null;
 };
 
 type View = { x: number; y: number; w: number; h: number };
@@ -28,6 +41,7 @@ export function BeachMap({
   height,
   seaSide,
   spaces,
+  features,
   selectedId,
   editMode,
   onSelect,
@@ -37,6 +51,7 @@ export function BeachMap({
   height: number;
   seaSide: "top" | "bottom" | "left" | "right";
   spaces: MapSpace[];
+  features: MapFeature[];
   selectedId: string | null;
   editMode: boolean;
   onSelect: (id: string | null) => void;
@@ -78,6 +93,26 @@ export function BeachMap({
     if (!ctm) return { x: 0, y: 0 };
     const p = pt.matrixTransform(ctm.inverse());
     return { x: p.x, y: p.y };
+  }, []);
+
+  // Escape: cancela el arrastre en curso y devuelve el espacio a su lugar guardado.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape" || !drag.current) return;
+      const d = drag.current;
+      drag.current = null;
+      if (d.type === "space") {
+        setLocal((prev) => {
+          const next = { ...prev };
+          delete next[d.id];
+          return next;
+        });
+      } else {
+        setView(d.view);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
   }, []);
 
   // Rueda: zoom solo con Ctrl; durante un arrastre se bloquea para evitar saltos.
@@ -215,6 +250,10 @@ export function BeachMap({
             <stop offset="0" stopColor={seaSide === "bottom" || seaSide === "right" ? "var(--sea)" : "var(--sea-deep)"} />
             <stop offset="1" stopColor={seaSide === "bottom" || seaSide === "right" ? "var(--sea-deep)" : "var(--sea)"} />
           </linearGradient>
+          <pattern id="planks" width="14" height="14" patternUnits="userSpaceOnUse">
+            <rect width="14" height="14" fill="none" />
+            <line x1="0" y1="0" x2="0" y2="14" stroke="#3b2410" strokeWidth="2" />
+          </pattern>
           <clipPath id="tent-clip">
             <rect x={-TENT_W / 2} y={-TENT_H / 2} width={TENT_W} height={TENT_H} rx={7} />
           </clipPath>
@@ -252,11 +291,14 @@ export function BeachMap({
         </text>
         <rect x={0} y={0} width={width} height={height} fill="none" stroke="var(--line)" strokeWidth={3} pointerEvents="none" />
 
+        {features.map((f) => (
+          <FeatureShape key={f.id} f={f} />
+        ))}
+
         {spaces.map((s) => {
           const pos = local[s.space_id] ?? { x: Number(s.x), y: Number(s.y) };
           const color = STATE_COLOR[s.state];
           const selected = s.space_id === selectedId;
-          const labelY = s.kind === "carpa" ? TENT_H / 2 + 20 : UMBRELLA_R + 19;
           return (
             <g
               key={s.space_id}
@@ -271,13 +313,15 @@ export function BeachMap({
                 if (e.key === "Enter" || e.key === " ") onSelect(s.space_id);
               }}
             >
-              {s.kind === "carpa" ? (
-                <TentIcon color={color} selected={selected} dashed={s.state === "desactivada"} />
-              ) : (
-                <UmbrellaIcon color={color} selected={selected} dashed={s.state === "desactivada"} />
-              )}
-              <rect x={-24} y={labelY - 13} width={48} height={20} rx={6} fill="var(--surface)" opacity={0.92} />
-              <text y={labelY} textAnchor="middle" dominantBaseline="middle" fontSize={14} fontWeight={700} fill="var(--fg)">
+              <g transform={`rotate(${Number(s.rotation) || 0})`}>
+                {s.kind === "carpa" ? (
+                  <TentIcon color={color} selected={selected} dashed={s.state === "desactivada"} />
+                ) : (
+                  <UmbrellaIcon color={color} selected={selected} dashed={s.state === "desactivada"} />
+                )}
+              </g>
+              <rect x={-21} y={-13} width={42} height={26} rx={7} fill="var(--surface)" opacity={0.95} stroke={color} strokeWidth={1.5} />
+              <text y={1} textAnchor="middle" dominantBaseline="middle" fontSize={17} fontWeight={700} fill="var(--fg)">
                 {s.code}
               </text>
             </g>
@@ -291,7 +335,7 @@ export function BeachMap({
         <MapBtn label="Ver todo" onClick={() => setView({ x: 0, y: 0, w: width, h: height })}>⤢</MapBtn>
       </div>
       <p className="pointer-events-none absolute bottom-2 left-2 rounded bg-surface/90 px-2 py-1 text-[11px] text-muted">
-        Arrastrá el fondo para mover · Ctrl + rueda para zoom{editMode ? " · Arrastrá una carpa para ubicarla" : ""}
+        Arrastrá el fondo para mover · Ctrl + rueda para zoom{editMode ? " · Arrastrá una carpa para ubicarla · Esc cancela" : ""}
       </p>
     </div>
   );
@@ -308,5 +352,53 @@ function MapBtn({ label, onClick, children }: { label: string; onClick: () => vo
     >
       {children}
     </button>
+  );
+}
+
+const FEATURE_TEXT: Record<MapFeature["kind"], string> = {
+  camino: "#fff8ec",
+  pasillo: "#fff8ec",
+  instalacion: "#ffffff",
+  area_comun: "#5a3a12",
+  sector: "var(--fg)",
+};
+
+/** Caminos, pasarelas, edificios y áreas comunes del plano. No reciben clics (no tapan las carpas). */
+function FeatureShape({ f }: { f: MapFeature }) {
+  const w = Number(f.width);
+  const h = Number(f.height);
+  const isPath = f.kind === "camino" || f.kind === "pasillo";
+  const fill = f.color ?? (isPath ? "#9a6a34" : "#d9b77e");
+  const vertical = h > w;
+  const fontSize = Math.max(14, Math.min(40, (vertical ? w : h) * 0.32, (w / Math.max(4, (f.label ?? "").length)) * 1.6));
+  return (
+    <g transform={`translate(${Number(f.x)} ${Number(f.y)}) rotate(${Number(f.rotation) || 0})`} pointerEvents="none">
+      <rect
+        x={-w / 2}
+        y={-h / 2}
+        width={w}
+        height={h}
+        rx={isPath ? 2 : 10}
+        fill={fill}
+        opacity={f.kind === "sector" ? 0.15 : f.kind === "area_comun" ? 0.75 : 1}
+        stroke={f.kind === "sector" ? "var(--muted)" : "rgba(0,0,0,0.15)"}
+        strokeDasharray={f.kind === "sector" ? "10 8" : undefined}
+      />
+      {isPath && (
+        <rect x={-w / 2} y={-h / 2} width={w} height={h} fill="url(#planks)" opacity={0.35} />
+      )}
+      {f.label && !isPath && (
+        <text
+          textAnchor="middle"
+          dominantBaseline="middle"
+          fontSize={fontSize}
+          fontWeight={700}
+          fill={FEATURE_TEXT[f.kind]}
+          transform={vertical && w < 160 ? "rotate(-90)" : undefined}
+        >
+          {f.label}
+        </text>
+      )}
+    </g>
   );
 }

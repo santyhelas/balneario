@@ -26,7 +26,8 @@ datos de prueba con datos reales. La verificación automática (GitHub Actions) 
 supabase/
   migrations/      Migraciones numeradas (fuente de verdad del esquema)
   instalar.sql     Todas las migraciones juntas, para pegar en Supabase la primera vez
-  tests/           Pruebas automáticas de la base (97 casos)
+  actualizaciones/ Cambios para pegar en una base ya instalada
+  tests/           Pruebas automáticas de la base
 ```
 
 ## Decisiones de diseño
