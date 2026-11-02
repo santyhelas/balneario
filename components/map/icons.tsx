@@ -20,9 +20,9 @@ export const STATE_LABEL: Record<SpaceState, string> = {
   desactivada: "Desactivada",
 };
 
-export const TENT_W = 72;
-export const TENT_H = 58;
-export const UMBRELLA_R = 30;
+export const TENT_W = 86;
+export const TENT_H = 70;
+export const UMBRELLA_R = 38;
 
 /** Carpa de playa vista desde arriba: lona rectangular a rayas con faldón frontal. */
 export function TentIcon({ color, selected, dashed }: { color: string; selected: boolean; dashed: boolean }) {

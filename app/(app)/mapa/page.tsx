@@ -8,7 +8,8 @@ import { addDays, formatDate, formatMoney, todayISO } from "@/lib/format";
 import { useWorkspace } from "@/components/workspace";
 import { PageHeader, SyncNotice } from "@/components/shell";
 import { Alert, Badge, Button, Card, ConfirmDialog, Field, Input, Modal, Select, Spinner, Textarea, TextField } from "@/components/ui";
-import { BeachMap, type MapFeature, type MapSpace } from "@/components/map/BeachMap";
+import { BeachMap, FEATURE_KIND_LABEL, type MapFeature, type MapSpace, type Selection } from "@/components/map/BeachMap";
+import { WeatherStrip, WindCompass } from "@/components/weather";
 import { STATE_COLOR, STATE_LABEL, type SpaceState } from "@/components/map/icons";
 
 type DayStatus = MapSpace & {
@@ -35,7 +36,7 @@ export default function MapaPage() {
   const [day, setDay] = useState(today);
   const [layoutConfirm, setLayoutConfirm] = useState(false);
   const [layoutBusy, setLayoutBusy] = useState(false);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [sel, setSel] = useState<Selection>(null);
   const [editMode, setEditMode] = useState(false);
   const [message, setMessage] = useState<{ tone: "danger" | "ok"; text: string } | null>(null);
   const [adding, setAdding] = useState(false);
@@ -46,8 +47,8 @@ export default function MapaPage() {
   );
 
   const featuresQ = useLoader<MapFeature[]>(
-    async () => unwrap(await sb.from("map_features").select("id, kind, label, x, y, width, height, rotation, color")
-      .eq("workspace_id", ws.id).eq("active", true)) as MapFeature[],
+    async () => unwrap(await sb.from("map_features").select("id, kind, label, x, y, width, height, rotation, color, version")
+      .eq("workspace_id", ws.id).eq("active", true).order("created_at")) as MapFeature[],
     [ws.id],
     0,
   );
@@ -59,20 +60,29 @@ export default function MapaPage() {
     setLayoutConfirm(false);
     if (error) return setMessage({ tone: "danger", text: friendlyError(error) });
     setMessage({ tone: "ok", text: `Listo: se ubicaron ${(res as { espacios_ubicados: number }).espacios_ubicados} espacios según el plano del parador.` });
+    setSel(null);
     await reloadWorkspace();
     featuresQ.reload();
     reload();
   }
 
   const spaces = data ?? [];
-  const selected = spaces.find((s) => s.space_id === selectedId) ?? null;
+  const features = featuresQ.data ?? [];
+  const selectedSpace = sel?.type === "space" ? spaces.find((s) => s.space_id === sel.id) ?? null : null;
+  const selectedFeature = sel?.type === "feature" ? features.find((f) => f.id === sel.id) ?? null : null;
 
-  // En el celular la ficha queda debajo del mapa: al tocar un espacio, bajar hasta ella.
+  // Fuera del modo edición no se seleccionan elementos del plano.
   useEffect(() => {
-    if (!selectedId || window.innerWidth >= 1280) return;
+    if (!editMode && sel?.type === "feature") setSel(null);
+  }, [editMode, sel]);
+
+  // En pantallas chicas la ficha queda debajo del plano: bajar hasta ella.
+  useEffect(() => {
+    if (!sel || window.innerWidth >= 1024) return;
     const el = document.getElementById("ficha-espacio");
     if (el) requestAnimationFrame(() => el.scrollIntoView({ behavior: "smooth", block: "start" }));
-  }, [selectedId]);
+  }, [sel]);
+
   const counts = useMemo(() => {
     const c = Object.fromEntries(STATES.map((s) => [s, 0])) as Record<SpaceState, number>;
     spaces.forEach((s) => (c[s.state] += 1));
@@ -93,6 +103,30 @@ export default function MapaPage() {
     return true;
   }
 
+  async function updateFeature(id: string, patch: Partial<MapFeature>): Promise<boolean> {
+    const f = features.find((x) => x.id === id);
+    if (!f) return false;
+    const { error } = await sb.from("map_features").update({ ...patch, version: f.version + 1 }).eq("id", id).select("id").single();
+    if (error) {
+      setMessage({ tone: "danger", text: `No se guardó el cambio: ${friendlyError(error)}` });
+      featuresQ.reload();
+      return false;
+    }
+    setMessage(null);
+    await featuresQ.reload();
+    return true;
+  }
+
+  async function addFeature(kind: MapFeature["kind"], label: string | null, w: number, h: number, color: string) {
+    const { data: row, error } = await sb.from("map_features").insert({
+      workspace_id: ws.id, kind, label, x: Math.round(ws.map_width / 2), y: Math.round(ws.map_height / 2), width: w, height: h, color,
+    }).select("id").single();
+    if (error) return setMessage({ tone: "danger", text: friendlyError(error) });
+    await featuresQ.reload();
+    setSel({ type: "feature", id: (row as { id: string }).id });
+    setMessage({ tone: "ok", text: "Elemento agregado en el centro del plano: arrastralo a su lugar." });
+  }
+
   return (
     <>
       <PageHeader
@@ -102,9 +136,9 @@ export default function MapaPage() {
           isAdmin ? (
             <>
               {editMode && <Button variant="secondary" onClick={() => setLayoutConfirm(true)}>Diseño Parador</Button>}
-              {editMode && <Button variant="secondary" onClick={() => setAdding(true)}>Agregar espacio</Button>}
-              <Button variant={editMode ? "primary" : "secondary"} onClick={() => setEditMode((v) => !v)}>
-                {editMode ? "Terminar edición" : "Editar ubicaciones"}
+              {editMode && <Button variant="secondary" onClick={() => setAdding(true)}>Agregar carpa o sombrilla</Button>}
+              <Button variant={editMode ? "primary" : "secondary"} onClick={() => { setEditMode((v) => !v); setMessage(null); }}>
+                {editMode ? "Terminar edición" : "Editar plano"}
               </Button>
             </>
           ) : undefined
@@ -112,77 +146,152 @@ export default function MapaPage() {
       />
       <SyncNotice error={error} stale={stale} updatedAt={updatedAt} onRetry={reload} />
 
-      <div className="mb-3 flex flex-wrap items-end gap-2">
-        <Field label="Consultar fecha">
-          <Input type="date" value={day} onChange={(e) => e.target.value && setDay(e.target.value)} className="w-auto" />
-        </Field>
-        <Button variant="secondary" onClick={() => setDay(addDays(day, -1))} aria-label="Día anterior">←</Button>
-        <Button variant="secondary" onClick={() => setDay(today)} disabled={day === today}>Hoy</Button>
-        <Button variant="secondary" onClick={() => setDay(addDays(day, 1))} aria-label="Día siguiente">→</Button>
-        <Button variant="secondary" onClick={() => setDay(addDays(today, 7))}>En una semana</Button>
-        {loading && <span className="flex items-center gap-2 text-sm text-muted"><Spinner small /> Actualizando…</span>}
-      </div>
+      <WeatherStrip className="mb-3" />
 
-      <div className="mb-3 flex flex-wrap gap-x-4 gap-y-1 text-xs">
-        {STATES.map((st) => (
-          <span key={st} className="flex items-center gap-1.5">
-            <span className="inline-block h-3 w-3 rounded-sm" style={{ background: STATE_COLOR[st] }} />
-            {STATE_LABEL[st]} <span className="text-muted">({counts[st]})</span>
-          </span>
-        ))}
+      <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
+        <div className="flex flex-wrap items-end gap-2">
+          <Field label="Consultar fecha">
+            <Input type="date" value={day} onChange={(e) => e.target.value && setDay(e.target.value)} className="w-auto" />
+          </Field>
+          <Button variant="secondary" onClick={() => setDay(addDays(day, -1))} aria-label="Día anterior">←</Button>
+          <Button variant="secondary" onClick={() => setDay(today)} disabled={day === today}>Hoy</Button>
+          <Button variant="secondary" onClick={() => setDay(addDays(day, 1))} aria-label="Día siguiente">→</Button>
+          <Button variant="secondary" onClick={() => setDay(addDays(today, 7))}>En una semana</Button>
+          {loading && <span className="flex items-center gap-2 text-sm text-muted"><Spinner small /> Actualizando…</span>}
+        </div>
+        <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
+          {STATES.map((st) => (
+            <span key={st} className="flex items-center gap-1.5">
+              <span className="inline-block h-3 w-3 rounded-sm" style={{ background: STATE_COLOR[st] }} />
+              {STATE_LABEL[st]} <span className="text-muted">({counts[st]})</span>
+            </span>
+          ))}
+        </div>
       </div>
 
       {message && <Alert tone={message.tone} className="mb-3">{message.text}</Alert>}
-      {editMode && <Alert tone="info" className="mb-3">Modo edición: arrastrá carpas y sombrillas a su lugar. Cada movimiento se guarda al soltar.</Alert>}
+      {editMode && (
+        <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-accent/30 bg-accent-soft p-2 text-sm">
+          <span className="px-1 font-medium">Agregar al plano:</span>
+          <Button variant="secondary" className="py-1.5" onClick={() => addFeature("camino", null, 30, 400, "#9a6a34")}>Camino</Button>
+          <Button variant="secondary" className="py-1.5" onClick={() => addFeature("area_comun", "Juegos infantiles", 160, 250, "#e9c98f")}>Juegos</Button>
+          <Button variant="secondary" className="py-1.5" onClick={() => addFeature("instalacion", "Nueva instalación", 260, 160, "#f08c1a")}>Instalación</Button>
+          <Button variant="secondary" className="py-1.5" onClick={() => addFeature("area_comun", "Área común", 300, 200, "#d9b77e")}>Área común</Button>
+          <Button variant="secondary" className="py-1.5" onClick={() => addFeature("sector", "Sector", 600, 400, "#0b6a87")}>Sector</Button>
+          <span className="text-xs text-muted">Tocá un elemento para editarlo; arrastralo para moverlo.</span>
+        </div>
+      )}
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+      <div className="relative">
         {data ? (
           <BeachMap
             width={ws.map_width}
             height={ws.map_height}
             seaSide={ws.sea_side}
             spaces={spaces}
-            features={featuresQ.data ?? []}
-            selectedId={selectedId}
+            features={features}
+            selected={sel}
             editMode={editMode}
-            onSelect={setSelectedId}
+            onSelect={setSel}
             onMove={moveSpace}
+            onFeatureChange={(id, g) => updateFeature(id, g)}
+            overlay={<WindCompass seaSide={ws.sea_side} />}
           />
         ) : (
-          <div className="flex h-[62vh] items-center justify-center rounded-xl border border-line text-muted">
-            {loading ? <><Spinner /> <span className="ml-2">Cargando mapa…</span></> : "Sin datos"}
+          <div className="flex aspect-[4/3] items-center justify-center rounded-2xl bg-surface-2 text-muted">
+            {loading ? <><Spinner /> <span className="ml-2">Cargando plano…</span></> : "Sin datos"}
           </div>
         )}
 
-        <div id="ficha-espacio" className="scroll-mt-20">
-          <SpacePanel space={selected} day={day} today={today} isAdmin={isAdmin} onChanged={reload} onCheckDate={setDay} />
-        </div>
+        {(selectedSpace || selectedFeature) && (
+          <div id="ficha-espacio" className="mt-3 scroll-mt-20 lg:absolute lg:left-3 lg:top-3 lg:mt-0 lg:max-h-[calc(100%-1.5rem)] lg:w-[340px] lg:overflow-y-auto lg:rounded-xl lg:shadow-xl">
+            {selectedSpace && <SpacePanel space={selectedSpace} day={day} today={today} isAdmin={isAdmin} onChanged={reload} onCheckDate={setDay} onClose={() => setSel(null)} />}
+            {selectedFeature && <FeaturePanel feature={selectedFeature} onSave={(patch) => updateFeature(selectedFeature.id, patch)} onClose={() => setSel(null)} onRemove={async () => { if (await updateFeature(selectedFeature.id, { active: false } as Partial<MapFeature>)) setSel(null); }} />}
+          </div>
+        )}
       </div>
+      {!sel && <p className="mt-2 text-xs text-muted">Tocá una carpa o sombrilla para ver su estado{day === today ? " de hoy" : ` el ${formatDate(day)}`}.</p>}
 
       <ConfirmDialog
         open={layoutConfirm}
         title="Aplicar el Diseño Parador"
-        message="Todas las carpas y sombrillas cuyo número figura en el plano oficial vuelven a su lugar original, y se redibujan el parador, las pasarelas y los juegos. No se crean ni se borran espacios, y las reservas no cambian."
+        message="Todas las carpas y sombrillas cuyo número figura en el plano oficial vuelven a su lugar original, y se redibujan el parador, las pasarelas y los juegos (los cambios que hayas hecho a caminos y elementos se reemplazan). No se crean ni se borran carpas, y las reservas no cambian."
         confirmLabel="Aplicar diseño"
         busy={layoutBusy}
         onConfirm={applyLayout}
         onCancel={() => setLayoutConfirm(false)}
       />
-      {isAdmin && <AddSpaceModal open={adding} onClose={() => setAdding(false)} onDone={(id) => { setAdding(false); reload(); setSelectedId(id); }} mapW={ws.map_width} mapH={ws.map_height} />}
+      {isAdmin && <AddSpaceModal open={adding} onClose={() => setAdding(false)} onDone={(id) => { setAdding(false); reload(); setSel({ type: "space", id }); }} mapW={ws.map_width} mapH={ws.map_height} />}
     </>
   );
 }
 
-function SpacePanel({ space, day, today, isAdmin, onChanged, onCheckDate }: { space: DayStatus | null; day: string; today: string; isAdmin: boolean; onChanged: () => void; onCheckDate: (d: string) => void }) {
+function FeaturePanel({ feature, onSave, onClose, onRemove }: {
+  feature: MapFeature; onSave: (patch: Partial<MapFeature>) => Promise<boolean>; onClose: () => void; onRemove: () => Promise<void>;
+}) {
+  const [kind, setKind] = useState(feature.kind);
+  const [label, setLabel] = useState(feature.label ?? "");
+  const [color, setColor] = useState(feature.color ?? "#9a6a34");
+  const [busy, setBusy] = useState(false);
+  const [confirmRemove, setConfirmRemove] = useState(false);
+  useEffect(() => {
+    setKind(feature.kind);
+    setLabel(feature.label ?? "");
+    setColor(feature.color ?? "#9a6a34");
+  }, [feature.id, feature.kind, feature.label, feature.color]);
+
+  async function run(patch: Partial<MapFeature>) {
+    setBusy(true);
+    await onSave(patch);
+    setBusy(false);
+  }
+  const dirty = kind !== feature.kind || label !== (feature.label ?? "") || color !== (feature.color ?? "#9a6a34");
+
+  return (
+    <Card title={FEATURE_KIND_LABEL[feature.kind]} actions={<button onClick={onClose} className="rounded p-1 text-muted hover:bg-surface-2" aria-label="Cerrar">✕</button>}>
+      <div className="flex flex-col gap-3">
+        <Field label="Tipo">
+          <Select value={kind} onChange={(e) => setKind(e.target.value as MapFeature["kind"])}>
+            {Object.entries(FEATURE_KIND_LABEL).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+          </Select>
+        </Field>
+        <TextField label="Texto (opcional)" value={label} onChange={(e) => setLabel(e.target.value)} maxLength={80} placeholder="Ej: Juegos infantiles" />
+        <Field label="Color">
+          <div className="flex items-center gap-2">
+            <input type="color" value={color} onChange={(e) => setColor(e.target.value)} className="h-10 w-14 cursor-pointer rounded border border-line bg-surface" aria-label="Color" />
+            {["#9a6a34", "#e9c98f", "#d9b77e", "#f08c1a", "#a8661b", "#2f9e5b", "#0b6a87"].map((c) => (
+              <button key={c} type="button" onClick={() => setColor(c)} className="h-6 w-6 rounded-full border border-line" style={{ background: c }} aria-label={`Color ${c}`} />
+            ))}
+          </div>
+        </Field>
+        {dirty && <Button loading={busy} onClick={() => run({ kind, label: label.trim() || null, color })}>Guardar cambios</Button>}
+        <p className="text-xs text-muted">Tamaño: {Math.round(Number(feature.width))} × {Math.round(Number(feature.height))}. Para agrandarlo o achicarlo, arrastrá el círculo de su esquina.</p>
+        <div className="flex flex-wrap gap-2 border-t border-line pt-3">
+          <Button variant="secondary" loading={busy} onClick={() => run({ rotation: ((Number(feature.rotation) || 0) + 90) % 360 })}>Girar 90°</Button>
+          <Button variant="secondary" loading={busy} onClick={() => run({ width: Number(feature.height), height: Number(feature.width) })}>Cambiar orientación</Button>
+          <Button variant="danger" onClick={() => setConfirmRemove(true)}>Quitar</Button>
+        </div>
+      </div>
+      <ConfirmDialog
+        open={confirmRemove}
+        title="Quitar del plano"
+        message="El elemento deja de mostrarse en el plano. Si lo necesitás de nuevo, lo podés volver a agregar."
+        confirmLabel="Quitar"
+        danger
+        busy={busy}
+        onConfirm={async () => { setBusy(true); await onRemove(); setBusy(false); setConfirmRemove(false); }}
+        onCancel={() => setConfirmRemove(false)}
+      />
+    </Card>
+  );
+}
+
+function SpacePanel({ space, day, today, isAdmin, onChanged, onCheckDate, onClose }: { space: DayStatus; day: string; today: string; isAdmin: boolean; onChanged: () => void; onCheckDate: (d: string) => void; onClose: () => void }) {
   const [renaming, setRenaming] = useState(false);
   const [toggling, setToggling] = useState(false);
   const [maint, setMaint] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  if (!space) {
-    return <Card><p className="text-sm text-muted">Tocá una carpa o sombrilla para ver su estado el {formatDate(day)}.</p></Card>;
-  }
 
   async function rotate() {
     if (!space) return;
@@ -209,7 +318,7 @@ function SpacePanel({ space, day, today, isAdmin, onChanged, onCheckDate }: { sp
 
   const kindLabel = space.kind === "carpa" ? "Carpa" : "Sombrilla";
   return (
-    <Card title={`${kindLabel} ${space.code}`}>
+    <Card title={`${kindLabel} ${space.code}`} actions={<button onClick={onClose} className="rounded p-1 text-muted hover:bg-surface-2" aria-label="Cerrar">✕</button>}>
       <div className="mb-3 flex items-center gap-2">
         <span className="inline-block h-3 w-3 rounded-full" style={{ background: STATE_COLOR[space.state] }} />
         <span className="text-sm font-medium">{STATE_LABEL[space.state]}</span>

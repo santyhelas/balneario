@@ -18,6 +18,7 @@ export type Workspace = {
   sea_side: "top" | "bottom" | "left" | "right";
   logo_data: string | null;
   subtitle: string | null;
+  sea_bearing?: number | null;
   version: number;
 };
 
@@ -102,7 +103,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
           data: MemberRow | null;
           error: { code?: string; message: string } | null;
         };
-      let mem = await memberQuery("id, name, timezone, latitude, longitude, map_width, map_height, sea_side, logo_data, subtitle, version");
+      let mem = await memberQuery("id, name, timezone, latitude, longitude, map_width, map_height, sea_side, logo_data, subtitle, sea_bearing, version");
       if (mem.error?.code === "42703") {
         mem = await memberQuery("id, name, timezone, latitude, longitude, map_width, map_height, sea_side, version");
       }
