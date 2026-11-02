@@ -62,7 +62,8 @@ export function Field({ label, hint, error, children, htmlFor }: { label: string
   );
 }
 
-const control = "w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg outline-none focus:border-accent";
+// text-base en celular: con menos de 16px el iPhone hace zoom al tocar el campo.
+const control = "w-full rounded-lg border border-line bg-surface px-3 py-2.5 text-base text-fg outline-none focus:border-accent sm:py-2 sm:text-sm";
 
 export function Input(props: InputHTMLAttributes<HTMLInputElement>) {
   return <input {...props} className={cx(control, props.className)} />;
@@ -166,7 +167,7 @@ export function Modal({
         aria-modal="true"
         aria-label={title}
         className={cx(
-          "max-h-[92dvh] w-full overflow-y-auto rounded-t-2xl border border-line bg-surface p-5 shadow-xl sm:rounded-2xl",
+          "max-h-[92dvh] w-full overflow-y-auto overscroll-contain rounded-t-2xl border border-line bg-surface p-5 pb-safe-5 shadow-xl sm:rounded-2xl sm:pb-5",
           wide ? "sm:max-w-3xl" : "sm:max-w-md",
         )}
       >

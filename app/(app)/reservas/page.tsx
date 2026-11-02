@@ -103,12 +103,12 @@ export default function ReservasPage() {
 
       <Card>
         <div className="mb-3 flex flex-wrap items-center gap-2">
-          <div className="flex flex-wrap gap-1">
+          <div className="-mx-1 flex w-full gap-1 overflow-x-auto px-1 pb-1 md:w-auto md:flex-wrap md:overflow-visible">
             {FILTERS.map(([f, l]) => (
-              <button key={f} onClick={() => setFilter(f)} className={cx("rounded-lg px-3 py-1.5 text-sm", filter === f ? "bg-accent text-accent-fg" : "bg-surface-2 hover:opacity-80")}>{l}</button>
+              <button key={f} onClick={() => setFilter(f)} className={cx("shrink-0 rounded-lg px-3 py-2 text-sm md:py-1.5", filter === f ? "bg-accent text-accent-fg" : "bg-surface-2 hover:opacity-80")}>{l}</button>
             ))}
           </div>
-          <Input type="search" placeholder="Buscar cliente o N° de reserva" value={q} onChange={(e) => setQ(e.target.value)} className="ml-auto max-w-xs" aria-label="Buscar" />
+          <Input type="search" placeholder="Buscar cliente o N° de reserva" value={q} onChange={(e) => setQ(e.target.value)} className="md:ml-auto md:max-w-xs" aria-label="Buscar" />
         </div>
 
         {list.loading && !list.data ? (
@@ -116,7 +116,32 @@ export default function ReservasPage() {
         ) : !list.data || list.data.rows.length === 0 ? (
           <EmptyState>No hay reservas para mostrar.</EmptyState>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+          {/* Celular: tarjetas */}
+          <ul className="flex flex-col divide-y divide-line md:hidden">
+            {list.data.rows.map((r) => {
+              const b = list.data!.bal[r.id];
+              const codes = r.reservation_segments.filter((s) => s.active).sort((a, z) => a.start_date.localeCompare(z.start_date)).map((s) => s.spaces.code).filter((c, i, a) => a.indexOf(c) === i);
+              return (
+                <li key={r.id}>
+                  <Link href={`/reservas/${r.id}`} className="flex items-center justify-between gap-3 py-3 active:bg-surface-2">
+                    <div className="min-w-0">
+                      <div className="truncate font-medium">{r.customers.first_name} {r.customers.last_name}</div>
+                      <div className="text-xs text-muted">#{r.number} · {codes.join(" → ") || "—"} · {formatDate(r.start_date)} – {formatDate(r.end_date)}</div>
+                    </div>
+                    <div className="shrink-0 text-right text-sm">
+                      {r.status === "cancelada" ? <Badge tone="muted">Cancelada</Badge>
+                        : r.is_courtesy ? <Badge tone="info">Cortesía</Badge>
+                        : b && Number(b.due_amount) > 0 ? <span className="tabular font-semibold text-danger">Debe {formatMoney(b.due_amount)}</span>
+                        : <Badge tone="ok">Pagada</Badge>}
+                    </div>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+          {/* Computadora: tabla */}
+          <div className="hidden overflow-x-auto md:block">
             <table className="w-full text-sm">
               <thead className="text-left text-xs text-muted">
                 <tr><th className="py-2 pr-3">N°</th><th className="pr-3">Cliente</th><th className="pr-3">Lugar</th><th className="pr-3">Estadía</th><th className="pr-3 text-right">Total</th><th className="pr-3 text-right">Saldo</th><th /></tr>
@@ -144,8 +169,9 @@ export default function ReservasPage() {
                 })}
               </tbody>
             </table>
-            {list.data.rows.length === 200 && <p className="mt-2 text-xs text-muted">Se muestran las primeras 200. Usá la búsqueda para encontrar otras.</p>}
           </div>
+          {list.data.rows.length === 200 && <p className="mt-2 text-xs text-muted">Se muestran las primeras 200. Usá la búsqueda para encontrar otras.</p>}
+          </>
         )}
       </Card>
 

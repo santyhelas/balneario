@@ -52,7 +52,7 @@ export default function ReservaPage() {
           <>
             {confirmed && !r.is_courtesy && due > 0 && <Button onClick={() => setModal("pago")}>Registrar pago</Button>}
             {confirmed && r.end_date >= today && <Button variant="secondary" onClick={() => setModal("reubicar")}>Cambiar de carpa</Button>}
-            <Link href={`/reservas/${r.id}/recibo`} target="_blank"><Button variant="secondary">Comprobante</Button></Link>
+            <Link href={`/reservas/${r.id}/recibo`}><Button variant="secondary">Comprobante</Button></Link>
             {wa && <a href={wa} target="_blank" rel="noopener noreferrer"><Button variant="secondary">WhatsApp</Button></a>}
             {confirmed && <Button variant="danger" onClick={() => setModal("cancelar")}>Cancelar reserva</Button>}
           </>
@@ -67,7 +67,7 @@ export default function ReservaPage() {
         <Card title="Datos">
           <dl className="grid grid-cols-2 gap-3 text-sm">
             <div><dt className="text-xs text-muted">Cliente</dt><dd className="font-medium">{r.customers.first_name} {r.customers.last_name}</dd></div>
-            <div><dt className="text-xs text-muted">Teléfono</dt><dd>{r.customers.phone ?? "—"}</dd></div>
+            <div><dt className="text-xs text-muted">Teléfono</dt><dd>{r.customers.phone ? <a className="text-accent underline" href={`tel:${r.customers.phone.replace(/[^\d+]/g, "")}`}>{r.customers.phone}</a> : "—"}</dd></div>
             <div><dt className="text-xs text-muted">Estadía</dt><dd>{inclusiveDays(r.start_date, r.end_date)} días</dd></div>
             <div><dt className="text-xs text-muted">Días restantes</dt><dd>{confirmed ? (r.end_date < today ? "Finalizada" : daysLeft) : "—"}</dd></div>
             {r.is_courtesy && <div className="col-span-2"><dt className="text-xs text-muted">Cortesía familiar para</dt><dd>{r.courtesy_beneficiary ?? "—"}</dd></div>}

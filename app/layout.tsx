@@ -4,10 +4,25 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "Balneario · Gestión",
   description: "Gestión integral del balneario: reservas, mapa, caja y clientes.",
-  icons: { icon: "/icon.svg" },
+  applicationName: "Balneario",
+  icons: {
+    icon: [{ url: "/icon.svg", type: "image/svg+xml" }, { url: "/icon-192.png", sizes: "192x192", type: "image/png" }],
+    apple: [{ url: "/apple-touch-icon.png", sizes: "180x180" }],
+  },
+  // iPhone: al agregarla a la pantalla de inicio se abre a pantalla completa, como una app.
+  appleWebApp: { capable: true, title: "Balneario", statusBarStyle: "default" },
+  formatDetection: { telephone: false },
 };
 
-export const viewport: Viewport = { width: "device-width", initialScale: 1 };
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover", // usa toda la pantalla (muesca del iPhone incluida); los márgenes los da safe-area
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
+    { media: "(prefers-color-scheme: dark)", color: "#162027" },
+  ],
+};
 
 // Aplica el tema guardado antes de pintar, para evitar el destello de color.
 // La preferencia real vive en la base (user_preferences); esto es solo una copia para el primer pintado.
@@ -17,6 +32,9 @@ try {
   var dark = t === 'oscuro' || (t === 'sistema' && window.matchMedia('(prefers-color-scheme: dark)').matches);
   document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
 } catch (e) { document.documentElement.setAttribute('data-theme', 'light'); }
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function () { navigator.serviceWorker.register('/sw.js').catch(function () {}); });
+}
 `;
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

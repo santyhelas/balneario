@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { getSupabase } from "@/lib/supabase/client";
 import { unwrap, useLoader } from "@/lib/data";
 import { friendlyError } from "@/lib/errors";
@@ -66,6 +66,13 @@ export default function MapaPage() {
 
   const spaces = data ?? [];
   const selected = spaces.find((s) => s.space_id === selectedId) ?? null;
+
+  // En el celular la ficha queda debajo del mapa: al tocar un espacio, bajar hasta ella.
+  useEffect(() => {
+    if (!selectedId || window.innerWidth >= 1280) return;
+    const el = document.getElementById("ficha-espacio");
+    if (el) requestAnimationFrame(() => el.scrollIntoView({ behavior: "smooth", block: "start" }));
+  }, [selectedId]);
   const counts = useMemo(() => {
     const c = Object.fromEntries(STATES.map((s) => [s, 0])) as Record<SpaceState, number>;
     spaces.forEach((s) => (c[s.state] += 1));
@@ -147,7 +154,9 @@ export default function MapaPage() {
           </div>
         )}
 
-        <SpacePanel space={selected} day={day} today={today} isAdmin={isAdmin} onChanged={reload} onCheckDate={setDay} />
+        <div id="ficha-espacio" className="scroll-mt-20">
+          <SpacePanel space={selected} day={day} today={today} isAdmin={isAdmin} onChanged={reload} onCheckDate={setDay} />
+        </div>
       </div>
 
       <ConfirmDialog

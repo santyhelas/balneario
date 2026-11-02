@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { getSupabase } from "@/lib/supabase/client";
 import { useWorkspace, type ThemePref } from "@/components/workspace";
 import { ConfirmDialog, cx } from "@/components/ui";
@@ -14,6 +14,16 @@ const NAV = [
   { href: "/tarifas", label: "Tarifario", icon: "M20 12l-8 8-9-9V3h8l9 9zM7.5 7.5h.01" },
   { href: "/clientes", label: "Clientes", icon: "M16 19v-1a4 4 0 00-4-4H7a4 4 0 00-4 4v1M9.5 10a3.5 3.5 0 100-7 3.5 3.5 0 000 7zM21 19v-1a4 4 0 00-3-3.9M16 3.1a3.5 3.5 0 010 6.8" },
 ];
+
+const byHref = (h: string) => NAV.find((n) => n.href === h)!;
+const TABS = [
+  byHref("/"),
+  byHref("/mapa"),
+  { href: "/reservas/nueva", label: "Reservar", icon: "" },
+  byHref("/reservas"),
+  { href: "#mas", label: "Más", icon: "M5 12h.01M12 12h.01M19 12h.01" },
+];
+const MORE = [byHref("/caja"), byHref("/clientes"), byHref("/tarifas")];
 
 function Icon({ d, className }: { d: string; className?: string }) {
   return (
@@ -96,26 +106,82 @@ export function Shell({ children }: { children: ReactNode }) {
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        {/* Barra superior en pantallas chicas */}
-        <header className="sticky top-0 z-30 flex items-center print:hidden justify-between border-b border-line bg-surface px-3 py-2 md:hidden">
-          <button onClick={() => setMenuOpen((v) => !v)} className="rounded-lg p-2 hover:bg-surface-2" aria-label="Menú">
-            <Icon d="M4 6h16M4 12h16M4 18h16" />
-          </button>
-          <span className="truncate font-semibold">{ws.name}</span>
+        {/* Barra superior en el celular */}
+        <header className="pt-safe-2 sticky top-0 z-30 flex items-center justify-between gap-2 border-b border-line bg-surface/95 px-3 pb-2 backdrop-blur print:hidden md:hidden">
+          <div className="flex min-w-0 items-center gap-2">
+            <img src="/icon.svg" alt="" className="h-7 w-7 shrink-0" />
+            <span className="truncate font-semibold">{ws.name}</span>
+          </div>
           <button onClick={cycleTheme} className="rounded-lg p-2 hover:bg-surface-2" aria-label={`Tema: ${THEME_LABEL[theme]}`}>
             <Icon d="M12 3v1M12 20v1M4.2 4.2l.7.7M19.1 19.1l.7.7M3 12h1M20 12h1M4.2 19.8l.7-.7M19.1 4.9l.7-.7M12 7a5 5 0 100 10 5 5 0 000-10z" />
           </button>
         </header>
-        {menuOpen && (
-          <div className="border-b border-line bg-surface p-3 md:hidden">
-            {nav}
-            <button onClick={() => setConfirmLogout(true)} className="mt-2 w-full rounded-lg px-3 py-2 text-left text-sm text-danger hover:bg-surface-2">
-              Cerrar sesión ({email})
-            </button>
-          </div>
-        )}
-        <main className="mx-auto w-full max-w-7xl flex-1 p-4 md:p-6 print:p-0">{children}</main>
+        <InstallBanner />
+        <main className="px-safe pb-tabbar mx-auto w-full max-w-7xl flex-1 pt-4 md:pt-6 print:p-0">{children}</main>
       </div>
+
+      {/* Barra inferior en el celular: lo más usado al alcance del pulgar */}
+      <nav className="pb-safe-1 fixed inset-x-0 bottom-0 z-40 border-t border-line bg-surface/95 backdrop-blur print:hidden md:hidden" aria-label="Navegación principal">
+        <div className="mx-auto grid max-w-md grid-cols-5 items-end px-1 pt-1">
+          {TABS.map((t) => {
+            if (t.href === "/reservas/nueva") {
+              return (
+                <Link key={t.href} href={t.href} onClick={() => setMenuOpen(false)} className="flex flex-col items-center gap-0.5 pb-1 text-[11px] font-medium text-accent" aria-label="Nueva reserva">
+                  <span className="-mt-4 flex h-12 w-12 items-center justify-center rounded-full bg-accent text-accent-fg shadow-lg">
+                    <Icon d="M12 5v14M5 12h14" className="h-6 w-6" />
+                  </span>
+                  Reservar
+                </Link>
+              );
+            }
+            if (t.href === "#mas") {
+              const active = menuOpen || MORE.some((m) => pathname.startsWith(m.href));
+              return (
+                <button key={t.href} onClick={() => setMenuOpen((v) => !v)} className={cx("flex flex-col items-center gap-0.5 py-1.5 text-[11px] font-medium", active ? "text-accent" : "text-muted")} aria-expanded={menuOpen}>
+                  <Icon d={t.icon} className="h-6 w-6" />
+                  {t.label}
+                </button>
+              );
+            }
+            const active = t.href === "/" ? pathname === "/" : pathname.startsWith(t.href) && !pathname.startsWith("/reservas/nueva");
+            return (
+              <Link key={t.href} href={t.href} onClick={() => setMenuOpen(false)} className={cx("flex flex-col items-center gap-0.5 py-1.5 text-[11px] font-medium", active ? "text-accent" : "text-muted")} aria-current={active ? "page" : undefined}>
+                <Icon d={t.icon} className="h-6 w-6" />
+                {t.label}
+              </Link>
+            );
+          })}
+        </div>
+      </nav>
+
+      {/* Menú "Más" del celular */}
+      {menuOpen && (
+        <div className="fixed inset-0 z-30 bg-black/40 md:hidden" onClick={() => setMenuOpen(false)}>
+          <div className="bottom-tabbar absolute inset-x-0 rounded-t-2xl border-t border-line bg-surface p-3" onClick={(e) => e.stopPropagation()}>
+            <nav className="grid grid-cols-3 gap-2">
+              {MORE.map((m) => (
+                <Link key={m.href} href={m.href} onClick={() => setMenuOpen(false)}
+                  className={cx("flex flex-col items-center gap-1 rounded-xl border p-3 text-sm font-medium", pathname.startsWith(m.href) ? "border-accent bg-accent-soft text-accent" : "border-line")}>
+                  <Icon d={m.icon} className="h-6 w-6" />
+                  {m.label}
+                </Link>
+              ))}
+            </nav>
+            <div className="mt-3 flex flex-col gap-1 border-t border-line pt-3 text-sm">
+              <button onClick={cycleTheme} className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-left hover:bg-surface-2">
+                <Icon d="M12 3v1M12 20v1M4.2 4.2l.7.7M19.1 19.1l.7.7M3 12h1M20 12h1M4.2 19.8l.7-.7M19.1 4.9l.7-.7M12 7a5 5 0 100 10 5 5 0 000-10z" />
+                Tema: {THEME_LABEL[theme]}
+              </button>
+              <InstallButton onDone={() => setMenuOpen(false)} />
+              <div className="truncate px-3 py-1 text-xs text-muted">{email} · {role}</div>
+              <button onClick={() => { setMenuOpen(false); setConfirmLogout(true); }} className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-left text-danger hover:bg-surface-2">
+                <Icon d="M15 4h4v16h-4M10 8l-4 4 4 4M6 12h11" />
+                Cerrar sesión
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <ConfirmDialog
         open={confirmLogout}
@@ -154,6 +220,115 @@ export function SyncNotice({ error, stale, updatedAt, onRetry }: { error: string
           : `No se pudieron cargar los datos: ${error}`}
       </span>
       <button onClick={onRetry} className="font-medium text-danger underline">Reintentar</button>
+    </div>
+  );
+}
+
+type InstallPromptEvent = Event & { prompt: () => Promise<void>; userChoice: Promise<{ outcome: string }> };
+
+function useInstall() {
+  const [deferred, setDeferred] = useState<InstallPromptEvent | null>(null);
+  const [platform, setPlatform] = useState<"ios" | "android" | "otro">("otro");
+  const [installed, setInstalled] = useState(true);
+
+  useEffect(() => {
+    const nav = window.navigator as Navigator & { standalone?: boolean };
+    const standalone = window.matchMedia("(display-mode: standalone)").matches || nav.standalone === true;
+    setInstalled(standalone);
+    const ua = nav.userAgent;
+    const ios = /iPhone|iPad|iPod/.test(ua) || (nav.platform === "MacIntel" && nav.maxTouchPoints > 1);
+    setPlatform(ios ? "ios" : /Android/.test(ua) ? "android" : "otro");
+    const onPrompt = (e: Event) => {
+      e.preventDefault();
+      setDeferred(e as InstallPromptEvent);
+    };
+    const onInstalled = () => setInstalled(true);
+    window.addEventListener("beforeinstallprompt", onPrompt);
+    window.addEventListener("appinstalled", onInstalled);
+    return () => {
+      window.removeEventListener("beforeinstallprompt", onPrompt);
+      window.removeEventListener("appinstalled", onInstalled);
+    };
+  }, []);
+
+  async function install() {
+    if (!deferred) return false;
+    await deferred.prompt();
+    const choice = await deferred.userChoice;
+    setDeferred(null);
+    if (choice.outcome === "accepted") setInstalled(true);
+    return true;
+  }
+
+  const canOffer = !installed && (deferred !== null || platform === "ios");
+  return { canOffer, platform, hasPrompt: deferred !== null, install };
+}
+
+function IosSteps() {
+  return (
+    <ol className="list-decimal space-y-0.5 pl-5 text-sm">
+      <li>Tocá el botón <strong>Compartir</strong> (el cuadrado con la flecha hacia arriba).</li>
+      <li>Elegí <strong>«Agregar a inicio»</strong> y confirmá con <strong>Agregar</strong>.</li>
+    </ol>
+  );
+}
+
+/** Aviso (una vez, se puede cerrar) para instalar el sistema como app en el celular. */
+function InstallBanner() {
+  const { canOffer, platform, hasPrompt, install } = useInstall();
+  const [hidden, setHidden] = useState(true);
+  useEffect(() => {
+    try {
+      setHidden(localStorage.getItem("balneario-instalar-oculto") === "1");
+    } catch {
+      setHidden(false);
+    }
+  }, []);
+  if (!canOffer || hidden) return null;
+  function close() {
+    setHidden(true);
+    try {
+      localStorage.setItem("balneario-instalar-oculto", "1");
+    } catch {
+      /* sin almacenamiento: se vuelve a mostrar la próxima vez */
+    }
+  }
+  return (
+    <div className="mx-3 mt-3 rounded-xl border border-accent/30 bg-accent-soft p-3 text-sm md:hidden print:hidden">
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <strong>Instalá el sistema como app</strong>
+          <p className="text-muted">Se abre desde la pantalla de inicio, a pantalla completa.</p>
+        </div>
+        <button onClick={close} className="rounded p-1 text-muted" aria-label="Cerrar aviso">✕</button>
+      </div>
+      <div className="mt-2">
+        {platform === "ios" && !hasPrompt ? <IosSteps /> : (
+          <button onClick={async () => { if (await install()) close(); }} className="rounded-lg bg-accent px-3 py-2 font-medium text-accent-fg">Instalar</button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** Opción "Instalar app" dentro del menú Más. */
+function InstallButton({ onDone }: { onDone: () => void }) {
+  const { canOffer, platform, hasPrompt, install } = useInstall();
+  const [showIos, setShowIos] = useState(false);
+  if (!canOffer) return null;
+  return (
+    <div>
+      <button
+        onClick={async () => {
+          if (platform === "ios" && !hasPrompt) setShowIos((v) => !v);
+          else if (await install()) onDone();
+        }}
+        className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left hover:bg-surface-2"
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5" aria-hidden><path d="M12 4v11M7 10l5 5 5-5M5 20h14" /></svg>
+        Instalar como app
+      </button>
+      {showIos && <div className="px-3 pb-2"><IosSteps /></div>}
     </div>
   );
 }

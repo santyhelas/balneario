@@ -43,6 +43,11 @@ export function useWorkspace(): Ctx {
 export function applyTheme(t: ThemePref) {
   const dark = t === "oscuro" || (t === "sistema" && window.matchMedia("(prefers-color-scheme: dark)").matches);
   document.documentElement.setAttribute("data-theme", dark ? "dark" : "light");
+  // Color de la barra del sistema en el celular, acorde al tema elegido.
+  document.querySelectorAll('meta[name="theme-color"]').forEach((m) => {
+    m.removeAttribute("media");
+    m.setAttribute("content", dark ? "#162027" : "#ffffff");
+  });
   try {
     localStorage.setItem("balneario-tema", t);
   } catch {

@@ -617,6 +617,24 @@ export default function NuevaReservaPage() {
         </div>
       </div>
 
+      {/* Celular: barra fija con el total y el botón de confirmar */}
+      <div className="bottom-tabbar fixed inset-x-0 z-20 border-t border-line bg-surface/95 px-4 py-2 backdrop-blur xl:hidden print:hidden">
+        <div className="mx-auto flex max-w-3xl items-center justify-between gap-3">
+          <div className="min-w-0 text-sm">
+            <div className="text-xs text-muted">{courtesy ? "Cortesía" : "Total"}</div>
+            <div className="tabular truncate text-base font-semibold">
+              {quoteLoading ? "Calculando…" : quote?.ok ? formatMoney(quote.total) : "—"}
+              {!courtesy && quote?.ok && debt !== null && debt > 0 && <span className="ml-2 text-xs font-normal text-danger">debe {formatMoney(debt)}</span>}
+            </div>
+            {!canSave && problems[0] && <div className="truncate text-xs text-muted">{problems[0]}</div>}
+          </div>
+          <Button className="shrink-0 py-3" disabled={!canSave} onClick={() => { setSaveError(null); setConfirmOpen(true); }}>
+            Confirmar
+          </Button>
+        </div>
+      </div>
+      <div className="h-20 xl:hidden" aria-hidden />
+
       <CustomerForm
         open={newCustOpen}
         customer={null}

@@ -125,3 +125,39 @@ textarea::placeholder {
 .tabular {
   font-variant-numeric: tabular-nums;
 }
+
+/* ---------------- Celular (iPhone y Android) ---------------- */
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+body {
+  -webkit-tap-highlight-color: transparent;
+}
+button,
+a,
+label {
+  touch-action: manipulation; /* sin demora de doble toque */
+}
+
+/* Márgenes para la muesca y la barra de gestos (app instalada a pantalla completa). */
+.pt-safe-2 { padding-top: calc(0.5rem + env(safe-area-inset-top)); }
+.pb-safe-5 { padding-bottom: calc(1.25rem + env(safe-area-inset-bottom)); }
+.pb-safe-1 { padding-bottom: calc(0.25rem + env(safe-area-inset-bottom)); }
+.pb-tabbar { padding-bottom: calc(5.5rem + env(safe-area-inset-bottom)); }
+.bottom-tabbar { bottom: calc(4.25rem + env(safe-area-inset-bottom)); }
+@media (min-width: 768px) {
+  .pb-tabbar { padding-bottom: 1.5rem; }
+  .bottom-tabbar { bottom: 0; }
+}
+.px-safe {
+  padding-left: max(1rem, env(safe-area-inset-left));
+  padding-right: max(1rem, env(safe-area-inset-right));
+}
+@media (min-width: 768px) {
+  .px-safe { padding-left: 1.5rem; padding-right: 1.5rem; }
+}
+
+@media print {
+  .pb-tabbar { padding-bottom: 0; }
+}

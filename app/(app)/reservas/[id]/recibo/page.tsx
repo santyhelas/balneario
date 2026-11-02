@@ -1,5 +1,6 @@
 "use client";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 import { getSupabase } from "@/lib/supabase/client";
 import { unwrap, useLoader } from "@/lib/data";
 import { formatDate, formatDateTime, formatMoney, inclusiveDays } from "@/lib/format";
@@ -14,6 +15,9 @@ type WsInfo = { name: string; legal_id: string | null; phone: string | null; add
 export default function ReciboPage() {
   const { id } = useParams<{ id: string }>();
   const { ws } = useWorkspace();
+  const router = useRouter();
+  const [canShare, setCanShare] = useState(false);
+  useEffect(() => setCanShare(typeof navigator !== "undefined" && typeof navigator.share === "function"), []);
   const q = useLoader(async () => {
     const full = await loadReservation(id);
     const info = unwrap(await getSupabase().from("workspaces").select("name, legal_id, phone, address").eq("id", ws.id).single()) as WsInfo;
@@ -27,11 +31,23 @@ export default function ReciboPage() {
 
   return (
     <div className="mx-auto max-w-2xl">
-      <div className="mb-4 flex justify-end gap-2 print:hidden">
-        <Button variant="secondary" onClick={() => window.close()}>Cerrar</Button>
-        <Button onClick={() => window.print()}>Imprimir / Guardar PDF</Button>
+      <div className="mb-4 flex flex-wrap justify-end gap-2 print:hidden">
+        <Button variant="secondary" onClick={() => router.back()}>Volver</Button>
+        {canShare && (
+          <Button variant="secondary" onClick={() => {
+            const text = [
+              `${info.name} · Reserva #${r.number}`,
+              `${r.customers.first_name} ${r.customers.last_name}`,
+              `${segments.map((x) => `${x.spaces.kind === "carpa" ? "Carpa" : "Sombrilla"} ${x.spaces.code}`).filter((v, i, a) => a.indexOf(v) === i).join(" → ")}`,
+              `Del ${formatDate(r.start_date)} al ${formatDate(r.end_date)}`,
+              `Total ${formatMoney(r.total_amount)} · Abonado ${formatMoney(balance.paid_amount)} · Saldo ${formatMoney(balance.due_amount)}`,
+            ].join("\n");
+            navigator.share({ title: `Reserva #${r.number}`, text }).catch(() => { /* cancelado */ });
+          }}>Compartir</Button>
+        )}
+        <Button onClick={() => window.print()}>Imprimir / PDF</Button>
       </div>
-      <article className="rounded-xl border border-line bg-white p-8 text-[#111] print:border-0 print:p-0">
+      <article className="rounded-xl border border-line bg-white p-5 text-[#111] sm:p-8 print:border-0 print:p-0">
         <header className="mb-6 flex items-start justify-between gap-4 border-b border-neutral-300 pb-4">
           <div>
             <h1 className="text-xl font-bold">{info.name}</h1>
@@ -42,12 +58,12 @@ export default function ReciboPage() {
             <div className="text-neutral-600">Emitido {formatDateTime(new Date().toISOString(), ws.timezone)}</div>
           </div>
         </header>
-        <section className="mb-4 grid grid-cols-2 gap-2 text-sm">
+        <section className="mb-4 grid gap-2 text-sm sm:grid-cols-2">
           <div><span className="text-neutral-600">Cliente: </span><strong>{r.customers.first_name} {r.customers.last_name}</strong></div>
           <div><span className="text-neutral-600">Teléfono: </span>{r.customers.phone ?? "—"}</div>
           <div><span className="text-neutral-600">Estadía: </span>{formatDate(r.start_date)} al {formatDate(r.end_date)} ({inclusiveDays(r.start_date, r.end_date)} días)</div>
           <div><span className="text-neutral-600">Estado: </span>{r.status === "cancelada" ? "Cancelada" : r.is_courtesy ? "Cortesía" : "Confirmada"}</div>
-          <div className="col-span-2"><span className="text-neutral-600">Ubicación: </span>{segments.map((s) => `${s.spaces.kind === "carpa" ? "Carpa" : "Sombrilla"} ${s.spaces.code} (${formatDate(s.start_date)} al ${formatDate(s.end_date)})`).join(" · ") || "—"}</div>
+          <div className="sm:col-span-2"><span className="text-neutral-600">Ubicación: </span>{segments.map((s) => `${s.spaces.kind === "carpa" ? "Carpa" : "Sombrilla"} ${s.spaces.code} (${formatDate(s.start_date)} al ${formatDate(s.end_date)})`).join(" · ") || "—"}</div>
         </section>
         <table className="mb-4 w-full text-sm">
           <tbody>

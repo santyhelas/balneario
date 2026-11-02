@@ -63,14 +63,34 @@ export function BeachMap({
   const [local, setLocal] = useState<Record<string, { x: number; y: number }>>({});
   const [saving, setSaving] = useState<string | null>(null);
   const drag = useRef<
-    | { type: "pan"; startX: number; startY: number; view: View; moved: boolean }
+    | { type: "pan"; startX: number; startY: number; view: View; moved: boolean; tapId?: string }
     | { type: "space"; id: string; dx: number; dy: number; startX: number; startY: number; moved: boolean }
+    | { type: "pinch"; lastDist: number; lastMid: { x: number; y: number }; view: View }
     | null
   >(null);
+  // Dedos apoyados en la pantalla (para el zoom con dos dedos).
+  const pointers = useRef(new Map<number, { x: number; y: number }>());
+
+  /** Vista inicial: en pantallas chicas arranca acercada sobre la playa para que las carpas se puedan tocar. */
+  const initialView = useCallback((): View => {
+    const rect = svgRef.current?.getBoundingClientRect();
+    if (rect && rect.width > 0 && rect.width < 640) {
+      const w = Math.min(width, 1250);
+      const h = (w * rect.height) / rect.width;
+      return { x: (width - w) / 2, y: Math.max(0, Math.min(height - h, height * 0.32)), w, h };
+    }
+    return { x: 0, y: 0, w: width, h: height };
+  }, [width, height]);
 
   useEffect(() => {
-    setView({ x: 0, y: 0, w: width, h: height });
-  }, [width, height]);
+    setView(initialView());
+  }, [initialView]);
+
+  /** Unidades del mapa por píxel de pantalla (igual en ambos ejes: el plano no se deforma). */
+  function unitsPerPx(v: View) {
+    const rect = svgRef.current!.getBoundingClientRect();
+    return Math.max(v.w / rect.width, v.h / rect.height);
+  }
 
   // Cuando la base ya confirma la posición nueva, se descarta la copia local.
   useEffect(() => {
@@ -107,7 +127,7 @@ export function BeachMap({
           delete next[d.id];
           return next;
         });
-      } else {
+      } else if (d.type === "pan") {
         setView(d.view);
       }
     };
@@ -147,6 +167,33 @@ export function BeachMap({
     [width],
   );
 
+  function pinchInfo() {
+    const [a, b] = [...pointers.current.values()];
+    return { dist: Math.hypot(a.x - b.x, a.y - b.y), mid: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 } };
+  }
+
+  // Se registra cada dedo antes que los demás manejadores; con dos dedos empieza el zoom.
+  function onPointerDownCapture(e: RPointerEvent<SVGSVGElement>) {
+    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pointers.current.size === 2) {
+      e.stopPropagation();
+      svgRef.current!.setPointerCapture(e.pointerId);
+      const d = drag.current;
+      if (d?.type === "space") {
+        // Un arrastre de carpa interrumpido por el zoom: vuelve a su lugar.
+        setLocal((prev) => {
+          const next = { ...prev };
+          delete next[d.id];
+          return next;
+        });
+      }
+      const { dist, mid } = pinchInfo();
+      drag.current = { type: "pinch", lastDist: dist, lastMid: mid, view };
+    } else if (pointers.current.size > 2) {
+      e.stopPropagation();
+    }
+  }
+
   function onBgPointerDown(e: RPointerEvent<SVGRectElement>) {
     if (e.button !== 0) return;
     (e.currentTarget.ownerSVGElement ?? svgRef.current)!.setPointerCapture(e.pointerId);
@@ -157,22 +204,44 @@ export function BeachMap({
     if (e.button !== 0) return;
     e.stopPropagation();
     svgRef.current!.setPointerCapture(e.pointerId);
+    if (!editMode) {
+      // Fuera del modo edición, arrastrar sobre una carpa mueve el mapa; tocarla la selecciona.
+      drag.current = { type: "pan", startX: e.clientX, startY: e.clientY, view, moved: false, tapId: s.space_id };
+      return;
+    }
     const pos = local[s.space_id] ?? { x: Number(s.x), y: Number(s.y) };
     const p = toSvg(e.clientX, e.clientY);
     drag.current = { type: "space", id: s.space_id, dx: p.x - pos.x, dy: p.y - pos.y, startX: e.clientX, startY: e.clientY, moved: false };
   }
 
   function onPointerMove(e: RPointerEvent<SVGSVGElement>) {
+    if (pointers.current.has(e.pointerId)) pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
     const d = drag.current;
     if (!d) return;
+    if (d.type === "pinch") {
+      if (pointers.current.size < 2) return;
+      const { dist, mid } = pinchInfo();
+      if (dist < 10) return;
+      const factor = d.lastDist / dist;
+      const upp = unitsPerPx(view);
+      const dx = (mid.x - d.lastMid.x) * upp;
+      const dy = (mid.y - d.lastMid.y) * upp;
+      const c = toSvg(mid.x, mid.y);
+      setView((v) => {
+        const w = Math.min(width * 1.5, Math.max(MIN_ZOOM_W, v.w * factor));
+        const h = (w / v.w) * v.h;
+        return { x: c.x - ((c.x - v.x) * w) / v.w - dx, y: c.y - ((c.y - v.y) * h) / v.h - dy, w, h };
+      });
+      d.lastDist = dist;
+      d.lastMid = mid;
+      return;
+    }
     const dist = Math.hypot(e.clientX - d.startX, e.clientY - d.startY);
-    if (dist > 4) d.moved = true;
+    if (dist > (e.pointerType === "touch" ? 8 : 4)) d.moved = true;
     if (!d.moved) return;
     if (d.type === "pan") {
-      const rect = svgRef.current!.getBoundingClientRect();
-      const sx = d.view.w / rect.width;
-      const sy = d.view.h / rect.height;
-      setView({ ...d.view, x: d.view.x - (e.clientX - d.startX) * sx, y: d.view.y - (e.clientY - d.startY) * sy });
+      const upp = unitsPerPx(d.view);
+      setView({ ...d.view, x: d.view.x - (e.clientX - d.startX) * upp, y: d.view.y - (e.clientY - d.startY) * upp });
     } else if (editMode) {
       const s = spaces.find((sp) => sp.space_id === d.id);
       if (!s) return;
@@ -186,12 +255,18 @@ export function BeachMap({
     }
   }
 
-  async function onPointerUp() {
+  async function onPointerUp(e: RPointerEvent<SVGSVGElement>) {
+    pointers.current.delete(e.pointerId);
     const d = drag.current;
+    if (d?.type === "pinch") {
+      // Termina el zoom cuando se levantan todos los dedos (sin seleccionar nada).
+      if (pointers.current.size === 0) drag.current = null;
+      return;
+    }
     drag.current = null;
     if (!d) return;
     if (d.type === "pan") {
-      if (!d.moved) onSelect(null);
+      if (!d.moved) onSelect(d.tapId ?? null);
       return;
     }
     if (!d.moved || !editMode) {
@@ -232,11 +307,13 @@ export function BeachMap({
       <svg
         ref={svgRef}
         viewBox={`${view.x} ${view.y} ${view.w} ${view.h}`}
-        className={cx("block h-[62vh] min-h-[360px] w-full select-none touch-none", drag.current?.type === "pan" ? "cursor-grabbing" : "cursor-grab")}
+        className={cx("block h-[58dvh] min-h-[340px] w-full select-none touch-none sm:h-[62vh]", drag.current?.type === "pan" ? "cursor-grabbing" : "cursor-grab")}
         preserveAspectRatio="xMidYMid meet"
+        onPointerDownCapture={onPointerDownCapture}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
-        onPointerCancel={() => { drag.current = null; }}
+        onPointerCancel={(e) => { pointers.current.delete(e.pointerId); if (pointers.current.size === 0) drag.current = null; }}
+        onContextMenu={(e) => e.preventDefault()}
         role="img"
         aria-label="Mapa del balneario"
       >
@@ -335,7 +412,8 @@ export function BeachMap({
         <MapBtn label="Ver todo" onClick={() => setView({ x: 0, y: 0, w: width, h: height })}>⤢</MapBtn>
       </div>
       <p className="pointer-events-none absolute bottom-2 left-2 rounded bg-surface/90 px-2 py-1 text-[11px] text-muted">
-        Arrastrá el fondo para mover · Ctrl + rueda para zoom{editMode ? " · Arrastrá una carpa para ubicarla · Esc cancela" : ""}
+        <span className="hidden sm:inline">Arrastrá para mover · Ctrl + rueda para zoom{editMode ? " · Arrastrá una carpa para ubicarla · Esc cancela" : ""}</span>
+        <span className="sm:hidden">Un dedo: mover · Dos dedos: zoom{editMode ? " · Arrastrá una carpa para ubicarla" : ""}</span>
       </p>
     </div>
   );
@@ -348,7 +426,7 @@ function MapBtn({ label, onClick, children }: { label: string; onClick: () => vo
       onClick={onClick}
       aria-label={label}
       title={label}
-      className="h-9 w-9 rounded-lg border border-line bg-surface text-lg font-semibold text-fg shadow-sm hover:bg-surface-2"
+      className="h-10 w-10 rounded-lg border border-line bg-surface text-lg font-semibold text-fg shadow-sm hover:bg-surface-2"
     >
       {children}
     </button>

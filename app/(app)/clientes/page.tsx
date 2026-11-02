@@ -33,6 +33,12 @@ export default function ClientesPage() {
     return () => clearTimeout(t);
   }, [q]);
 
+  // En el celular la ficha queda debajo de la lista: bajar hasta ella al elegir un cliente.
+  useEffect(() => {
+    if (!selected || window.innerWidth >= 1024) return;
+    requestAnimationFrame(() => document.getElementById("ficha-cliente")?.scrollIntoView({ behavior: "smooth", block: "start" }));
+  }, [selected]);
+
   const list = useLoader(() => searchCustomers(ws.id, debounced), [ws.id, debounced], 60_000);
 
   return (
@@ -57,7 +63,7 @@ export default function ClientesPage() {
                 <li key={c.id}>
                   <button
                     onClick={() => setSelected(c)}
-                    className={`flex w-full items-center justify-between gap-2 rounded-lg px-2 py-2 text-left text-sm hover:bg-surface-2 ${selected?.id === c.id ? "bg-accent-soft" : ""}`}
+                    className={`flex w-full items-center justify-between gap-2 rounded-lg px-2 py-2.5 text-left text-sm hover:bg-surface-2 ${selected?.id === c.id ? "bg-accent-soft" : ""}`}
                   >
                     <span className="font-medium">{c.last_name ? `${c.last_name}, ` : ""}{c.first_name}</span>
                     <span className="text-xs text-muted">{c.phone ?? ""}</span>
@@ -69,6 +75,7 @@ export default function ClientesPage() {
           {list.data && list.data.length === 50 && <p className="mt-2 text-xs text-muted">Se muestran los primeros 50. Refiná la búsqueda para ver otros.</p>}
         </Card>
 
+        <div id="ficha-cliente" className="scroll-mt-20">
         {selected ? (
           <CustomerDetail
             key={selected.id}
@@ -76,8 +83,9 @@ export default function ClientesPage() {
             onEdit={() => { setEditing(selected); setFormOpen(true); }}
           />
         ) : (
-          <Card><EmptyState>Elegí un cliente para ver sus datos e historial.</EmptyState></Card>
+          <Card className="hidden lg:block"><EmptyState>Elegí un cliente para ver sus datos e historial.</EmptyState></Card>
         )}
+        </div>
       </div>
 
       <CustomerForm
@@ -118,7 +126,7 @@ function CustomerDetail({ customer, onEdit }: { customer: Customer; onEdit: () =
       actions={<Button variant="secondary" onClick={onEdit}>Editar</Button>}
     >
       <dl className="mb-4 grid grid-cols-2 gap-2 text-sm">
-        <div><dt className="text-xs text-muted">Teléfono</dt><dd>{customer.phone ?? "—"}</dd></div>
+        <div><dt className="text-xs text-muted">Teléfono</dt><dd>{customer.phone ? <a className="text-accent underline" href={`tel:${customer.phone.replace(/[^\d+]/g, "")}`}>{customer.phone}</a> : "—"}</dd></div>
         <div><dt className="text-xs text-muted">Correo</dt><dd className="truncate">{customer.email ?? "—"}</dd></div>
         <div><dt className="text-xs text-muted">Localidad</dt><dd>{customer.locality ?? "—"}</dd></div>
         {customer.other_contact && <div className="col-span-2"><dt className="text-xs text-muted">Otro contacto</dt><dd>{customer.other_contact}</dd></div>}
