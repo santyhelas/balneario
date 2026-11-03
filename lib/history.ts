@@ -14,7 +14,7 @@ export type AuditRow = {
   at: string;
 };
 
-export type Category = "reservas" | "clientes" | "tarifas" | "caja" | "gastos" | "espacios" | "mapa" | "convenios" | "configuracion";
+export type Category = "reservas" | "clientes" | "tarifas" | "caja" | "gastos" | "espacios" | "mapa" | "convenios" | "notas" | "configuracion";
 
 export const CATEGORY_LABEL: Record<Category | "cobros", string> = {
   reservas: "Reservas",
@@ -26,6 +26,7 @@ export const CATEGORY_LABEL: Record<Category | "cobros", string> = {
   gastos: "Gastos",
   espacios: "Carpas y sombrillas",
   mapa: "Plano",
+  notas: "Notas del día",
   configuracion: "Configuración",
 };
 
@@ -39,6 +40,7 @@ export const CATEGORY_TABLES: Record<Category, string[]> = {
   gastos: ["expenses"],
   espacios: ["spaces", "maintenance_blocks"],
   mapa: ["map_features"],
+  notas: ["day_notes"],
   configuracion: ["workspaces"],
 };
 
@@ -212,6 +214,16 @@ export function describeAudit(row: AuditRow, l: Lookups): Described {
           details: [`${money(n.amount)} · ${str(n.method)}`, n.supplier ? `Proveedor: ${n.supplier}` : ""].filter(Boolean) };
       }
       if (!o.voided_at && n.voided_at) return { category: "gastos", title: `Gasto anulado: ${str(d.concept)}`, details: [`${money(d.amount)}`, `Motivo: ${str(n.void_reason)}`] };
+      return null;
+    }
+    case "day_notes": {
+      const t = `"${str(d.text)}"`;
+      if (row.action === "alta") return { category: "notas", title: `Nota para el ${date(n.day)}: ${t}`, details: [] };
+      if (o.active === true && n.active === false) return { category: "notas", title: `Nota quitada: ${t}`, details: [] };
+      if (!o.done && n.done) return { category: "notas", title: `Nota hecha: ${t}`, details: [] };
+      if (o.done && !n.done) return { category: "notas", title: `Nota marcada como pendiente: ${t}`, details: [] };
+      if (o.text !== n.text) return { category: "notas", title: "Nota modificada", details: [`${str(o.text)} → ${str(n.text)}`] };
+      if (o.day !== n.day) return { category: "notas", title: `Nota pasada al ${date(n.day)}: ${t}`, details: [] };
       return null;
     }
     case "workspaces": {

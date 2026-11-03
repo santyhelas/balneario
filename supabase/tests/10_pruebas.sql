@@ -641,6 +641,21 @@ update public.user_preferences set notices_read = '{"day":"2026-11-02","ids":["c
 select t.ok((select notices_read -> 'ids' ->> 0 from public.user_preferences where user_id = auth.uid()) = 'caja', 'Avisos: se guardan los avisos leídos del usuario');
 select t.throws($$update public.user_preferences set notices_read = '[1]' where user_id = auth.uid()$$, 'check', 'Avisos: formato inválido no se acepta');
 
+-- 21. Notas del día
+set role authenticated;
+select set_config('request.jwt.claims', '{"sub":"11111111-1111-1111-1111-111111111111","email":"duenio@test.com"}', false);
+insert into public.day_notes (workspace_id, day, text) values (t.uid('ws'), current_date, 'Viene el proveedor de hielo');
+select t.ok((select count(*) from public.day_notes where text like 'Viene%') = 1, 'Notas: se crea una nota del día');
+update public.day_notes set done = true, done_at = now(), done_by = auth.uid(), version = version + 1 where text like 'Viene%';
+select t.ok((select done from public.day_notes where text like 'Viene%'), 'Notas: se tilda como hecha');
+select t.throws($$update public.day_notes set text = 'x', version = 1 where text like 'Viene%'$$, 'otro dispositivo', 'Notas: no se pisa un cambio hecho desde otro dispositivo');
+select t.throws($$delete from public.day_notes$$, 'denied', 'Notas: no se borran (se ocultan)');
+select t.throws(format($$insert into public.day_notes (workspace_id, day, text) values (%L, current_date, '   ')$$, t.get('ws')), 'check', 'Notas: no se acepta una nota vacía');
+select t.ok((select count(*) from public.audit_log where table_name = 'day_notes') >= 2, 'Notas: quedan en el historial');
+select set_config('request.jwt.claims', '{"sub":"22222222-2222-2222-2222-222222222222","email":"extranio@test.com"}', false);
+select t.ok((select count(*) from public.day_notes) = 0, 'Notas: un extraño no las ve');
+select set_config('request.jwt.claims', '{"sub":"11111111-1111-1111-1111-111111111111","email":"duenio@test.com"}', false);
+
 reset role;
 \o
 -- Resultado ----------------------------------------------------------
