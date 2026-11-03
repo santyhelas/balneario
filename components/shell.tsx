@@ -7,6 +7,7 @@ import { useWorkspace, type ThemePref, type Workspace } from "@/components/works
 import { useStatus, type Notice } from "@/components/status";
 import { useUndo } from "@/components/undo";
 import { ConfirmDialog, cx } from "@/components/ui";
+import { DayNotes, usePendingNotes } from "@/components/day-notes";
 
 type NavItem = { href: string; label: string; icon: string };
 
@@ -208,6 +209,7 @@ export function Shell({ children }: { children: ReactNode }) {
           </div>
           <SyncChip />
           <CashChip />
+          <NotesButton />
           <Link href="/reservas/nueva" className="flex items-center gap-1.5 rounded-lg bg-accent px-3 py-2 text-sm font-semibold text-accent-fg hover:opacity-90" title="Nueva reserva">
             <Icon d="M12 5v14M5 12h14" className="h-4 w-4" /><span className="hidden xl:inline">Nueva reserva</span>
           </Link>
@@ -245,6 +247,7 @@ export function Shell({ children }: { children: ReactNode }) {
           </Link>
           <div className="flex items-center">
             <button onClick={cycleTheme} className="rounded-lg p-2" aria-label={`Tema: ${THEME_LABEL[theme]}`}><Icon d={THEME_ICON[theme]} /></button>
+            <NotesButton compact />
             <NoticesBell notices={status.notices} count={alerts} />
           </div>
         </header>
@@ -359,6 +362,39 @@ function SyncChip() {
       <span className={cx("h-2 w-2 rounded-full", ok ? "bg-ok" : "bg-danger", s.loading && "animate-pulse")} />
       {label}
     </button>
+  );
+}
+
+/** Botón amarillo de "Notas del día": abre las notas del personal en un panel. */
+function NotesButton({ compact = false }: { compact?: boolean }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const pathname = usePathname();
+  const pending = usePendingNotes();
+  useEffect(() => setOpen(false), [pathname]);
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => { document.removeEventListener("mousedown", onDown); document.removeEventListener("keydown", onKey); };
+  }, [open]);
+  return (
+    <div className="relative" ref={ref}>
+      <button onClick={() => setOpen((v) => !v)} aria-expanded={open} aria-label={`Notas del día (${pending} pendientes)`} title="Notas del día"
+        className={cx("relative flex items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-100 text-sm font-semibold text-amber-900 hover:bg-amber-200 dark:border-amber-700/60 dark:bg-amber-900/40 dark:text-amber-100 dark:hover:bg-amber-900/60",
+          compact ? "p-2" : "px-3 py-2")}>
+        <Icon d="M5 3h14v18H5zM9 7h6M9 11h6M9 15h4" className="h-4 w-4" />
+        {!compact && <span>Notas</span>}
+        {pending > 0 && <span className={cx("rounded-full bg-amber-500 px-1.5 text-[10px] font-bold leading-4 text-white", compact && "absolute -right-1 -top-1")}>{pending}</span>}
+      </button>
+      {open && (
+        <div className="fixed inset-x-3 top-16 z-50 max-h-[75dvh] overflow-y-auto rounded-2xl shadow-xl md:absolute md:inset-x-auto md:left-0 md:top-12 md:w-[26rem]">
+          <DayNotes />
+        </div>
+      )}
+    </div>
   );
 }
 

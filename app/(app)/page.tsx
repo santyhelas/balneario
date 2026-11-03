@@ -5,7 +5,6 @@ import { getSupabase } from "@/lib/supabase/client";
 import { formatDate, formatMoney } from "@/lib/format";
 import { useWorkspace } from "@/components/workspace";
 import { useStatus, type ResItem, type Notice } from "@/components/status";
-import { DayNotes } from "@/components/day-notes";
 import { Icon, NAV } from "@/components/shell";
 import { Alert, Button, Spinner, cx } from "@/components/ui";
 import { CloseCashModal, OpenCashModal, type CashSummary } from "@/components/cash";
@@ -154,8 +153,6 @@ export default function DashboardPage() {
           <NoticeList notices={st.notices.filter((n) => n.tone !== "info")} />
         </section>
       </div>
-
-      <DayNotes />
 
       <div className="grid gap-4 lg:grid-cols-2">
         <ResCard title={`Inician hoy (${data.ingresan_hoy.length})`} tone="accent" items={data.ingresan_hoy} empty="No hay ingresos previstos para hoy." right={formatDate(data.fecha)} />

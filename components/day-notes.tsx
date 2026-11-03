@@ -1,5 +1,5 @@
 "use client";
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { getSupabase } from "@/lib/supabase/client";
 import { unwrap, useLoader } from "@/lib/data";
 import { friendlyError } from "@/lib/errors";
@@ -47,6 +47,7 @@ export function DayNotes() {
     if (err) return setError(friendlyError(err));
     setText("");
     q.reload();
+    window.dispatchEvent(new Event("notas-cambiaron"));
   }
 
   async function update(n: Note, patch: Partial<Note> & Record<string, unknown>) {
@@ -55,13 +56,14 @@ export function DayNotes() {
     if (err) setError(friendlyError(err));
     else if (!data?.length) setError("No se pudo guardar. Recargá la página.");
     q.reload();
+    window.dispatchEvent(new Event("notas-cambiaron"));
   }
 
   const toggle = (n: Note) => update(n, n.done ? { done: false, done_at: null, done_by: null } : { done: true, done_at: new Date().toISOString() });
   const label = day === today ? "Hoy" : day === addDays(today, 1) ? "Mañana" : formatDate(day);
 
   return (
-    <section className="rounded-2xl border border-line bg-surface p-4">
+    <section className="rounded-2xl border border-amber-300 bg-amber-50 p-4 dark:border-amber-700/60 dark:bg-surface">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-xs font-bold uppercase tracking-widest">Notas del día · {label}</h2>
         <div className="flex items-center gap-1">
@@ -123,4 +125,21 @@ function NoteRow({ n, from, onToggle, onRemove, onMoveToday }: { n: Note; from?:
       <button type="button" onClick={onRemove} className="shrink-0 text-xs text-muted hover:text-danger" aria-label="Quitar nota" title="Quitar">Quitar</button>
     </li>
   );
+}
+
+/** Cantidad de notas de hoy sin tildar (para el botón de arriba). Se actualiza cada minuto. */
+export function usePendingNotes(): number {
+  const { ws } = useWorkspace();
+  const today = todayISO(ws.timezone);
+  const q = useLoader<number>(async () => {
+    const { count, error } = await getSupabase().from("day_notes").select("id", { count: "exact", head: true })
+      .eq("workspace_id", ws.id).eq("active", true).eq("done", false).lte("day", today).gte("day", addDays(today, -14));
+    return error ? 0 : count ?? 0;
+  }, [ws.id, today], 60_000);
+  const { reload } = q;
+  useEffect(() => {
+    window.addEventListener("notas-cambiaron", reload);
+    return () => window.removeEventListener("notas-cambiaron", reload);
+  }, [reload]);
+  return q.data ?? 0;
 }
