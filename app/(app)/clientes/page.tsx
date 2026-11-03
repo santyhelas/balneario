@@ -128,7 +128,7 @@ function CustomerDetail({ customer, onEdit }: { customer: Customer; onEdit: () =
       <dl className="mb-4 grid grid-cols-2 gap-2 text-sm">
         <div><dt className="text-xs text-muted">Teléfono</dt><dd>{customer.phone ? <a className="text-accent underline" href={`tel:${customer.phone.replace(/[^\d+]/g, "")}`}>{customer.phone}</a> : "—"}</dd></div>
         <div><dt className="text-xs text-muted">Correo</dt><dd className="truncate">{customer.email ?? "—"}</dd></div>
-        <div><dt className="text-xs text-muted">Localidad</dt><dd>{customer.locality ?? "—"}</dd></div>
+        {customer.locality && <div><dt className="text-xs text-muted">Localidad</dt><dd>{customer.locality}</dd></div>}
         {customer.other_contact && <div className="col-span-2"><dt className="text-xs text-muted">Otro contacto</dt><dd>{customer.other_contact}</dd></div>}
         {customer.notes && <div className="col-span-2"><dt className="text-xs text-muted">Observaciones</dt><dd className="whitespace-pre-wrap">{customer.notes}</dd></div>}
       </dl>

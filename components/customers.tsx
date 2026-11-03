@@ -149,10 +149,9 @@ export function CustomerForm({
           <TextField label="Apellido" maxLength={80} value={last} onChange={(e) => { setLast(e.target.value); setConfirmedDup(false); setSimilar([]); }} />
         </div>
         <PhoneInput value={phoneParts} onChange={(p) => { setPhoneParts(p); setConfirmedDup(false); setSimilar([]); }} />
-        <div className="grid grid-cols-2 gap-3">
-          <TextField label="Correo (opcional)" type="email" maxLength={150} value={email} onChange={(e) => { setEmail(e.target.value); setConfirmedDup(false); setSimilar([]); }} hint="Se verifica que exista el dominio." />
-          <TextField label="Localidad (opcional)" maxLength={80} value={locality} onChange={(e) => setLocality(e.target.value)} />
-        </div>
+        {/* La localidad ya no se pide (se conserva la de clientes anteriores). */}
+        <TextField label="Correo (opcional)" type="email" maxLength={150} value={email} onChange={(e) => { setEmail(e.target.value); setConfirmedDup(false); setSimilar([]); }}
+          hint="Se puede dejar vacío. Si lo cargás, se revisa que esté bien escrito." />
         <TextField label="Otro contacto (opcional)" maxLength={200} value={other} onChange={(e) => setOther(e.target.value)} placeholder="Ej: Instagram, teléfono de un familiar" />
         <Field label="Observaciones"><Textarea maxLength={2000} value={notes} onChange={(e) => setNotes(e.target.value)} /></Field>
 
