@@ -25,11 +25,18 @@ export function PhoneInput({ value, onChange }: { value: PhoneParts; onChange: (
             </label>
           )}
         </div>
-        <div className="flex gap-2">
-          <Input inputMode="numeric" aria-label="Código de área" placeholder={ar ? "Área (ej: 11)" : "Área"} value={value.area}
-            onChange={(e) => set("area", e.target.value)} className="w-32" maxLength={6} />
-          <Input type="tel" inputMode="tel" aria-label="Número" placeholder={ar ? "Número (sin el 15)" : "Número"} value={value.number}
-            onChange={(e) => set("number", e.target.value)} className="flex-1" maxLength={20} />
+        {/* Cada campo va en su propia caja de ancho fijo: así el número tiene lugar para todos los dígitos. */}
+        <div className="grid grid-cols-[6.5rem_minmax(0,1fr)] gap-2">
+          <div>
+            <div className="mb-0.5 text-xs text-muted">Cód. de área</div>
+            <Input inputMode="numeric" aria-label="Código de área" placeholder={ar ? "Ej: 11" : "Área"} value={value.area}
+              onChange={(e) => set("area", e.target.value)} maxLength={6} />
+          </div>
+          <div>
+            <div className="mb-0.5 text-xs text-muted">Número{ar ? " (sin el 15)" : ""}</div>
+            <Input type="tel" inputMode="tel" aria-label="Número" placeholder={ar ? "Ej: 4555-4165" : "Número"} value={value.number}
+              onChange={(e) => set("number", e.target.value)} maxLength={20} />
+          </div>
         </div>
         {problem ? (
           <p className="text-xs text-warn">{problem}</p>
