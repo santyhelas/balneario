@@ -701,6 +701,41 @@ select t.throws(format($$select public.dashboard_summary(%L)$$, t.get('ws')), 'N
 select t.throws($$select public.create_workspace('Segundo')$$, 'ya pertenece', 'Multi: una cuenta crea un solo balneario');
 select t.throws($$select public.create_workspace('X', 0, 0)$$, 'Indicá cuántas', 'Multi: hay que tener al menos una carpa o sombrilla');
 
+-- 24. Restaurar una copia
+set role authenticated;
+select set_config('request.jwt.claims', '{"sub":"11111111-1111-1111-1111-111111111111","email":"duenio@test.com"}', false);
+select t.set('bk', (public.create_backup(t.uid('ws'), 'manual', 'Antes de probar') ->> 'backup_id'));
+select t.set('n_cust', (select count(*)::text from public.customers where workspace_id = t.uid('ws')));
+select t.set('n_pay', (select count(*)::text from public.payments where workspace_id = t.uid('ws')));
+select t.set('n_seg', (select count(*)::text from public.reservation_segments where workspace_id = t.uid('ws')));
+select t.set('n_mov', (select count(*)::text from public.cash_movements where workspace_id = t.uid('ws')));
+select t.set('n_audit', (select count(*)::text from public.audit_log where workspace_id = t.uid('ws')));
+insert into public.customers (workspace_id, first_name, last_name) values (t.uid('ws'), 'Cargado', 'Despues');
+select t.throws(format($$select public.restore_backup(%L, 'si')$$, t.get('bk')), 'RESTAURAR', 'Restaurar: pide escribir RESTAURAR');
+select t.set('rs', public.restore_backup(t.uid('bk'), 'RESTAURAR')::text);
+select t.ok((select count(*)::text from public.customers where workspace_id = t.uid('ws')) = t.get('n_cust'), 'Restaurar: los clientes vuelven a como estaban');
+select t.ok(not exists (select 1 from public.customers where first_name = 'Cargado'), 'Restaurar: lo cargado después de la copia no queda');
+select t.ok((select count(*)::text from public.payments where workspace_id = t.uid('ws')) = t.get('n_pay')
+        and (select count(*)::text from public.reservation_segments where workspace_id = t.uid('ws')) = t.get('n_seg')
+        and (select count(*)::text from public.cash_movements where workspace_id = t.uid('ws')) = t.get('n_mov'), 'Restaurar: pagos, tramos y movimientos de caja completos');
+select t.ok((select count(*) from public.audit_log where workspace_id = t.uid('ws'))::int > t.get('n_audit')::int, 'Restaurar: el historial no se borra');
+select t.ok(exists (select 1 from public.audit_log where workspace_id = t.uid('ws') and table_name = 'backups'), 'Restaurar: queda registrada la restauración');
+select t.ok(exists (select 1 from public.backups where id = (t.get('rs')::jsonb ->> 'copia_previa')::uuid), 'Restaurar: antes se guardó una copia del estado anterior');
+select t.ok((select count(*) from public.workspace_users(t.uid('ws'))) >= 1, 'Usuarios: la lista funciona con correos tipo varchar');
+select t.set('bk_old', (public.create_backup(t.uid('ws'), 'manual', 'Simula copia vieja') ->> 'backup_id'));
+reset role;
+update public.backups set data = jsonb_set(jsonb_set(data, '{spaces}', '[5, 7]'), '{map_features}', '[1]') where id = t.uid('bk_old');
+set role authenticated;
+select set_config('request.jwt.claims', '{"sub":"11111111-1111-1111-1111-111111111111","email":"duenio@test.com"}', false);
+select t.set('n_sp', (select count(*)::text from public.spaces where workspace_id = t.uid('ws')));
+select public.restore_backup(t.uid('bk_old'), 'RESTAURAR');
+select t.ok((select count(*)::text from public.spaces where workspace_id = t.uid('ws')) = t.get('n_sp')
+        and (select count(*) from public.reservation_segments where workspace_id = t.uid('ws'))::text = t.get('n_seg'), 'Restaurar: con una copia vieja las carpas y el plano quedan como están');
+select t.ok((select jsonb_typeof(data -> 'spaces' -> 0) from public.backups where id = t.uid('bk')) = 'object', 'Copias: ahora guardan bien las carpas (posición incluida)');
+select set_config('request.jwt.claims', '{"sub":"33333333-3333-3333-3333-333333333333","email":"operador@test.com"}', false);
+select t.throws(format($$select public.restore_backup(%L, 'RESTAURAR')$$, t.get('bk')), 'No tenés permiso', 'Restaurar: solo el propietario');
+select set_config('request.jwt.claims', '{"sub":"11111111-1111-1111-1111-111111111111","email":"duenio@test.com"}', false);
+
 reset role;
 \o
 -- Resultado ----------------------------------------------------------

@@ -41,7 +41,7 @@ export const CATEGORY_TABLES: Record<Category, string[]> = {
   espacios: ["spaces", "maintenance_blocks"],
   mapa: ["map_features"],
   notas: ["day_notes"],
-  configuracion: ["workspaces"],
+  configuracion: ["workspaces", "backups"],
 };
 
 export type Lookups = {
@@ -225,6 +225,9 @@ export function describeAudit(row: AuditRow, l: Lookups): Described {
       if (o.text !== n.text) return { category: "notas", title: "Nota modificada", details: [`${str(o.text)} → ${str(n.text)}`] };
       if (o.day !== n.day) return { category: "notas", title: `Nota pasada al ${date(n.day)}: ${t}`, details: [] };
       return null;
+    }
+    case "backups": {
+      return { category: "configuracion", title: "Se restauró una copia de seguridad", details: withReason([n.restaurada ? `Copia del ${date(n.restaurada)}` : ""].filter(Boolean)) };
     }
     case "workspaces": {
       if (changes.length === 0) return null;

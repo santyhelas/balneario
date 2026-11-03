@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { getSupabase } from "@/lib/supabase/client";
 import { unwrap, useLoader } from "@/lib/data";
 import { friendlyError } from "@/lib/errors";
@@ -7,7 +7,7 @@ import { formatDateTime } from "@/lib/format";
 import { downloadText } from "@/lib/csv";
 import { useWorkspace } from "@/components/workspace";
 import { PageHeader, SyncNotice } from "@/components/shell";
-import { Alert, Badge, Button, Card, EmptyState, Spinner, TextField } from "@/components/ui";
+import { Alert, Badge, Button, Card, EmptyState, Modal, Spinner, TextField } from "@/components/ui";
 
 type Backup = { id: string; kind: "manual" | "automatica"; note: string | null; counts: Record<string, number>; size_bytes: number; created_at: string; created_by_email: string | null };
 
@@ -17,7 +17,12 @@ const LABELS: Record<string, string> = {
 };
 
 export default function CopiasPage() {
-  const { ws, isAdmin } = useWorkspace();
+  const { ws, isAdmin, role } = useWorkspace();
+  const isOwner = role === "propietario";
+  const [restoring, setRestoring] = useState<Backup | null>(null);
+  const [confirmText, setConfirmText] = useState("");
+  const [restoreBusy, setRestoreBusy] = useState(false);
+  const [restoreError, setRestoreError] = useState<string | null>(null);
   const sb = getSupabase();
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
@@ -49,11 +54,26 @@ export default function CopiasPage() {
     downloadText(`copia_${ws.name.replace(/[^\w]+/g, "_")}_${stamp}.json`, JSON.stringify({ formato: "balneario-copia-v1", creada: b.created_at, ...(data as { data: object }).data }, null, 1), "application/json");
   }
 
+  async function restore() {
+    if (!restoring) return;
+    setRestoreBusy(true);
+    setRestoreError(null);
+    const { error } = await sb.rpc("restore_backup", { p_backup_id: restoring.id, p_confirm: confirmText });
+    setRestoreBusy(false);
+    if (error) return setRestoreError(friendlyError(error));
+    // Se recarga todo para que ninguna pantalla muestre datos anteriores a la restauración.
+    window.location.assign("/copias?restaurada=1");
+  }
+
+  const [justRestored, setJustRestored] = useState(false);
+  useEffect(() => setJustRestored(new URLSearchParams(window.location.search).get("restaurada") === "1"), []);
+
   return (
     <>
       <PageHeader title="Copias de seguridad" subtitle="Una foto completa de los datos: clientes, reservas, tramos, pagos, caja, gastos, tarifas, configuración e historial." />
       <SyncNotice error={q.error} stale={q.stale} updatedAt={q.updatedAt} onRetry={q.reload} />
       {msg && <Alert tone={msg.tone} className="mb-3">{msg.text}</Alert>}
+      {justRestored && !msg && <Alert tone="ok" className="mb-3">Copia restaurada. Antes de restaurar se guardó una copia del estado anterior (aparece arriba en la lista como "Automática antes de restaurar…"), por si querés volver atrás.</Alert>}
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)]">
         <div className="flex flex-col gap-4">
@@ -72,7 +92,11 @@ export default function CopiasPage() {
               <li><strong className="text-fg">Descargar:</strong> baja un archivo con todo, para guardarlo en tu computadora o en Google Drive.</li>
               <li>Las copias quedan en el servidor: no se pierden si se cambia o actualiza la página.</li>
             </ul>
-            <Alert tone="info" className="mt-3">La restauración de una copia se hace con asistencia, para no pisar datos por accidente. Si alguna vez la necesitás, pedila indicando la fecha de la copia.</Alert>
+            <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-muted">
+              <li><strong className="text-fg">Restaurar:</strong> vuelve los datos a como estaban en esa copia. Solo el propietario puede hacerlo.</li>
+              <li>Antes de restaurar se guarda una copia del estado actual, así siempre se puede volver atrás.</li>
+              <li>El historial de cambios, los usuarios y la configuración no se tocan.</li>
+            </ul>
           </Card>
         </div>
 
@@ -92,13 +116,38 @@ export default function CopiasPage() {
                       {" · "}{(b.size_bytes / 1024).toFixed(0)} KB{b.note ? ` · ${b.note}` : ""}{b.created_by_email && b.kind === "manual" ? ` · ${b.created_by_email}` : ""}
                     </div>
                   </div>
-                  <Button variant="secondary" onClick={() => download(b)} loading={downloading === b.id}>Descargar</Button>
+                  <div className="flex gap-2">
+                    <Button variant="secondary" onClick={() => download(b)} loading={downloading === b.id}>Descargar</Button>
+                    {isOwner && <Button variant="secondary" onClick={() => { setRestoring(b); setConfirmText(""); setRestoreError(null); }}>Restaurar</Button>}
+                  </div>
                 </li>
               ))}
             </ul>
           )}
         </Card>
       </div>
+
+      <Modal open={restoring !== null} onClose={() => !restoreBusy && setRestoring(null)} busy={restoreBusy} title="Restaurar copia de seguridad">
+        {restoring && (
+          <div className="flex flex-col gap-3 text-sm">
+            <Alert tone="warn">
+              Los datos del balneario van a volver a como estaban el <strong>{formatDateTime(restoring.created_at, ws.timezone)}</strong>.
+              Todo lo que se cargó después (reservas, cobros, gastos, clientes…) <strong>deja de verse</strong>.
+            </Alert>
+            <p className="text-muted">
+              Antes de restaurar se guarda automáticamente una copia de cómo está todo ahora, así podés volver atrás restaurando esa.
+              El historial de cambios, los usuarios y la configuración no se tocan.
+            </p>
+            <p className="text-muted">La copia tiene: {Object.entries(LABELS).filter(([k]) => restoring.counts[k] !== undefined).map(([k, l]) => `${restoring.counts[k]} ${l}`).join(" · ")}.</p>
+            <TextField label="Para confirmar, escribí RESTAURAR" value={confirmText} onChange={(e) => setConfirmText(e.target.value)} autoComplete="off" />
+            {restoreError && <Alert tone="danger">{restoreError}</Alert>}
+            <div className="flex justify-end gap-2">
+              <Button variant="secondary" onClick={() => setRestoring(null)} disabled={restoreBusy}>Cancelar</Button>
+              <Button variant="danger" onClick={restore} loading={restoreBusy} disabled={confirmText.trim() !== "RESTAURAR"}>Restaurar</Button>
+            </div>
+          </div>
+        )}
+      </Modal>
     </>
   );
 }
