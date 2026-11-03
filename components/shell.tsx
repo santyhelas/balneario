@@ -211,7 +211,7 @@ export function Shell({ children }: { children: ReactNode }) {
             <Icon d="M12 5v14M5 12h14" className="h-4 w-4" /><span className="hidden xl:inline">Nueva reserva</span>
           </Link>
           <Link href="/cobros" className="flex items-center gap-1.5 rounded-lg bg-ok px-3 py-2 text-sm font-semibold text-bg hover:opacity-90" title="Registrar cobro">
-            <Icon d={byHref("/cobros").icon} className="h-4 w-4" /><span className="hidden xl:inline">Registrar cobro</span>
+            Registrar cobro
           </Link>
           <Link href="/gastos?nuevo=1" className="flex items-center gap-1.5 rounded-lg border border-line bg-surface-2 px-3 py-2 text-sm font-semibold hover:opacity-90" title="Nuevo gasto">
             <Icon d="M5 12h14" className="h-4 w-4" /><span className="hidden xl:inline">Nuevo gasto</span>
