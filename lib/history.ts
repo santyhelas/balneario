@@ -48,7 +48,7 @@ export type Lookups = {
   reservations: Map<string, { number: number; customer_id: string }>;
 };
 
-export type Described = { category: Category; title: string; details: string[]; href?: string } | null;
+export type Described = { category: Category; title: string; details: string[]; href?: string; tag?: "res-alta" | "seg-alta"; place?: string } | null;
 
 const MONTHS = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
 
@@ -134,7 +134,7 @@ export function describeAudit(row: AuditRow, l: Lookups): Described {
       const c = l.customers.get(String(d.customer_id ?? "")) ?? "";
       const name = `Reserva #${str(d.number)}${c ? ` (${c})` : ""}`;
       if (row.action === "alta") {
-        return { category: "reservas", title: `${name} creada`, href,
+        return { category: "reservas", title: `${name} creada`, href, tag: "res-alta",
           details: [`Del ${date(n.start_date)} al ${date(n.end_date)}`, n.is_courtesy ? "Cortesía familiar" : `Total ${money(n.total_amount)}`] };
       }
       if (o.status !== "cancelada" && n.status === "cancelada") return { category: "reservas", title: `${name} cancelada`, href, details: withReason([]) };
@@ -145,8 +145,10 @@ export function describeAudit(row: AuditRow, l: Lookups): Described {
     case "reservation_segments": {
       const href = `/reservas/${d.reservation_id}`;
       const what = `${spaceName(l, d.space_id)} del ${date(d.start_date)} al ${date(d.end_date)}`;
-      if (row.action === "alta") return { category: "reservas", title: `${resName(l, d.reservation_id)}: ocupa ${what}`, href, details: withReason([]) };
-      if (o.active === true && n.active === false) return { category: "reservas", title: `${resName(l, d.reservation_id)}: deja ${what}`, href, details: withReason([]) };
+      if (row.action === "alta") return { category: "reservas", title: `${resName(l, d.reservation_id)}: ocupa ${what}`, href, details: withReason([]), tag: "seg-alta", place: what };
+      if (o.active === true && n.active === false) {
+        return { category: "reservas", title: `${resName(l, d.reservation_id)}: cambio de ubicación`, href, details: withReason([`Antes: ${what}`]) };
+      }
       return null;
     }
     case "customers": {

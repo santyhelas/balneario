@@ -19,6 +19,8 @@ export type Entry = {
   href?: string;
   who: string;
   whoId: string | null;
+  tag?: "res-alta" | "seg-alta";
+  place?: string;
 };
 
 type PayRow = {
@@ -122,9 +124,31 @@ export function HistoryFeed({
         });
       }
       list.sort((x, y) => y.at.localeCompare(x.at));
+      // Al crear una reserva, sus carpas van en el mismo renglón (no como renglones aparte).
+      const created = new Map(list.filter((e) => e.tag === "res-alta").map((e) => [e.href, e]));
+      for (const e of list) {
+        if (e.tag !== "seg-alta") continue;
+        const r = created.get(e.href);
+        if (r && Math.abs(Date.parse(r.at) - Date.parse(e.at)) < 5000) {
+          r.details = [...r.details, e.place ?? ""];
+          e.tag = undefined;
+          e.key = "";
+        }
+      }
+      // Cambio de ubicación: los tramos nuevos se muestran como "Ahora: …" en el mismo renglón.
+      for (const e of list) {
+        if (!e.title.endsWith(": cambio de ubicación")) continue;
+        for (const s of list) {
+          if (s.tag === "seg-alta" && s.href === e.href && Math.abs(Date.parse(s.at) - Date.parse(e.at)) < 5000) {
+            e.details = [...e.details.filter((x) => !x.startsWith("Motivo")), `Ahora: ${s.place}`, ...e.details.filter((x) => x.startsWith("Motivo"))];
+            s.key = "";
+          }
+        }
+      }
+      const visible = list.filter((e) => e.key !== "");
 
       setEntries((prev) => {
-        const merged = reset ? list : [...prev, ...list];
+        const merged = reset ? visible : [...prev, ...visible];
         const seen = new Set<string>();
         return merged.filter((e) => (seen.has(e.key) ? false : (seen.add(e.key), true)));
       });
