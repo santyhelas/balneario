@@ -656,6 +656,33 @@ select set_config('request.jwt.claims', '{"sub":"22222222-2222-2222-2222-2222222
 select t.ok((select count(*) from public.day_notes) = 0, 'Notas: un extraño no las ve');
 select set_config('request.jwt.claims', '{"sub":"11111111-1111-1111-1111-111111111111","email":"duenio@test.com"}', false);
 
+-- 22. Modo invitado
+reset role;
+insert into auth.users (id, email, is_anonymous) values ('55555555-5555-5555-5555-555555555555', null, true);
+select t.set('real_payments', (select count(*)::text from public.payments where workspace_id = t.uid('ws')));
+select t.set('real_res', (select count(*)::text from public.reservations where workspace_id = t.uid('ws')));
+set role authenticated;
+select set_config('request.jwt.claims', '{"sub":"11111111-1111-1111-1111-111111111111","email":"duenio@test.com"}', false);
+select t.throws($$select public.start_guest_session()$$, 'solo para entrar como invitado', 'Invitado: un usuario común no puede crear una demostración');
+select set_config('request.jwt.claims', '{"sub":"55555555-5555-5555-5555-555555555555","is_anonymous":true,"role":"authenticated"}', false);
+select t.set('demo', public.start_guest_session()::text);
+select t.ok(public.start_guest_session() = t.uid('demo'), 'Invitado: entrar dos veces usa la misma demostración');
+select t.ok((select count(*) = 1 and bool_and(is_demo) from public.workspaces), 'Invitado: solo ve su balneario de demostración');
+select t.ok((select count(*) from public.customers where workspace_id = t.uid('ws')) = 0, 'Invitado: no ve clientes reales');
+select t.ok((select count(*) from public.payments where workspace_id = t.uid('ws')) = 0, 'Invitado: no ve pagos reales');
+select t.ok((select count(*) from public.reservations) >= 10, 'Invitado: tiene reservas de demostración');
+select t.ok((select count(*) from public.spaces) = (select count(*) from public.spaces where workspace_id = t.uid('demo')) and (select count(*) from public.spaces) > 50, 'Invitado: tiene el mismo plano (carpas)');
+select public.end_guest_session();
+reset role;
+select t.ok(not exists (select 1 from public.workspaces where id = t.uid('demo')), 'Invitado: al salir se borra su balneario');
+select t.ok((select count(*) from public.reservations where workspace_id = t.uid('demo')) = 0
+        and (select count(*) from public.payments where workspace_id = t.uid('demo')) = 0
+        and (select count(*) from public.audit_log where workspace_id = t.uid('demo')) = 0, 'Invitado: no queda ningún dato de la demostración');
+select t.ok((select count(*)::text from public.payments where workspace_id = t.uid('ws')) = t.get('real_payments')
+        and (select count(*)::text from public.reservations where workspace_id = t.uid('ws')) = t.get('real_res'), 'Invitado: los datos reales quedan intactos');
+select t.throws(format($$select private.purge_demo_workspace(%L)$$, t.get('ws')), 'Solo se pueden borrar balnearios de demostración', 'Invitado: el balneario real nunca se puede borrar');
+select t.throws($$delete from public.payments$$, 'no se puede', 'Los pagos reales siguen sin poder borrarse');
+
 reset role;
 \o
 -- Resultado ----------------------------------------------------------

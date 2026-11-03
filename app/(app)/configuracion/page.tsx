@@ -15,7 +15,7 @@ type WsRow = { name: string; subtitle: string | null; logo_data: string | null; 
 type Member = { user_id: string; role: string; email: string | null; created_at: string };
 
 export default function ConfiguracionPage() {
-  const { ws, isAdmin, reloadWorkspace } = useWorkspace();
+  const { ws, isAdmin, reloadWorkspace, isGuest } = useWorkspace();
   const sb = getSupabase();
   const q = useLoader(async () => {
     const row = unwrap(await sb.from("workspaces").select("name, subtitle, logo_data, legal_id, phone, address, latitude, longitude, version").eq("id", ws.id).single()) as WsRow;
@@ -34,8 +34,8 @@ export default function ConfiguracionPage() {
           </div>
           <div className="flex flex-col gap-4">
             <ProfileCard />
-            <LinkedAccountsCard />
-            <UsersCard />
+            {!isGuest && <LinkedAccountsCard />}
+            {!isGuest && <UsersCard />}
           </div>
         </div>
       )}
@@ -154,7 +154,7 @@ function BalnearioCard({ row, editable, onSaved, onConflict }: { row: WsRow; edi
 }
 
 function ProfileCard() {
-  const { email, profile, saveProfile, theme, setTheme, tempUnit, setTempUnit } = useWorkspace();
+  const { email, profile, saveProfile, theme, setTheme, tempUnit, setTempUnit, isGuest } = useWorkspace();
   const status = useStatus();
   const [name, setName] = useState(profile.displayName ?? "");
   const [avatar, setAvatar] = useState<string | null>(profile.avatar);
@@ -201,7 +201,7 @@ function ProfileCard() {
   return (
     <Card title="Mi perfil">
       <form onSubmit={save} className="flex flex-col gap-3">
-        <MyUsernameField />
+        {!isGuest && <MyUsernameField />}
         <TextField label="Nombre para mostrar" value={name} onChange={(e) => setName(e.target.value)} maxLength={80} placeholder={email ?? ""} />
         <ImagePicker label="Foto de perfil" value={avatar} onChange={setAvatar} round maxSide={256} maxBytes={150_000} />
         <p className="text-xs text-muted">Cuenta: {email}</p>

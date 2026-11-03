@@ -3,6 +3,7 @@ import { createContext, useCallback, useContext, useEffect, useState, type FormE
 import { getSupabase } from "@/lib/supabase/client";
 import { friendlyError } from "@/lib/errors";
 import { Alert, Button, Spinner, TextField } from "@/components/ui";
+import { GUEST_MARK } from "@/lib/remember";
 
 export type Role = "propietario" | "administrador" | "operador";
 export type ThemePref = "claro" | "oscuro" | "sistema";
@@ -30,6 +31,8 @@ type Ctx = {
   isAdmin: boolean;
   userId: string;
   email: string | null;
+  /** Entró como invitado: balneario de demostración que se borra al salir. */
+  isGuest: boolean;
   profile: Profile;
   theme: ThemePref;
   tempUnit: "C" | "F";
@@ -62,11 +65,13 @@ export function applyTheme(t: ThemePref) {
   }
 }
 
+export { GUEST_MARK };
+
 type State =
   | { kind: "loading" }
   | { kind: "error"; message: string }
   | { kind: "onboarding"; userId: string; email: string | null }
-  | { kind: "ready"; ws: Workspace; role: Role; userId: string; email: string | null };
+  | { kind: "ready"; ws: Workspace; role: Role; userId: string; email: string | null; isGuest: boolean };
 
 export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<State>({ kind: "loading" });
@@ -83,6 +88,18 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         return;
       }
       const user = auth.user;
+      const isGuest = !!(user as { is_anonymous?: boolean }).is_anonymous;
+      // Invitado que vuelve en otra pestaña o después de cerrar el sitio: se borra la demostración y empieza de cero.
+      if (isGuest) {
+        let marked = false;
+        try { marked = sessionStorage.getItem(GUEST_MARK) === "1"; } catch { /* sin almacenamiento */ }
+        if (!marked) {
+          await sb.rpc("end_guest_session").then(() => undefined, () => undefined);
+          await sb.auth.signOut();
+          window.location.assign("/login?invitado=fin");
+          return;
+        }
+      }
 
       // Si la base todavía no tiene la actualización 0010, se piden solo las columnas anteriores.
       let prefs = await sb.from("user_preferences").select("theme, temperature_unit, display_name, avatar_data").eq("user_id", user.id).maybeSingle();
@@ -113,7 +130,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         return;
       }
       const ws = mem.data.workspaces as unknown as Workspace;
-      setState({ kind: "ready", ws, role: mem.data.role as Role, userId: user.id, email: user.email ?? null });
+      setState({ kind: "ready", ws, role: mem.data.role as Role, userId: user.id, email: user.email ?? null, isGuest });
     } catch (err) {
       setState({ kind: "error", message: friendlyError(err) });
     }
@@ -186,6 +203,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     isAdmin: state.role === "propietario" || state.role === "administrador",
     userId: state.userId,
     email: state.email,
+    isGuest: state.isGuest,
     profile,
     theme,
     tempUnit,

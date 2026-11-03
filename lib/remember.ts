@@ -19,3 +19,6 @@ export function applyRemember<T extends Opts>(options: T | undefined, remember: 
 export const USER_EMAIL_DOMAIN = "usuarios.balneario.invalid";
 export const USERNAME_RE = /^[a-z0-9][a-z0-9._-]{2,29}$/;
 export const normalizeUsername = (u: string) => u.trim().toLowerCase();
+
+/** Marca de la pestaña del invitado: si falta (pestaña nueva o sitio cerrado), la demostración se borra. */
+export const GUEST_MARK = "bal_invitado";

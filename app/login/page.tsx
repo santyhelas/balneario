@@ -4,6 +4,7 @@ import { getSupabase, setRememberPreference } from "@/lib/supabase/client";
 import { friendlyError } from "@/lib/errors";
 import { Alert, Button, Field, Input, TextField } from "@/components/ui";
 import { GoogleG } from "@/components/google";
+import { GUEST_MARK } from "@/lib/remember";
 
 type Mode = "ingresar" | "crear" | "recuperar";
 
@@ -33,6 +34,7 @@ export default function LoginPage() {
   useEffect(() => {
     const p = new URLSearchParams(window.location.search);
     if (p.get("error") === "enlace") setError("El enlace venció o ya fue usado. Pedí uno nuevo.");
+    if (p.get("invitado") === "fin") setInfo("Saliste del modo invitado. Todo lo que cargaste se borró.");
     fetch("/auth/registrar").then((r) => r.json()).then((d: { abierto?: boolean }) => setCanRegister(!!d.abierto)).catch(() => undefined);
   }, []);
 
@@ -64,6 +66,30 @@ export default function LoginPage() {
       setBusy(false);
       setError(friendlyError(error));
     }
+  }
+
+  // Invitado: balneario de demostración propio, que se borra al salir o al cerrar la pestaña.
+  async function guest() {
+    setBusy(true);
+    setError(null);
+    setInfo(null);
+    setRememberPreference(false); // la sesión del invitado no se recuerda
+    const sb = getSupabase();
+    const { error: e1 } = await sb.auth.signInAnonymously();
+    if (e1) {
+      setBusy(false);
+      return setError(/anonymous/i.test(e1.message)
+        ? "El modo invitado todavía no está activado en el servidor (Supabase → Authentication → Allow anonymous sign-ins)."
+        : friendlyError(e1));
+    }
+    const { error: e2 } = await sb.rpc("start_guest_session");
+    if (e2) {
+      await sb.auth.signOut();
+      setBusy(false);
+      return setError(friendlyError(e2));
+    }
+    try { sessionStorage.setItem(GUEST_MARK, "1"); } catch { /* sin almacenamiento: igual funciona en esta pestaña */ }
+    window.location.assign("/");
   }
 
   async function submit(e: FormEvent) {
@@ -192,6 +218,11 @@ export default function LoginPage() {
                 <GoogleG />
               </button>
             </div>
+            <button type="button" onClick={guest} disabled={busy}
+              className="mt-4 w-full rounded-lg border border-dashed border-line py-2.5 text-sm font-medium text-muted hover:bg-surface-2 hover:text-fg disabled:opacity-50">
+              Entrar como invitado
+              <span className="block text-xs font-normal">Para ver cómo funciona. Usa datos inventados y no guarda nada.</span>
+            </button>
           </>
         )}
 

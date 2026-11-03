@@ -9,6 +9,7 @@ async function caller() {
   const sb = await getServerSupabase();
   const { data: { user } } = await sb.auth.getUser();
   if (!user) return { error: json({ error: "Tu sesión venció. Volvé a ingresar." }, 401) };
+  if (user.is_anonymous) return { error: json({ error: "En el modo invitado no se pueden crear ni cambiar usuarios." }, 403) };
   const { data: m } = await sb.from("workspace_members").select("workspace_id, role").eq("user_id", user.id).maybeSingle();
   if (!m || !["propietario", "administrador"].includes(m.role)) {
     return { error: json({ error: "Solo el propietario o un administrador pueden gestionar usuarios." }, 403) };

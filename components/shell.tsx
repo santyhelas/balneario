@@ -3,7 +3,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { getSupabase } from "@/lib/supabase/client";
-import { useWorkspace, type ThemePref, type Workspace } from "@/components/workspace";
+import { GUEST_MARK, useWorkspace, type ThemePref, type Workspace } from "@/components/workspace";
 import { useStatus, type Notice } from "@/components/status";
 import { useUndo } from "@/components/undo";
 import { ConfirmDialog, cx } from "@/components/ui";
@@ -73,7 +73,7 @@ function longDate(iso: string, timeZone: string) {
 }
 
 export function Shell({ children }: { children: ReactNode }) {
-  const { ws, email, theme, setTheme, role, profile } = useWorkspace();
+  const { ws, email, theme, setTheme, role, profile, isGuest } = useWorkspace();
   const status = useStatus();
   const pathname = usePathname();
   const [confirmLogout, setConfirmLogout] = useState(false);
@@ -99,6 +99,11 @@ export function Shell({ children }: { children: ReactNode }) {
 
   async function logout() {
     setLoggingOut(true);
+    if (isGuest) {
+      // Invitado: se borra todo lo que cargó en la demostración.
+      await getSupabase().rpc("end_guest_session").then(() => undefined, () => undefined);
+      try { sessionStorage.removeItem(GUEST_MARK); } catch { /* nada */ }
+    }
     await getSupabase().auth.signOut();
     try {
       localStorage.removeItem("balneario-tema");
@@ -252,6 +257,12 @@ export function Shell({ children }: { children: ReactNode }) {
           </div>
         </header>
 
+        {isGuest && (
+          <div className="px-safe flex flex-wrap items-center justify-between gap-2 border-b border-amber-300 bg-amber-100 py-2 text-sm text-amber-950 print:hidden dark:border-amber-700/60 dark:bg-amber-900/40 dark:text-amber-100">
+            <span><strong>Modo invitado:</strong> es un balneario de demostración con datos inventados. Podés probar todo, pero <strong>nada se guarda</strong>: al salir o cerrar la pestaña se borra.</span>
+            <button onClick={() => setConfirmLogout(true)} className="rounded-lg border border-amber-400 bg-white/60 px-3 py-1 font-semibold hover:bg-white dark:bg-transparent">Salir del modo invitado</button>
+          </div>
+        )}
         <InstallBanner />
         {undo.message && <div className="px-safe pt-3">{undo.message}</div>}
         <main className="px-safe pb-tabbar w-full flex-1 pt-4 md:pt-6 print:p-0">{children}</main>
@@ -334,9 +345,9 @@ export function Shell({ children }: { children: ReactNode }) {
       {undo.dialog}
       <ConfirmDialog
         open={confirmLogout}
-        title="¿Cerrar sesión?"
-        message="Vas a tener que volver a ingresar para usar el sistema. Los datos quedan guardados."
-        confirmLabel="Cerrar sesión"
+        title={isGuest ? "¿Salir del modo invitado?" : "¿Cerrar sesión?"}
+        message={isGuest ? "Se borra todo lo que cargaste en la demostración." : "Vas a tener que volver a ingresar para usar el sistema. Los datos quedan guardados."}
+        confirmLabel={isGuest ? "Salir y borrar" : "Cerrar sesión"}
         danger
         busy={loggingOut}
         onConfirm={logout}
