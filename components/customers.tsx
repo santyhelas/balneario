@@ -7,6 +7,7 @@ import { Alert, Button, Field, Modal, Textarea, TextField } from "@/components/u
 import { PhoneInput } from "@/components/phone-input";
 import { EMPTY_PHONE, formatPhone, parsePhone, phoneProblem, type PhoneParts } from "@/lib/phone";
 import { EMAIL_RE, emailSuggestion } from "@/lib/email";
+import { capitalizeName } from "@/lib/names";
 
 export type Customer = {
   id: string;
@@ -58,8 +59,9 @@ export function CustomerForm({
   useEffect(() => {
     if (!open) return;
     const [f0, ...rest] = (initialName ?? "").trim().split(/\s+/);
-    setFirst(customer?.first_name ?? f0 ?? "");
-    setLast(customer?.last_name ?? rest.join(" "));
+    // Al crear desde Nueva reserva, el nombre buscado ya viene con mayúscula inicial.
+    setFirst(customer?.first_name ?? capitalizeName(f0 ?? ""));
+    setLast(customer?.last_name ?? capitalizeName(rest.join(" ")));
     setPhoneParts(parsePhone(customer?.phone));
     setEmail(customer?.email ?? "");
     setLocality(customer?.locality ?? "");
@@ -116,8 +118,8 @@ export function CustomerForm({
         }
       }
       const payload = {
-        first_name: first.trim(),
-        last_name: last.trim(),
+        first_name: capitalizeName(first),
+        last_name: capitalizeName(last),
         phone: phone.trim() || null,
         email: mail || null,
         locality: locality.trim() || null,
@@ -145,8 +147,8 @@ export function CustomerForm({
     <Modal open={open} onClose={onClose} title={customer ? "Editar cliente" : "Nuevo cliente"} busy={busy}>
       <form onSubmit={submit} className="flex flex-col gap-3">
         <div className="grid grid-cols-2 gap-3">
-          <TextField label="Nombre" required maxLength={80} value={first} onChange={(e) => { setFirst(e.target.value); setConfirmedDup(false); setSimilar([]); }} />
-          <TextField label="Apellido" maxLength={80} value={last} onChange={(e) => { setLast(e.target.value); setConfirmedDup(false); setSimilar([]); }} />
+          <TextField label="Nombre" required maxLength={80} value={first} onChange={(e) => { setFirst(e.target.value); setConfirmedDup(false); setSimilar([]); }} onBlur={() => setFirst(capitalizeName(first))} />
+          <TextField label="Apellido" maxLength={80} value={last} onChange={(e) => { setLast(e.target.value); setConfirmedDup(false); setSimilar([]); }} onBlur={() => setLast(capitalizeName(last))} />
         </div>
         <PhoneInput value={phoneParts} onChange={(p) => { setPhoneParts(p); setConfirmedDup(false); setSimilar([]); }} />
         {/* La localidad ya no se pide (se conserva la de clientes anteriores). */}
