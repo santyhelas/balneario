@@ -2,10 +2,13 @@
 import { useEffect, useState } from "react";
 import { getSupabase } from "@/lib/supabase/client";
 import { unwrap, useLoader } from "@/lib/data";
-import { formatDate, formatMoney } from "@/lib/format";
+import { formatDate, formatDateTime, formatMoney } from "@/lib/format";
+import { METHOD_LABEL } from "@/lib/methods";
+import { seasonOf } from "@/lib/history";
 import { useWorkspace } from "@/components/workspace";
 import { PageHeader, SyncNotice } from "@/components/shell";
-import { Badge, Button, Card, EmptyState, Input, Spinner } from "@/components/ui";
+import { Badge, Button, Card, EmptyState, Input, Spinner, cx } from "@/components/ui";
+import Link from "next/link";
 import { CustomerForm, searchCustomers, type Customer } from "@/components/customers";
 
 type HistoryRow = {
@@ -111,8 +114,14 @@ function CustomerDetail({ customer, onEdit }: { customer: Customer; onEdit: () =
     const balances = ids.length
       ? (unwrap(await sb.from("reservation_balances").select("reservation_id, paid_amount, due_amount, credit_amount").in("reservation_id", ids)) as Balance[])
       : [];
-    return { rows, balances: Object.fromEntries(balances.map((b) => [b.reservation_id, b])) as Record<string, Balance> };
+    const pays = ids.length
+      ? (unwrap(await sb.from("payments").select("*").in("reservation_id", ids).order("created_at")) as PayRow[])
+      : [];
+    const payments: Record<string, PayRow[]> = {};
+    for (const p of pays) (payments[p.reservation_id] ??= []).push(p);
+    return { rows, balances: Object.fromEntries(balances.map((b) => [b.reservation_id, b])) as Record<string, Balance>, payments };
   }, [customer.id]);
+  const { ws } = useWorkspace();
 
   const rows = history.data?.rows ?? [];
   const active = rows.filter((r) => r.status === "confirmada");
@@ -147,28 +156,80 @@ function CustomerDetail({ customer, onEdit }: { customer: Customer; onEdit: () =
       ) : rows.length === 0 ? (
         <EmptyState>Sin reservas todavía.</EmptyState>
       ) : (
-        <ul className="divide-y divide-line text-sm">
-          {rows.map((r) => {
-            const b = history.data?.balances[r.id];
-            const spaces = [...new Set(r.reservation_segments.filter((s) => s.active).sort((a, z) => a.start_date.localeCompare(z.start_date)).map((s) => s.spaces?.code))].join(", ");
+        <div className="flex flex-col gap-4">
+          {groupBySeason(rows).map(([season, list]) => {
+            const paid = list.reduce((acc, r) => acc + Number(history.data?.balances[r.id]?.paid_amount ?? 0), 0);
+            const days = list.filter((r) => r.status === "confirmada").reduce((acc, r) => acc + inclusive(r.start_date, r.end_date), 0);
             return (
-              <li key={r.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
-                <div>
-                  <div className="font-medium">#{r.number} · {spaces || "—"}</div>
-                  <div className="text-xs text-muted">{formatDate(r.start_date)} al {formatDate(r.end_date)} · Total {formatMoney(r.total_amount)}</div>
+              <section key={season}>
+                <div className="mb-1 flex flex-wrap items-baseline justify-between gap-2 border-b border-line pb-1">
+                  <h4 className="text-sm font-bold">Temporada {season}</h4>
+                  <span className="text-xs text-muted">{list.length} {list.length === 1 ? "reserva" : "reservas"} · {days} días · pagó {formatMoney(paid)}</span>
                 </div>
-                <div className="flex gap-1">
-                  {r.status === "cancelada" && <Badge tone="muted">Cancelada</Badge>}
-                  {r.is_courtesy && <Badge tone="info">Cortesía</Badge>}
-                  {b && Number(b.due_amount) > 0 && <Badge tone="danger">Debe {formatMoney(b.due_amount)}</Badge>}
-                  {b && Number(b.credit_amount) > 0 && <Badge tone="warn">A favor {formatMoney(b.credit_amount)}</Badge>}
-                  {b && r.status === "confirmada" && !r.is_courtesy && Number(b.due_amount) === 0 && <Badge tone="ok">Pagada</Badge>}
-                </div>
-              </li>
+                <ul className="divide-y divide-line text-sm">
+                  {list.map((r) => {
+                    const b = history.data?.balances[r.id];
+                    const spaces = [...new Set(r.reservation_segments.filter((s) => s.active).sort((a, z) => a.start_date.localeCompare(z.start_date)).map((s) => s.spaces?.code))].join(", ");
+                    const pays = history.data?.payments[r.id] ?? [];
+                    const voided = new Set(pays.filter((p) => p.voids_payment_id).map((p) => p.voids_payment_id));
+                    return (
+                      <li key={r.id} className="py-2">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div>
+                            <Link href={`/reservas/${r.id}`} className="font-medium hover:underline">#{r.number} · {spaces || "—"}</Link>
+                            <div className="text-xs text-muted">{formatDate(r.start_date)} al {formatDate(r.end_date)} · Total {formatMoney(r.total_amount)}</div>
+                          </div>
+                          <div className="flex gap-1">
+                            {r.status === "cancelada" && <Badge tone="muted">Cancelada</Badge>}
+                            {r.is_courtesy && <Badge tone="info">Cortesía</Badge>}
+                            {b && Number(b.due_amount) > 0 && <Badge tone="danger">Debe {formatMoney(b.due_amount)}</Badge>}
+                            {b && Number(b.credit_amount) > 0 && <Badge tone="warn">A favor {formatMoney(b.credit_amount)}</Badge>}
+                            {b && r.status === "confirmada" && !r.is_courtesy && Number(b.due_amount) === 0 && <Badge tone="ok">Pagada</Badge>}
+                          </div>
+                        </div>
+                        {pays.length > 0 && (
+                          <ul className="mt-1 ml-3 border-l-2 border-line pl-3 text-xs">
+                            {pays.map((p) => (
+                              <li key={p.id} className={cx("flex justify-between gap-2 py-0.5", voided.has(p.id) && "text-muted line-through")}>
+                                <span>
+                                  {formatDateTime(p.created_at, ws.timezone)} · {p.kind === "cobro" ? "Pago" : p.kind === "devolucion" ? "Devolución" : "Anulación"} · {METHOD_LABEL[p.method] ?? p.method}
+                                  {p.usd_amount ? ` (US$ ${p.usd_amount})` : ""}
+                                </span>
+                                <span className={cx("tabular font-medium", Number(p.signed_amount) >= 0 ? "text-ok" : "text-danger")}>
+                                  {Number(p.signed_amount) >= 0 ? "+" : "−"} {formatMoney(p.amount)}
+                                </span>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </section>
             );
           })}
-        </ul>
+        </div>
       )}
     </Card>
   );
+}
+
+type PayRow = {
+  id: string; reservation_id: string; kind: "cobro" | "devolucion" | "anulacion"; amount: number; signed_amount: number;
+  method: string; created_at: string; voids_payment_id: string | null; usd_amount?: number | null;
+};
+
+/** Reservas agrupadas por temporada (de julio a junio), la más reciente primero. */
+function groupBySeason<T extends { start_date: string }>(rows: T[]): [string, T[]][] {
+  const m = new Map<string, T[]>();
+  for (const r of rows) {
+    const k = seasonOf(r.start_date);
+    m.set(k, [...(m.get(k) ?? []), r]);
+  }
+  return [...m.entries()].sort((a, b) => b[0].localeCompare(a[0]));
+}
+
+function inclusive(a: string, b: string) {
+  return Math.round((Date.parse(b + "T00:00:00Z") - Date.parse(a + "T00:00:00Z")) / 86_400_000) + 1;
 }

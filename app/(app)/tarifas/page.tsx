@@ -4,7 +4,8 @@ import { useMemo, useState, type FormEvent } from "react";
 import { getSupabase } from "@/lib/supabase/client";
 import { unwrap, useLoader } from "@/lib/data";
 import { friendlyError } from "@/lib/errors";
-import { formatDate, formatMoney, parseMoney, todayISO } from "@/lib/format";
+import { addDays, formatDate, formatMoney, parseMoney, todayISO } from "@/lib/format";
+import { HistoryFeed } from "@/components/history-feed";
 import { MONTHS } from "@/lib/methods";
 import { useWorkspace } from "@/components/workspace";
 import { PageHeader, SyncNotice } from "@/components/shell";
@@ -39,6 +40,8 @@ export default function TarifasPage() {
   const [season, setSeason] = useState(currentSeason);
   const [allMonths, setAllMonths] = useState(false);
   const [copyOpen, setCopyOpen] = useState(false);
+  const [histFrom, setHistFrom] = useState(addDays(today, -365));
+  const [histTo, setHistTo] = useState(today);
 
   const q = useLoader(async () => {
     const rates = unwrap(await sb.from("rates").select("id, space_kind, year, month, half, season, daily_price, version").eq("workspace_id", ws.id)) as Rate[];
@@ -137,6 +140,15 @@ export default function TarifasPage() {
           </Card>
         </div>
       </div>
+
+      <Card title="Historial de cambios de tarifas" className="mt-4">
+        <p className="mb-3 text-xs text-muted">Cada precio que se cargó o cambió, con el valor anterior y el nuevo, quién lo hizo y cuándo. Las reservas ya hechas no cambian aunque cambie la tarifa.</p>
+        <div className="mb-3 flex flex-wrap items-end gap-2">
+          <Field label="Desde"><Input type="date" value={histFrom} max={today} onChange={(e) => e.target.value && setHistFrom(e.target.value)} className="w-auto" /></Field>
+          <Field label="Hasta"><Input type="date" value={histTo} min={histFrom} onChange={(e) => e.target.value && setHistTo(e.target.value)} className="w-auto" /></Field>
+        </div>
+        <HistoryFeed from={histFrom} to={histTo} tables={["rates", "package_discounts"]} includePayments={false} emptyText="No hubo cambios de tarifas en esas fechas." />
+      </Card>
 
       {q.data && <CopyModal open={copyOpen} seasons={seasons} onClose={() => setCopyOpen(false)} onDone={() => { setCopyOpen(false); q.reload(); }} />}
     </>
