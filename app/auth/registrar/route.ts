@@ -2,23 +2,17 @@ import { getAdminSupabase } from "@/lib/supabase/admin";
 import { SERVER_KEY_MISSING, json, passwordProblem, signIn } from "@/lib/auth-server";
 import { USERNAME_RE, USER_EMAIL_DOMAIN, normalizeUsername } from "@/lib/remember";
 
-// Creación de cuenta desde la pantalla de inicio.
-// Solo está habilitada mientras el balneario no exista (primera instalación).
-// Después, las cuentas nuevas las crea el propietario desde Configuración → Usuarios.
+// Creación de cuenta desde la pantalla de inicio: cualquiera puede registrarse
+// y después crear su propio balneario (cada balneario ve solo sus datos).
+// Los empleados de un balneario los crea su propietario desde Configuración → Usuarios.
 export async function GET() {
   const admin = getAdminSupabase();
-  if (!admin) return json({ abierto: false, configurado: false });
-  const { data, error } = await admin.rpc("setup_done");
-  return json({ abierto: !error && data === false, configurado: true });
+  return json({ abierto: !!admin, configurado: !!admin });
 }
 
 export async function POST(req: Request) {
   const admin = getAdminSupabase();
   if (!admin) return json({ error: SERVER_KEY_MISSING }, 503);
-  const { data: done, error: e1 } = await admin.rpc("setup_done");
-  if (e1) return json({ error: "No se pudo verificar el estado del sistema." }, 500);
-  if (done) return json({ error: "Las cuentas nuevas las crea el propietario del balneario desde Configuración → Usuarios." }, 403);
-
   let body: { usuario?: string; password?: string; password2?: string };
   try {
     body = await req.json();

@@ -55,13 +55,15 @@ select t.set('d0', ((now() at time zone 'America/Argentina/San_Juan')::date + 60
 set role authenticated;
 select set_config('request.jwt.claims', '{"sub":"11111111-1111-1111-1111-111111111111","email":"duenio@test.com"}', false);
 
-select t.set('ws', public.create_workspace('Balneario de Prueba')::text);
+select t.set('ws', public.create_workspace('Balneario de Prueba', 79, 10)::text);
+select public.apply_parador_layout(t.uid('ws'));
+insert into public.agreements (workspace_id, name, percent) values (t.uid('ws'), 'Parque Bonito', 30);
 select t.ok((select count(*) from public.spaces where kind = 'carpa') = 79, 'Alta: 79 carpas iniciales (01–79, como el plano)');
 select t.ok((select count(*) from public.spaces where kind = 'sombrilla') = 10, 'Alta: 10 sombrillas iniciales (80–89)');
 select t.ok((select count(*) from public.expense_categories) = 8, 'Alta: 8 categorías de gasto');
-select t.ok((select percent from public.agreements where name = 'Parque Bonito') = 30, 'Alta: convenio Parque Bonito 30%');
+select t.ok((select percent from public.agreements where name = 'Parque Bonito') = 30, 'Convenios: Parque Bonito 30%');
 select t.ok((select sea_side = 'bottom' and map_width = 3050 from public.workspaces), 'Plano: el mar queda abajo, como en el plano del parador');
-select t.ok((select count(*) from public.map_features where label = 'Bar') = 1, 'Plano: se dibuja el parador (Bar)');
+select t.ok((select count(*) from public.map_features where active and label = 'Bar') = 1, 'Plano: se dibuja el parador (Bar)');
 select t.ok((select code from public.spaces where kind = 'sombrilla' order by code limit 1) = '80', 'Plano: las sombrillas son 80 a 89');
 update public.spaces set x = 5, y = 5, version = version + 1 where code = '17';
 select t.ok((public.apply_parador_layout(t.uid('ws')) ->> 'espacios_ubicados')::int = 89, 'Diseño Parador: ubica los 89 espacios del plano');
@@ -73,7 +75,9 @@ select t.throws($$select public.create_workspace('Otro')$$, 'ya pertenece', 'Alt
 -- 2. Seguridad: extraños y anónimos no ven nada
 -- =====================================================================
 select set_config('request.jwt.claims', '{"sub":"22222222-2222-2222-2222-222222222222","email":"extranio@test.com"}', false);
-select t.throws($$select public.create_workspace('Intruso')$$, 'ya fue creado', 'Seguridad: un extraño no puede crear otro balneario');
+select set_config('request.jwt.claims', '{"sub":"22222222-2222-2222-2222-222222222222","is_anonymous":true}', false);
+select t.throws($$select public.create_workspace('Intruso')$$, 'modo invitado', 'Seguridad: un invitado no puede crear un balneario');
+select set_config('request.jwt.claims', '{"sub":"22222222-2222-2222-2222-222222222222","email":"extranio@test.com"}', false);
 select t.ok((select count(*) from public.spaces) = 0, 'Seguridad: un extraño no ve espacios');
 select t.ok((select count(*) from public.workspaces) = 0, 'Seguridad: un extraño no ve el balneario');
 select t.throws(format($$select public.dashboard_summary(%L)$$, t.get('ws')), 'No tenés permiso', 'Seguridad: un extraño no puede consultar el panel');
@@ -682,6 +686,20 @@ select t.ok((select count(*)::text from public.payments where workspace_id = t.u
         and (select count(*)::text from public.reservations where workspace_id = t.uid('ws')) = t.get('real_res'), 'Invitado: los datos reales quedan intactos');
 select t.throws(format($$select private.purge_demo_workspace(%L)$$, t.get('ws')), 'Solo se pueden borrar balnearios de demostración', 'Invitado: el balneario real nunca se puede borrar');
 select t.throws($$delete from public.payments$$, 'no se puede', 'Los pagos reales siguen sin poder borrarse');
+
+-- 23. Varios balnearios: cualquiera se registra y crea el suyo
+reset role;
+insert into auth.users (id, email) values ('77777777-7777-7777-7777-777777777777', 'otro@test.com');
+set role authenticated;
+select set_config('request.jwt.claims', '{"sub":"77777777-7777-7777-7777-777777777777","email":"otro@test.com"}', false);
+select t.set('ws2', public.create_workspace('Balneario Los Médanos', 20, 5)::text);
+select t.ok((select count(*) from public.spaces where kind = 'carpa') = 20 and (select count(*) from public.spaces where kind = 'sombrilla') = 5, 'Multi: el balneario nuevo arranca con las carpas y sombrillas pedidas');
+select t.ok((select string_agg(code, ',' order by code) from public.spaces where kind = 'sombrilla') = '21,22,23,24,25', 'Multi: las sombrillas siguen la numeración');
+select t.ok((select count(*) from public.workspaces) = 1 and (select id from public.workspaces) = t.uid('ws2'), 'Multi: cada uno ve solo su balneario');
+select t.ok((select count(*) from public.customers) = 0 and (select count(*) from public.payments) = 0 and (select count(*) from public.reservations) = 0, 'Multi: no ve clientes, pagos ni reservas de otro balneario');
+select t.throws(format($$select public.dashboard_summary(%L)$$, t.get('ws')), 'No tenés permiso', 'Multi: no puede consultar el panel de otro balneario');
+select t.throws($$select public.create_workspace('Segundo')$$, 'ya pertenece', 'Multi: una cuenta crea un solo balneario');
+select t.throws($$select public.create_workspace('X', 0, 0)$$, 'Indicá cuántas', 'Multi: hay que tener al menos una carpa o sombrilla');
 
 reset role;
 \o

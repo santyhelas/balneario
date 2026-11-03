@@ -231,7 +231,7 @@ export default function LoginPage() {
             <>
               <button className="text-accent hover:underline" onClick={() => go("recuperar")}>Olvidé mi contraseña</button>
               {canRegister ? (
-                <button className="text-muted hover:underline" onClick={() => go("crear")}>Crear una cuenta nueva</button>
+                <button className="text-muted hover:underline" onClick={() => go("crear")}>¿No tenés cuenta? Registrate y creá tu balneario</button>
               ) : (
                 <p className="text-center text-xs text-muted">¿No tenés usuario? Pedíselo al propietario del balneario.</p>
               )}

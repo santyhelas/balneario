@@ -219,16 +219,16 @@ function Onboarding({ email, onDone }: { email: string | null; onDone: () => Pro
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [blocked, setBlocked] = useState(false);
+  const [tents, setTents] = useState("90");
+  const [umbrellas, setUmbrellas] = useState("10");
 
   async function submit(e: FormEvent) {
     e.preventDefault();
     setBusy(true);
     setError(null);
-    const { error } = await getSupabase().rpc("create_workspace", { p_name: name });
+    const { error } = await getSupabase().rpc("create_workspace", { p_name: name, p_tents: Number(tents) || 0, p_umbrellas: Number(umbrellas) || 0 });
     setBusy(false);
     if (error) {
-      if (/ya fue creado/i.test(error.message)) setBlocked(true);
       setError(friendlyError(error));
       return;
     }
@@ -243,27 +243,22 @@ function Onboarding({ email, onDone }: { email: string | null; onDone: () => Pro
   return (
     <main className="flex min-h-dvh items-center justify-center p-4">
       <div className="w-full max-w-md rounded-2xl border border-line bg-surface p-6">
-        {blocked ? (
-          <>
-            <h1 className="mb-2 text-lg font-semibold">Sin acceso</h1>
-            <p className="mb-4 text-sm text-muted">
-              La cuenta {email} no tiene permiso para usar este balneario. Pedile al propietario que te invite.
-            </p>
-            <Button variant="secondary" onClick={logout}>Cerrar sesión</Button>
-          </>
-        ) : (
-          <form onSubmit={submit} className="flex flex-col gap-3">
-            <h1 className="text-lg font-semibold">Bienvenido</h1>
-            <p className="text-sm text-muted">
-              Es la primera vez que se usa el sistema. Vas a quedar como propietario del balneario ({email}). Se cargan
-              90 carpas y 10 sombrillas iniciales, que después podés modificar.
-            </p>
-            <TextField label="Nombre del balneario" required maxLength={120} value={name} onChange={(e) => setName(e.target.value)} />
-            {error && <Alert tone="danger">{error}</Alert>}
-            <Button type="submit" loading={busy}>Crear balneario</Button>
-            <button type="button" className="text-sm text-muted hover:underline" onClick={logout}>Usar otra cuenta</button>
-          </form>
-        )}
+        <form onSubmit={submit} className="flex flex-col gap-3">
+          <h1 className="text-lg font-semibold">Creá tu balneario</h1>
+          <p className="text-sm text-muted">
+            Vas a quedar como propietario{email ? ` (${email})` : ""}. Tus datos son solo tuyos: ningún otro balneario los ve.
+            El plano arranca con filas de carpas y sombrillas que después acomodás en el Mapa.
+          </p>
+          <TextField label="Nombre del balneario" required maxLength={120} value={name} onChange={(e) => setName(e.target.value)} />
+          <div className="grid grid-cols-2 gap-3">
+            <TextField label="Carpas" type="number" inputMode="numeric" min={0} max={600} value={tents} onChange={(e) => setTents(e.target.value)} />
+            <TextField label="Sombrillas" type="number" inputMode="numeric" min={0} max={300} value={umbrellas} onChange={(e) => setUmbrellas(e.target.value)} />
+          </div>
+          <p className="text-xs text-muted">Después podés agregar, quitar y renombrar carpas y sombrillas, y cargar la ubicación en Configuración para ver el clima.</p>
+          {error && <Alert tone="danger">{error}</Alert>}
+          <Button type="submit" loading={busy}>Crear balneario</Button>
+          <button type="button" className="text-sm text-muted hover:underline" onClick={logout}>Usar otra cuenta</button>
+        </form>
       </div>
     </main>
   );
