@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { getSupabase } from "@/lib/supabase/client";
+import { allowLeave } from "@/lib/leave";
 import { unwrap, useLoader } from "@/lib/data";
 import { friendlyError } from "@/lib/errors";
 import { formatDateTime } from "@/lib/format";
@@ -62,6 +63,7 @@ export default function CopiasPage() {
     setRestoreBusy(false);
     if (error) return setRestoreError(friendlyError(error));
     // Se recarga todo para que ninguna pantalla muestre datos anteriores a la restauración.
+    allowLeave();
     window.location.assign("/copias?restaurada=1");
   }
 

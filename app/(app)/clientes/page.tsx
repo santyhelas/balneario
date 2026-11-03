@@ -2,12 +2,13 @@
 import { useEffect, useState } from "react";
 import { getSupabase } from "@/lib/supabase/client";
 import { unwrap, useLoader } from "@/lib/data";
-import { formatDate, formatDateTime, formatMoney } from "@/lib/format";
+import { formatDate, formatDateTime, formatMoney, todayISO } from "@/lib/format";
+import { exportCustomersXlsx } from "@/lib/customers-export";
 import { METHOD_LABEL } from "@/lib/methods";
 import { seasonOf } from "@/lib/history";
 import { useWorkspace } from "@/components/workspace";
 import { PageHeader, SyncNotice } from "@/components/shell";
-import { Badge, Button, Card, EmptyState, Input, Spinner, cx } from "@/components/ui";
+import { Alert, Badge, Button, Card, EmptyState, Input, Spinner, cx } from "@/components/ui";
 import Link from "next/link";
 import { CustomerForm, searchCustomers, type Customer } from "@/components/customers";
 
@@ -43,15 +44,35 @@ export default function ClientesPage() {
   }, [selected]);
 
   const list = useLoader(() => searchCustomers(ws.id, debounced), [ws.id, debounced], 60_000);
+  const [exporting, setExporting] = useState(false);
+  const [exportMsg, setExportMsg] = useState<{ tone: "ok" | "danger"; text: string } | null>(null);
+  async function exportXlsx() {
+    setExporting(true);
+    setExportMsg(null);
+    try {
+      const r = await exportCustomersXlsx(ws.id, ws.name, todayISO(ws.timezone));
+      setExportMsg({ tone: "ok", text: `Excel descargado: ${r.customers} clientes y ${r.rentals} alquileres (sin cortesías).` });
+    } catch (e) {
+      setExportMsg({ tone: "danger", text: `No se pudo armar el Excel: ${e instanceof Error ? e.message : "error desconocido"}` });
+    } finally {
+      setExporting(false);
+    }
+  }
 
   return (
     <>
       <PageHeader
         title="Clientes"
-        subtitle="Buscá por nombre, apellido, teléfono o localidad"
-        actions={<Button onClick={() => { setEditing(null); setFormOpen(true); }}>Nuevo cliente</Button>}
+        subtitle="Buscá por nombre, apellido o teléfono"
+        actions={
+          <>
+            <Button variant="secondary" loading={exporting} onClick={exportXlsx}>Descargar Excel</Button>
+            <Button onClick={() => { setEditing(null); setFormOpen(true); }}>Nuevo cliente</Button>
+          </>
+        }
       />
       <SyncNotice error={list.error} stale={list.stale} updatedAt={list.updatedAt} onRetry={list.reload} />
+      {exportMsg && <Alert tone={exportMsg.tone} className="mb-3">{exportMsg.text}</Alert>}
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
         <Card>

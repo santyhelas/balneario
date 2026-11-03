@@ -3,11 +3,13 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { getSupabase } from "@/lib/supabase/client";
+import { allowLeave, leaveAllowed } from "@/lib/leave";
 import { GUEST_MARK, useWorkspace, type ThemePref, type Workspace } from "@/components/workspace";
 import { useStatus, type Notice } from "@/components/status";
 import { useUndo } from "@/components/undo";
 import { ConfirmDialog, cx } from "@/components/ui";
 import { DayNotes, usePendingNotes } from "@/components/day-notes";
+import { CloseCashModal, OpenCashModal, type CashSummary } from "@/components/cash";
 
 type NavItem = { href: string; label: string; icon: string };
 
@@ -92,6 +94,8 @@ export function Shell({ children }: { children: ReactNode }) {
     </button>
   );
   const [loggingOut, setLoggingOut] = useState(false);
+  const [closeForLogout, setCloseForLogout] = useState(false);
+  const cashOpen = status.summary?.caja.estado === "abierta";
   const [menuOpen, setMenuOpen] = useState(false);
   const undo = useUndo(() => status.reload());
 
@@ -110,6 +114,7 @@ export function Shell({ children }: { children: ReactNode }) {
     } catch {
       /* nada */
     }
+    allowLeave();
     window.location.assign("/login");
   }
 
@@ -343,17 +348,90 @@ export function Shell({ children }: { children: ReactNode }) {
       )}
 
       {undo.dialog}
+      <CashGuard closeRequest={closeForLogout} onClosedForLogout={() => { setCloseForLogout(false); logout(); }} onCancelClose={() => setCloseForLogout(false)} />
       <ConfirmDialog
         open={confirmLogout}
         title={isGuest ? "¿Salir del modo invitado?" : "¿Cerrar sesión?"}
-        message={isGuest ? "Se borra todo lo que cargaste en la demostración." : "Vas a tener que volver a ingresar para usar el sistema. Los datos quedan guardados."}
-        confirmLabel={isGuest ? "Salir y borrar" : "Cerrar sesión"}
+        message={isGuest ? "Se borra todo lo que cargaste en la demostración." : cashOpen ? (
+          <div className="flex flex-col gap-3">
+            <p>La <strong>caja de hoy sigue abierta</strong>. ¿Querés cerrarla antes de salir?</p>
+            <p className="text-xs text-muted">Cerrala solo si terminó el día: una vez cerrada, hoy no se puede volver a abrir. Si vas a seguir trabajando más tarde, salí sin cerrarla.</p>
+            <button type="button" onClick={() => { setConfirmLogout(false); setCloseForLogout(true); }}
+              className="rounded-lg border border-accent bg-accent-soft px-3 py-2 text-sm font-semibold text-accent hover:opacity-90">Cerrar la caja y salir</button>
+          </div>
+        ) : "Vas a tener que volver a ingresar para usar el sistema. Los datos quedan guardados."}
+        confirmLabel={isGuest ? "Salir y borrar" : cashOpen ? "Salir sin cerrar la caja" : "Cerrar sesión"}
         danger
         busy={loggingOut}
         onConfirm={logout}
         onCancel={() => setConfirmLogout(false)}
       />
     </div>
+  );
+}
+
+/**
+ * Caja del día:
+ * - al empezar un día nuevo ofrece abrirla (y, si quedó abierta la de otro día, primero cerrarla);
+ * - al cerrar la pestaña con la caja abierta, el navegador pregunta antes de salir;
+ * - al cerrar sesión, si se elige "Cerrar la caja y salir", muestra el cierre.
+ */
+function CashGuard({ closeRequest, onClosedForLogout, onCancelClose }: { closeRequest: boolean; onClosedForLogout: () => void; onCancelClose: () => void }) {
+  const { ws, isGuest } = useWorkspace();
+  const st = useStatus();
+  const sb = getSupabase();
+  const [openNew, setOpenNew] = useState(false);
+  const [closing, setClosing] = useState<{ summary: CashSummary; forLogout: boolean } | null>(null);
+  const s = st.summary;
+
+  const asked = (k: string) => { try { return sessionStorage.getItem(`caja-preg:${k}`) === "1"; } catch { return false; } };
+  const mark = (k: string) => { try { sessionStorage.setItem(`caja-preg:${k}`, "1"); } catch { /* nada */ } };
+
+  // Inicio del día: primero cerrar la caja que quedó abierta; después abrir la de hoy.
+  useEffect(() => {
+    if (!s || isGuest) return;
+    if (s.caja_anterior_sin_cerrar) {
+      const k = `cerrar:${s.caja_anterior_sin_cerrar.session_id}`;
+      if (asked(k)) return;
+      mark(k);
+      sb.rpc("cash_session_summary", { p_session_id: s.caja_anterior_sin_cerrar.session_id }).then(({ data, error }) => {
+        if (!error && data) setClosing({ summary: data as CashSummary, forLogout: false });
+      });
+    } else if (s.caja.estado === "sin_abrir") {
+      const k = `abrir:${s.fecha}`;
+      if (asked(k)) return;
+      mark(k);
+      setOpenNew(true);
+    }
+  }, [s?.fecha, s?.caja.estado, s?.caja_anterior_sin_cerrar?.session_id, isGuest]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Cerrar la pestaña con la caja abierta: el navegador pregunta si salir.
+  useEffect(() => {
+    if (s?.caja.estado !== "abierta" || isGuest) return;
+    const h = (e: BeforeUnloadEvent) => { if (leaveAllowed()) return; e.preventDefault(); e.returnValue = ""; };
+    window.addEventListener("beforeunload", h);
+    return () => window.removeEventListener("beforeunload", h);
+  }, [s?.caja.estado, isGuest]);
+
+  // Cerrar la caja antes de cerrar sesión.
+  useEffect(() => {
+    if (!closeRequest || !s?.caja.session_id) return;
+    sb.rpc("cash_session_summary", { p_session_id: s.caja.session_id }).then(({ data, error }) => {
+      if (!error && data) setClosing({ summary: data as CashSummary, forLogout: true });
+      else onCancelClose();
+    });
+  }, [closeRequest]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  return (
+    <>
+      <OpenCashModal open={openNew} workspaceId={ws.id} onClose={() => setOpenNew(false)} onDone={() => { setOpenNew(false); st.reload(); }} />
+      <CloseCashModal
+        open={closing !== null}
+        summary={closing?.summary ?? null}
+        onClose={() => { const f = closing?.forLogout; setClosing(null); if (f) onCancelClose(); }}
+        onDone={() => { const f = closing?.forLogout; setClosing(null); st.reload(); if (f) onClosedForLogout(); }}
+      />
+    </>
   );
 }
 
