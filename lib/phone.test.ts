@@ -28,3 +28,15 @@ test("lee teléfonos guardados", () => {
   assert.deepEqual(parsePhone("11 4555-4165"), { dial: "54", mobile: true, area: "11", number: "45554165" });
   assert.deepEqual(parsePhone(null), { dial: "54", mobile: true, area: "", number: "" });
 });
+
+import { phoneFromText, splitArgentine } from "./phone.ts";
+
+test("un solo campo: separa el código de área", () => {
+  assert.deepEqual(splitArgentine("2255 45-1234"), { area: "2255", number: "451234" });
+  assert.deepEqual(splitArgentine("011 15 4555-4165"), { area: "11", number: "45554165" });
+  assert.deepEqual(splitArgentine("+54 9 223 455-1234"), { area: "223", number: "4551234" });
+  assert.deepEqual(splitArgentine("02255 15 451234"), { area: "2255", number: "451234" });
+  assert.deepEqual(splitArgentine("1145554165"), { area: "11", number: "45554165" });
+  assert.equal(formatPhone(phoneFromText("54", true, "2255 451234")), "+54 9 2255 45-1234");
+  assert.equal(formatPhone(phoneFromText("598", true, "99 123 456")), "+598 9912-3456");
+});

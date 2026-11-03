@@ -1,13 +1,21 @@
 "use client";
-import { COUNTRIES, formatPhone, phoneProblem, type PhoneParts } from "@/lib/phone";
+import { useEffect, useState } from "react";
+import { COUNTRIES, formatPhone, phoneFromText, phoneProblem, phoneToText, type PhoneParts } from "@/lib/phone";
 import { Field, Input, Select } from "@/components/ui";
 
 /**
- * Teléfono en partes: país (Argentina por defecto), celular (agrega el 9),
- * código de área y número. Muestra cómo queda guardado y si falta algo.
+ * Teléfono: país (Argentina por defecto), celular (agrega el 9) y un solo campo con
+ * código de área y número juntos. Muestra cómo queda guardado y si falta algo.
  */
 export function PhoneInput({ value, onChange }: { value: PhoneParts; onChange: (p: PhoneParts) => void }) {
   const set = <K extends keyof PhoneParts>(k: K, v: PhoneParts[K]) => onChange({ ...value, [k]: v });
+  // Un solo campo con el código de área y el número juntos; el sistema separa el área solo.
+  const [text, setText] = useState(() => phoneToText(value));
+  const shown = phoneToText(value);
+  useEffect(() => {
+    // Si el teléfono cambia desde afuera (abrir otro cliente), se actualiza el campo.
+    if (phoneToText(phoneFromText(value.dial, value.mobile, text)) !== shown) setText(shown);
+  }, [shown]); // eslint-disable-line react-hooks/exhaustive-deps
   const problem = phoneProblem(value);
   const preview = formatPhone(value);
   const ar = value.dial === "54";
@@ -15,7 +23,7 @@ export function PhoneInput({ value, onChange }: { value: PhoneParts; onChange: (
     <Field label="Teléfono">
       <div className="flex flex-col gap-2">
         <div className="flex flex-wrap items-center gap-2">
-          <Select value={value.dial} onChange={(e) => set("dial", e.target.value)} aria-label="País" className="w-auto">
+          <Select value={value.dial} onChange={(e) => onChange(phoneFromText(e.target.value, value.mobile, text))} aria-label="País" className="w-auto">
             {COUNTRIES.map((c) => <option key={c.code} value={c.dial}>{c.name} (+{c.dial})</option>)}
           </Select>
           {ar && (
@@ -25,19 +33,9 @@ export function PhoneInput({ value, onChange }: { value: PhoneParts; onChange: (
             </label>
           )}
         </div>
-        {/* Cada campo va en su propia caja de ancho fijo: así el número tiene lugar para todos los dígitos. */}
-        <div className="grid grid-cols-[6.5rem_minmax(0,1fr)] gap-2">
-          <div>
-            <div className="mb-0.5 text-xs text-muted">Cód. de área</div>
-            <Input inputMode="numeric" aria-label="Código de área" placeholder={ar ? "Ej: 11" : "Área"} value={value.area}
-              onChange={(e) => set("area", e.target.value)} maxLength={6} />
-          </div>
-          <div>
-            <div className="mb-0.5 text-xs text-muted">Número{ar ? " (sin el 15)" : ""}</div>
-            <Input type="tel" inputMode="tel" aria-label="Número" placeholder={ar ? "Ej: 4555-4165" : "Número"} value={value.number}
-              onChange={(e) => set("number", e.target.value)} maxLength={20} />
-          </div>
-        </div>
+        <Input type="tel" inputMode="tel" aria-label="Número con código de área" value={text}
+          placeholder={ar ? "Código de área y número, ej: 2255 45-1234" : "Número completo"}
+          onChange={(e) => { setText(e.target.value); onChange(phoneFromText(value.dial, value.mobile, e.target.value)); }} maxLength={25} />
         {problem ? (
           <p className="text-xs text-warn">{problem}</p>
         ) : preview ? (

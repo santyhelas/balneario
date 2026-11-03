@@ -85,3 +85,46 @@ export function parsePhone(stored: string | null | undefined): PhoneParts {
   }
   return { dial: "54", mobile: true, area: "", number: digits(t) };
 }
+
+// Códigos de área de 3 dígitos (sin el 0). El 11 es de 2 dígitos; el resto de 4.
+const AREA3 = new Set([
+  "220", "221", "223", "230", "236", "237", "249", "260", "261", "263", "264", "266", "280", "291", "294", "297", "298", "299",
+  "336", "341", "342", "343", "345", "348", "351", "353", "358", "362", "364", "370", "376", "379", "380", "381", "383", "385", "387", "388",
+]);
+
+/** Largo del código de área argentino al principio de los dígitos (2, 3 o 4). */
+export function areaLength(d: string): number {
+  if (d.startsWith("11")) return 2;
+  if (AREA3.has(d.slice(0, 3))) return 3;
+  return 4;
+}
+
+/**
+ * Separa un número argentino escrito todo junto ("2255 15 451234", "011 4555-4165", "+54 9 223 455-1234")
+ * en código de área y número, quitando el 0, el 54, el 9 y el 15.
+ */
+export function splitArgentine(text: string): { area: string; number: string } {
+  let d = digits(text);
+  if (d.startsWith("00")) d = d.slice(2);
+  if (d.startsWith("54") && d.length >= 12) d = d.slice(2);
+  if (d.startsWith("9") && d.length === 11) d = d.slice(1);
+  d = d.replace(/^0+/, "");
+  const al = areaLength(d);
+  let area = d.slice(0, al);
+  let number = d.slice(al);
+  if (number.startsWith("15") && area.length + number.length === 12) number = number.slice(2);
+  if (d.length < al + 1) { area = ""; number = d; }
+  return { area, number };
+}
+
+/** Teléfono a partir de lo que se escribe en un solo campo. */
+export function phoneFromText(dial: string, mobile: boolean, text: string): PhoneParts {
+  if (dial === "54") return { dial, mobile, ...splitArgentine(text) };
+  return { dial, mobile, area: "", number: digits(text) };
+}
+
+/** Texto para mostrar en el campo único a partir de las partes guardadas. */
+export function phoneToText(p: PhoneParts): string {
+  const n = p.number.length >= 6 ? `${p.number.slice(0, p.number.length - 4)}-${p.number.slice(-4)}` : p.number;
+  return [p.area, n].filter(Boolean).join(" ");
+}
