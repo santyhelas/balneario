@@ -10,7 +10,7 @@ import { useWorkspace } from "@/components/workspace";
 import { PageHeader, SyncNotice } from "@/components/shell";
 import { Alert, Badge, Button, Card, EmptyState, Modal, Spinner, TextField } from "@/components/ui";
 
-type Backup = { id: string; kind: "manual" | "automatica"; note: string | null; counts: Record<string, number>; size_bytes: number; created_at: string; created_by_email: string | null };
+type Backup = { id: string; kind: "manual" | "automatica" | "importada"; note: string | null; counts: Record<string, number>; size_bytes: number; created_at: string; created_by_email: string | null };
 
 const LABELS: Record<string, string> = {
   customers: "clientes", reservations: "reservas", reservation_segments: "tramos", payments: "pagos",
@@ -55,6 +55,31 @@ export default function CopiasPage() {
     downloadText(`copia_${ws.name.replace(/[^\w]+/g, "_")}_${stamp}.json`, JSON.stringify({ formato: "balneario-copia-v1", creada: b.created_at, ...(data as { data: object }).data }, null, 1), "application/json");
   }
 
+  const [importing, setImporting] = useState(false);
+  async function importFile(file: File | undefined) {
+    if (!file) return;
+    setMsg(null);
+    if (file.size > 50 * 1024 * 1024) return setMsg({ tone: "danger", text: "El archivo es demasiado grande (máximo 50 MB)." });
+    setImporting(true);
+    try {
+      let data: unknown;
+      try {
+        data = JSON.parse(await file.text());
+      } catch {
+        throw new Error("El archivo no es una copia de seguridad del sistema (no se pudo leer).");
+      }
+      const { data: res, error } = await sb.rpc("import_backup", { p_workspace_id: ws.id, p_data: data, p_note: file.name.slice(0, 120) });
+      if (error) throw new Error(friendlyError(error));
+      const r = res as { counts: Record<string, number>; de_otro_balneario: boolean };
+      setMsg({ tone: "ok", text: `Archivo importado: ${r.counts.reservations ?? 0} reservas, ${r.counts.customers ?? 0} clientes, ${r.counts.payments ?? 0} pagos${r.de_otro_balneario ? " (de otro balneario)" : ""}. Todavía no cambió nada: para usarlo, tocá "Restaurar" en la copia "Importada" de la lista.` });
+      q.reload();
+    } catch (e) {
+      setMsg({ tone: "danger", text: e instanceof Error ? e.message : "No se pudo importar el archivo." });
+    } finally {
+      setImporting(false);
+    }
+  }
+
   async function restore() {
     if (!restoring) return;
     setRestoreBusy(true);
@@ -87,11 +112,22 @@ export default function CopiasPage() {
               </div>
             ) : <p className="text-sm text-muted">Solo los administradores pueden crear copias manuales.</p>}
           </Card>
+          {isOwner && (
+            <Card title="Importar una copia">
+              <p className="mb-3 text-sm text-muted">Subí un archivo de copia que hayas descargado antes (termina en .json). Se guarda como una copia más; nada cambia hasta que toques <strong className="text-fg">Restaurar</strong>.</p>
+              <label className={`flex cursor-pointer items-center justify-center rounded-lg border border-dashed border-line px-3 py-3 text-sm font-medium hover:bg-surface-2 ${importing ? "pointer-events-none opacity-60" : ""}`}>
+                {importing ? <><Spinner small /> <span className="ml-2">Importando…</span></> : "Elegir archivo de copia"}
+                <input type="file" accept=".json,application/json" className="hidden" onChange={(e) => { importFile(e.target.files?.[0]); e.target.value = ""; }} />
+              </label>
+              <p className="mt-2 text-xs text-muted">También sirve para pasar los datos a otra cuenta: si la copia es de otro balneario, se adapta sola.</p>
+            </Card>
+          )}
           <Card title="Cómo funciona">
             <ul className="list-disc space-y-1 pl-5 text-sm text-muted">
               <li><strong className="text-fg">Automática:</strong> se hace sola una vez por día al abrir el sistema. Se guardan las últimas 30.</li>
               <li><strong className="text-fg">Manual:</strong> cuando quieras, por ejemplo antes de un cambio grande.</li>
-              <li><strong className="text-fg">Descargar:</strong> baja un archivo con todo, para guardarlo en tu computadora o en Google Drive.</li>
+              <li><strong className="text-fg">Descargar (exportar):</strong> baja un archivo con todo, para guardarlo en tu computadora o en Google Drive.</li>
+              <li><strong className="text-fg">Importar:</strong> vuelve a subir ese archivo, por ejemplo si la copia ya no está en el servidor.</li>
               <li>Las copias quedan en el servidor: no se pierden si se cambia o actualiza la página.</li>
             </ul>
             <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-muted">
@@ -111,7 +147,7 @@ export default function CopiasPage() {
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 font-medium">
                       {formatDateTime(b.created_at, ws.timezone)}
-                      <Badge tone={b.kind === "manual" ? "info" : "muted"}>{b.kind === "manual" ? "Manual" : "Automática"}</Badge>
+                      <Badge tone={b.kind === "manual" ? "info" : b.kind === "importada" ? "warn" : "muted"}>{b.kind === "manual" ? "Manual" : b.kind === "importada" ? "Importada" : "Automática"}</Badge>
                     </div>
                     <div className="text-xs text-muted">
                       {Object.entries(LABELS).filter(([k]) => b.counts[k] !== undefined).map(([k, l]) => `${b.counts[k]} ${l}`).join(" · ")}

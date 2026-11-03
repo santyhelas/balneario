@@ -736,6 +736,27 @@ select set_config('request.jwt.claims', '{"sub":"33333333-3333-3333-3333-3333333
 select t.throws(format($$select public.restore_backup(%L, 'RESTAURAR')$$, t.get('bk')), 'No tenés permiso', 'Restaurar: solo el propietario');
 select set_config('request.jwt.claims', '{"sub":"11111111-1111-1111-1111-111111111111","email":"duenio@test.com"}', false);
 
+-- 25. Importar una copia (archivo descargado)
+select t.set('file', (select (jsonb_build_object('formato', 'balneario-copia-v1', 'creada', created_at) || data)::text from public.backups where id = t.uid('bk')));
+select t.set('imp', (public.import_backup(t.uid('ws'), t.get('file')::jsonb, 'Archivo de la compu') ->> 'backup_id'));
+select t.ok((select kind = 'importada' and (counts ->> 'reservations')::int > 0 from public.backups where id = t.uid('imp')), 'Importar: queda como copia importada');
+insert into public.customers (workspace_id, first_name, last_name) values (t.uid('ws'), 'Otro', 'Cliente');
+select public.restore_backup(t.uid('imp'), 'RESTAURAR');
+select t.ok(not exists (select 1 from public.customers where first_name = 'Otro' and last_name = 'Cliente') and (select count(*)::text from public.customers where workspace_id = t.uid('ws')) = t.get('n_cust'), 'Importar: restaurar el archivo vuelve los datos');
+select t.throws(format($$select public.import_backup(%L, '{"hola": 1}'::jsonb)$$, t.get('ws')), 'no es una copia', 'Importar: rechaza archivos que no son copias');
+-- De otro balneario: identificadores nuevos, no toca los datos del original
+select set_config('request.jwt.claims', '{"sub":"77777777-7777-7777-7777-777777777777","email":"otro@test.com"}', false);
+select t.set('imp2', (public.import_backup(t.uid('ws2'), t.get('file')::jsonb) ->> 'backup_id'));
+select public.restore_backup(t.uid('imp2'), 'RESTAURAR');
+select t.ok((select count(*)::text from public.customers where workspace_id = t.uid('ws2')) = t.get('n_cust'), 'Importar: los datos pasan a otro balneario');
+select t.ok((select count(*) from public.reservations where workspace_id = t.uid('ws2')) > 0
+        and (select count(*) from public.reservation_segments g join public.spaces s on s.id = g.space_id where g.workspace_id = t.uid('ws2') and s.workspace_id = t.uid('ws2')) > 0, 'Importar: las reservas quedan con las carpas del balneario nuevo');
+select set_config('request.jwt.claims', '{"sub":"11111111-1111-1111-1111-111111111111","email":"duenio@test.com"}', false);
+select t.ok((select count(*)::text from public.customers where workspace_id = t.uid('ws')) = t.get('n_cust'), 'Importar: el balneario original queda igual');
+select set_config('request.jwt.claims', '{"sub":"33333333-3333-3333-3333-333333333333","email":"operador@test.com"}', false);
+select t.throws(format($$select public.import_backup(%L, %L::jsonb)$$, t.get('ws'), t.get('file')), 'No tenés permiso', 'Importar: solo el propietario');
+select set_config('request.jwt.claims', '{"sub":"11111111-1111-1111-1111-111111111111","email":"duenio@test.com"}', false);
+
 reset role;
 \o
 -- Resultado ----------------------------------------------------------
