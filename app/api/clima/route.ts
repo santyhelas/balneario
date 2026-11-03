@@ -69,9 +69,11 @@ async function getSmnText(): Promise<string | null> {
 
 // OpenWeather: clima actual cada ~10 minutos. Se consulta como máximo una vez por minuto.
 const owCache = new Map<string, { at: number; data: Ahora | null }>();
+/** Estado de OpenWeather para mostrar en pantalla (sin datos sensibles). */
+let owStatus: "sin_clave" | "clave_no_activa" | "error" | "ok" = "sin_clave";
 async function getOpenWeather(lat: number, lon: number): Promise<Ahora | null> {
-  const key = process.env.OPENWEATHER_API_KEY;
-  if (!key) return null;
+  const key = process.env.OPENWEATHER_API_KEY?.trim();
+  if (!key) { owStatus = "sin_clave"; return null; }
   const k = `${lat.toFixed(3)},${lon.toFixed(3)}`;
   const hit = owCache.get(k);
   if (hit && Date.now() - hit.at < 60_000) return hit.data;
@@ -80,11 +82,16 @@ async function getOpenWeather(lat: number, lon: number): Promise<Ahora | null> {
       `https://api.openweathermap.org/data/2.5/weather?lat=${lat.toFixed(4)}&lon=${lon.toFixed(4)}&units=metric&lang=es&appid=${encodeURIComponent(key)}`,
       { cache: "no-store", signal: AbortSignal.timeout(8000) },
     );
-    if (!res.ok) return hit?.data ?? null;
+    if (!res.ok) {
+      owStatus = res.status === 401 ? "clave_no_activa" : "error";
+      return hit?.data ?? null;
+    }
+    owStatus = "ok";
     const data = parseOw((await res.json()) as OwCurrent);
     owCache.set(k, { at: Date.now(), data });
     return data;
   } catch {
+    owStatus = "error";
     return hit?.data ?? null;
   }
 }
@@ -180,6 +187,7 @@ export async function GET(req: Request) {
     : fc;
 
   return json({
+    openweather: owStatus,
     medido: ow
       ? { fuente: "OpenWeather", estacion: ow.lugar ?? "la zona del balneario", hora: ow.hora, distancia_km: 0, cielo: ow.cielo }
       : medido && { fuente: "SMN", estacion: medido.estacion, hora: medido.hora, distancia_km: medido.distancia_km, cielo: medido.cielo },

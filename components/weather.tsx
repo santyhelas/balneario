@@ -6,6 +6,8 @@ import { useWorkspace } from "@/components/workspace";
 import { cx } from "@/components/ui";
 
 export type Weather = {
+  /** Estado de la conexión con OpenWeather. */
+  openweather?: "sin_clave" | "clave_no_activa" | "error" | "ok";
   /** Medición real del SMN (si hay una de las últimas 3 horas cerca del balneario). */
   medido?: { fuente?: "OpenWeather" | "SMN"; estacion: string; hora: string; distancia_km: number; cielo: string | null } | null;
   fuente: string;
@@ -239,6 +241,9 @@ export function WeatherStrip({ className }: { className?: string }) {
               : `Pronóstico para las ${hhmm(d.hora_dato, ws.timezone)} (calculado ${hhmm(d.actualizado, ws.timezone)})`}
             {w.fetchedAt ? ` · revisado ${hhmm(w.fetchedAt.toISOString(), ws.timezone)}` : ""}
           </span>
+          {d.openweather === "clave_no_activa" && <span className="text-warn">OpenWeather: la clave todavía no está activa (puede tardar hasta 2 horas)</span>}
+          {d.openweather === "sin_clave" && <span>OpenWeather: falta cargar la clave en Vercel</span>}
+          {d.openweather === "error" && <span className="text-warn">OpenWeather no responde; se usa el SMN</span>}
           <span>
             {d.medido?.fuente === "OpenWeather"
               ? <><a href="https://openweathermap.org/" target="_blank" rel="noopener noreferrer" className="hover:underline">Weather data © OpenWeather</a> · </>
