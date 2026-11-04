@@ -757,6 +757,28 @@ select set_config('request.jwt.claims', '{"sub":"33333333-3333-3333-3333-3333333
 select t.throws(format($$select public.import_backup(%L, %L::jsonb)$$, t.get('ws'), t.get('file')), 'No tenés permiso', 'Importar: solo el propietario');
 select set_config('request.jwt.claims', '{"sub":"11111111-1111-1111-1111-111111111111","email":"duenio@test.com"}', false);
 
+-- 26. Seguridad: límite de intentos y permisos
+reset role;
+select t.ok(public.login_allowed('u:pepe', 'ip:1.2.3.4'), 'Ingreso: al principio se puede intentar');
+select public.login_record('u:pepe', 'ip:1.2.3.4', false) from generate_series(1, 10);
+select t.ok(not public.login_allowed('u:pepe', 'ip:9.9.9.9'), 'Ingreso: 10 contraseñas mal seguidas bloquean al usuario');
+select t.ok(public.login_allowed('u:otro', 'ip:9.9.9.9'), 'Ingreso: no bloquea a otros usuarios');
+select public.login_record('u:pepe', null, true);
+select t.ok(public.login_allowed('u:pepe', null), 'Ingreso: al entrar bien se limpian las fallas');
+select public.login_record('u:x' || g, 'ip:5.5.5.5', false) from generate_series(1, 30) g;
+select t.ok(not public.login_allowed('u:nuevo', 'ip:5.5.5.5'), 'Ingreso: muchas fallas desde una misma conexión la bloquean');
+set role authenticated;
+select t.throws($$select public.login_allowed('u:a', null)$$, 'permission denied', 'Ingreso: el navegador no puede consultar ni borrar los intentos');
+reset role;
+select t.ok(not exists (
+  select 1 from information_schema.role_table_grants
+  where table_schema = 'public' and grantee in ('anon', 'authenticated')
+    and privilege_type in ('INSERT', 'UPDATE', 'DELETE', 'TRUNCATE')
+    and table_name <> 'user_preferences'), 'Seguridad: ninguna tabla tiene permisos de escritura generales de más');
+select t.ok(not exists (
+  select 1 from information_schema.role_table_grants
+  where table_schema = 'public' and grantee = 'anon' and privilege_type = 'SELECT'), 'Seguridad: sin sesión no se puede leer ninguna tabla');
+
 reset role;
 \o
 -- Resultado ----------------------------------------------------------
