@@ -8,6 +8,7 @@ import { friendlyError } from "@/lib/errors";
 import { addDays, formatDate, formatDateTime, formatMoney, inclusiveDays, parseMoney, todayISO } from "@/lib/format";
 import { METHOD_LABEL } from "@/lib/methods";
 import { VoucherList } from "@/components/vouchers";
+import { receiptMessage } from "@/lib/whatsapp-messages";
 import { loadReservation, spacesSummary, whatsappLink, type Full, type PaymentRow } from "@/lib/reservations";
 import { daysOf, indexGrid, isFreeFor, type GridRow } from "@/lib/stay";
 import { useWorkspace } from "@/components/workspace";
@@ -39,6 +40,13 @@ export default function ReservaPage() {
     `Hola ${r.customers.first_name}, te escribimos de ${ws.name}. Reserva #${r.number}: ${spacesSummary(segments)} del ${formatDate(r.start_date)} al ${formatDate(r.end_date)}.` +
     (due > 0 ? ` Saldo pendiente: ${formatMoney(due)}.` : " Está paga. ¡Te esperamos!"));
 
+  const waReceipt = whatsappLink(r.customers.phone, receiptMessage({
+    balneario: ws.name, number: r.number, customer: `${r.customers.first_name} ${r.customers.last_name ?? ""}`.trim(),
+    places: spacesSummary(segments).split(" → ").map((c) => `${segments.find((s) => s.spaces.code === c)?.spaces.kind === "sombrilla" ? "Sombrilla" : "Carpa"} ${c}`).join(" → "),
+    start: r.start_date, end: r.end_date, total: Number(r.total_amount), paid: Number(balance.paid_amount), due, courtesy: r.is_courtesy,
+    payments: payments.map((p) => ({ date: formatDateISO(p.created_at, ws.timezone), kind: p.kind, method: METHOD_LABEL[p.method] ?? p.method, amount: Number(p.amount), voided: voided.has(p.id) })),
+  }));
+
   function done(text: string) {
     setModal(null);
     setVoiding(null);
@@ -59,6 +67,7 @@ export default function ReservaPage() {
             {confirmed && r.end_date >= today && <Button variant="secondary" onClick={() => setModal("reubicar")}>Cambiar de carpa</Button>}
             <Link href={`/reservas/${r.id}/recibo`}><Button variant="secondary">Comprobante</Button></Link>
             {wa && <a href={wa} target="_blank" rel="noopener noreferrer"><Button variant="secondary">WhatsApp</Button></a>}
+            {waReceipt && <a href={waReceipt} target="_blank" rel="noopener noreferrer" title="Mandar el comprobante con el detalle de pagos"><Button variant="secondary">Comprobante por WhatsApp</Button></a>}
             {confirmed && <Button variant="danger" onClick={() => setModal("cancelar")}>Cancelar reserva</Button>}
           </>
         }
@@ -428,4 +437,9 @@ function RevertModal({ changeId, description, onClose, onDone }: { changeId: str
       }
     />
   );
+}
+
+/** Fecha AAAA-MM-DD de un momento, en la zona horaria del balneario. */
+function formatDateISO(iso: string, tz: string) {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(new Date(iso));
 }

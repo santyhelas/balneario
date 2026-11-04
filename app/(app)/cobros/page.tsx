@@ -10,11 +10,14 @@ import { useStatus } from "@/components/status";
 import { PageHeader, SyncNotice } from "@/components/shell";
 import { Alert, Badge, Button, Card, EmptyState, Input, Spinner, cx } from "@/components/ui";
 import { PaymentModal } from "@/components/payments";
+import { whatsappLink } from "@/lib/reservations";
+import { debtReminder } from "@/lib/whatsapp-messages";
 import { VoucherList } from "@/components/vouchers";
 
 type DebtRow = {
   id: string; number: number; start_date: string; end_date: string; total_amount: number;
   customers: { first_name: string; last_name: string; phone: string | null };
+  reservation_segments?: { active: boolean; start_date: string; spaces: { code: string; kind: string } | null }[];
   due: number; paid: number;
 };
 type PayRow = {
@@ -36,7 +39,7 @@ export default function CobrosPage() {
     const bal = unwrap(await sb.from("reservation_balances").select("reservation_id, due_amount, paid_amount").eq("workspace_id", ws.id).gt("due_amount", 0)) as { reservation_id: string; due_amount: number; paid_amount: number }[];
     let debts: DebtRow[] = [];
     if (bal.length) {
-      const rows = unwrap(await sb.from("reservations").select("id, number, start_date, end_date, total_amount, customers(first_name, last_name, phone)").in("id", bal.map((b) => b.reservation_id))) as unknown as Omit<DebtRow, "due" | "paid">[];
+      const rows = unwrap(await sb.from("reservations").select("id, number, start_date, end_date, total_amount, customers(first_name, last_name, phone), reservation_segments(active, start_date, spaces(code, kind))").in("id", bal.map((b) => b.reservation_id))) as unknown as Omit<DebtRow, "due" | "paid">[];
       const m = new Map(bal.map((b) => [b.reservation_id, b]));
       debts = rows.map((r) => ({ ...r, due: Number(m.get(r.id)!.due_amount), paid: Number(m.get(r.id)!.paid_amount) }))
         .sort((a, b) => a.end_date.localeCompare(b.end_date));
@@ -100,6 +103,20 @@ export default function CobrosPage() {
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="tabular font-bold text-danger">{formatMoney(d.due)}</span>
+                      {(() => {
+                        const places = [...new Set((d.reservation_segments ?? []).filter((x) => x.active).sort((a, b) => a.start_date.localeCompare(b.start_date))
+                          .map((x) => `${x.spaces?.kind === "sombrilla" ? "Sombrilla" : "Carpa"} ${x.spaces?.code ?? ""}`))].join(" y ");
+                        const link = whatsappLink(d.customers.phone, debtReminder({
+                          firstName: d.customers.first_name, balneario: ws.name, number: d.number, places,
+                          start: d.start_date, end: d.end_date, due: d.due, today,
+                        }));
+                        return link ? (
+                          <a href={link} target="_blank" rel="noopener noreferrer" title="Mandar recordatorio por WhatsApp"
+                            className="rounded-lg border border-green-600/40 bg-green-50 px-2.5 py-2 text-sm font-semibold text-green-800 hover:bg-green-100 dark:bg-green-900/30 dark:text-green-200">
+                            WhatsApp
+                          </a>
+                        ) : <span className="text-xs text-muted" title="El cliente no tiene teléfono cargado">Sin teléfono</span>;
+                      })()}
                       <Button onClick={() => { setMsg(null); setPaying(d); }} disabled={!cajaAbierta}>Cobrar</Button>
                     </div>
                   </li>
