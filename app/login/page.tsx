@@ -5,6 +5,7 @@ import { friendlyError } from "@/lib/errors";
 import { Alert, Button, Field, Input, TextField } from "@/components/ui";
 import { GoogleG } from "@/components/google";
 import { GUEST_MARK } from "@/lib/remember";
+import { SITE_EMAIL } from "@/lib/site";
 
 type Mode = "ingresar" | "crear" | "recuperar";
 
@@ -240,6 +241,9 @@ export default function LoginPage() {
             <button className="text-accent hover:underline" onClick={() => go("ingresar")}>Volver a ingresar</button>
           )}
         </div>
+        <p className="mt-5 border-t border-line pt-3 text-center text-xs text-muted">
+          Consultas: <a href={`mailto:${SITE_EMAIL}`} className="text-accent hover:underline">{SITE_EMAIL}</a>
+        </p>
       </div>
     </main>
   );
