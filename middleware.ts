@@ -5,7 +5,8 @@ type CookieToSet = { name: string; value: string; options: CookieOptions };
 import { NextResponse, type NextRequest } from "next/server";
 
 // Rutas que se pueden ver sin haber iniciado sesión.
-const PUBLIC_PATHS = ["/login", "/auth/callback", "/auth/restablecer", "/auth/ingresar", "/auth/registrar"];
+// /api/cron: tareas automáticas de Vercel (no tienen sesión; cada una se protege sola).
+const PUBLIC_PATHS = ["/login", "/auth/callback", "/auth/restablecer", "/auth/ingresar", "/auth/registrar", "/api/cron"];
 
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({ request });

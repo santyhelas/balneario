@@ -7,6 +7,7 @@ import { friendlyError } from "@/lib/errors";
 import { formatDateTime } from "@/lib/format";
 import { downloadText } from "@/lib/csv";
 import { useWorkspace } from "@/components/workspace";
+import { DriveCard } from "@/components/drive-card";
 import { PageHeader, SyncNotice } from "@/components/shell";
 import { Alert, Badge, Button, Card, EmptyState, Modal, Spinner, TextField } from "@/components/ui";
 
@@ -112,6 +113,7 @@ export default function CopiasPage() {
               </div>
             ) : <p className="text-sm text-muted">Solo los administradores pueden crear copias manuales.</p>}
           </Card>
+          <DriveCard />
           {isOwner && (
             <Card title="Importar una copia">
               <p className="mb-3 text-sm text-muted">Subí un archivo de copia que hayas descargado antes (termina en .json). Se guarda como una copia más; nada cambia hasta que toques <strong className="text-fg">Restaurar</strong>.</p>

@@ -779,6 +779,22 @@ select t.ok(not exists (
   select 1 from information_schema.role_table_grants
   where table_schema = 'public' and grantee = 'anon' and privilege_type = 'SELECT'), 'Seguridad: sin sesión no se puede leer ninguna tabla');
 
+-- 27. Copias en Google Drive
+reset role;
+select public.drive_save_link(t.uid('ws'), '11111111-1111-1111-1111-111111111111', 'cifrado', 'carpeta1', 'duenio@gmail.com');
+select t.ok(t.uid('ws') in (select public.drive_pending()), 'Drive: un balneario conectado sin copia queda pendiente');
+select public.drive_mark(t.uid('ws'), true, 'copia.json', null);
+select t.ok(t.uid('ws') not in (select public.drive_pending()), 'Drive: después de subir no vuelve a subir hasta el otro día');
+select t.ok((public.backup_payload(t.uid('ws')) ->> 'formato') = 'balneario-copia-v1' and jsonb_array_length(public.backup_payload(t.uid('ws')) -> 'customers') > 0, 'Drive: la copia tiene el formato importable');
+set role authenticated;
+select set_config('request.jwt.claims', '{"sub":"11111111-1111-1111-1111-111111111111","email":"duenio@test.com"}', false);
+select t.ok((public.drive_status(t.uid('ws')) ->> 'conectado')::boolean and not (public.drive_status(t.uid('ws')) ? 'token_enc'), 'Drive: el estado no muestra el permiso guardado');
+select t.throws(format($$select public.drive_get_link(%L)$$, t.get('ws')), 'permission denied', 'Drive: el navegador no puede leer el permiso de Drive');
+select t.throws(format($$select public.backup_payload(%L)$$, t.get('ws')), 'permission denied', 'Drive: el navegador no puede pedir la copia por esta vía');
+select set_config('request.jwt.claims', '{"sub":"77777777-7777-7777-7777-777777777777","email":"otro@test.com"}', false);
+select t.throws(format($$select public.drive_status(%L)$$, t.get('ws')), 'No tenés permiso', 'Drive: otro balneario no ve tu conexión');
+select set_config('request.jwt.claims', '{"sub":"11111111-1111-1111-1111-111111111111","email":"duenio@test.com"}', false);
+
 reset role;
 \o
 -- Resultado ----------------------------------------------------------
