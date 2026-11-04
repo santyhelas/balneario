@@ -5,6 +5,7 @@ import { getSupabase } from "@/lib/supabase/client";
 import { formatDate, formatMoney } from "@/lib/format";
 import { useWorkspace } from "@/components/workspace";
 import { useStatus, type ResItem, type Notice } from "@/components/status";
+import { WeekAhead } from "@/components/week-ahead";
 import { Icon, NAV } from "@/components/shell";
 import { Alert, Button, Spinner, cx } from "@/components/ui";
 import { CloseCashModal, OpenCashModal, type CashSummary } from "@/components/cash";
@@ -129,6 +130,8 @@ export default function DashboardPage() {
         <Stat tone="neutral" label="Flujo neto caja (efvo)" value={cash ? formatMoney(cashIn - cashOut) : "—"} note={cash ? `En caja: ${formatMoney(cash.efectivo_esperado)}` : "Caja sin abrir"} icon={icon("/caja")} href="/caja" />
         <Stat tone="danger" label="Saldos a cobrar" value={formatMoney(saldo)} note={`${st.debts.length} ${st.debts.length === 1 ? "reserva adeudada" : "reservas adeudadas"}`} icon="M12 3v18M16.5 7.5c0-1.7-2-3-4.5-3s-4.5 1.3-4.5 3 2 2.5 4.5 3 4.5 1.3 4.5 3-2 3-4.5 3-4.5-1.3-4.5-3" href="/cobros" />
       </div>
+
+      <WeekAhead />
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
         {/* Accesos directos */}

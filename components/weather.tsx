@@ -23,6 +23,8 @@ export type Weather = {
   lluvia_1h_prob: number | null;
   lluvia_6h_mm: number | null;
   lluvia_6h_prob: number | null;
+  /** Resumen de los próximos días (pronóstico). */
+  dias?: { fecha: string; tmax: number | null; tmin: number | null; lluvia_mm: number; prob: number | null; viento_max: number; simbolo: string | null }[];
   proximas: { time: string; temp: number | null; wind: number | null; gust: number | null; precip: number | null; prob: number | null; symbol: string }[];
 };
 

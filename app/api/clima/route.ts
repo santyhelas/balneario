@@ -158,6 +158,31 @@ export async function GET(req: Request) {
     symbol: s.data.next_1_hours!.summary.symbol_code,
   }));
 
+  // Resumen por día (hora argentina) para los próximos días: máxima, mínima, lluvia, viento e ícono del mediodía.
+  const dayOf = (iso: string) => new Date(Date.parse(iso) - 3 * 3600_000).toISOString().slice(0, 10);
+  const byDay = new Map<string, { tmax: number; tmin: number; rain: number; wind: number; prob: number | null; symbol: string | null; symHour: number }>();
+  for (const s of series) {
+    const day = dayOf(s.time);
+    const hour = new Date(Date.parse(s.time) - 3 * 3600_000).getUTCHours();
+    const t = s.data.instant.details.air_temperature;
+    const w = kmh(s.data.instant.details.wind_speed) ?? 0;
+    const cur0 = byDay.get(day) ?? { tmax: -99, tmin: 99, rain: 0, wind: 0, prob: null, symbol: null, symHour: 99 };
+    if (typeof t === "number") { cur0.tmax = Math.max(cur0.tmax, t); cur0.tmin = Math.min(cur0.tmin, t); }
+    cur0.wind = Math.max(cur0.wind, w);
+    // Lluvia: por hora si hay dato horario; si no, por bloques de 6 horas (sin contar dos veces).
+    if (s.data.next_1_hours) cur0.rain += s.data.next_1_hours.details.precipitation_amount ?? 0;
+    else if (s.data.next_6_hours && hour % 6 === 0) cur0.rain += s.data.next_6_hours.details.precipitation_amount ?? 0;
+    const pr = s.data.next_1_hours?.details.probability_of_precipitation ?? s.data.next_6_hours?.details.probability_of_precipitation;
+    if (typeof pr === "number") cur0.prob = Math.max(cur0.prob ?? 0, pr);
+    const sym = s.data.next_1_hours?.summary.symbol_code ?? s.data.next_6_hours?.summary.symbol_code ?? null;
+    if (sym && Math.abs(hour - 13) < Math.abs(cur0.symHour - 13)) { cur0.symbol = sym; cur0.symHour = hour; }
+    byDay.set(day, cur0);
+  }
+  const dias = [...byDay.entries()].slice(0, 8).map(([fecha, v]) => ({
+    fecha, tmax: v.tmax > -99 ? Math.round(v.tmax) : null, tmin: v.tmin < 99 ? Math.round(v.tmin) : null,
+    lluvia_mm: Math.round(v.rain * 10) / 10, prob: v.prob, viento_max: v.wind, simbolo: v.symbol,
+  }));
+
   // Si hay medición real del SMN, manda para "ahora"; el pronóstico queda para lluvia y próximas horas.
   const fc = {
     temperatura: d.air_temperature ?? null,
@@ -202,5 +227,6 @@ export async function GET(req: Request) {
     lluvia_6h_mm: n6?.details.precipitation_amount ?? null,
     lluvia_6h_prob: n6?.details.probability_of_precipitation ?? null,
     proximas: next,
+    dias,
   });
 }

@@ -35,6 +35,11 @@ export default function MapaPage() {
   const sb = getSupabase();
   const today = todayISO(ws.timezone);
   const [day, setDay] = useState(today);
+  // Desde el Panel ("Próximos 7 días") se puede abrir el mapa en un día puntual: /mapa?dia=AAAA-MM-DD
+  useEffect(() => {
+    const d = new URLSearchParams(window.location.search).get("dia");
+    if (d && /^\d{4}-\d{2}-\d{2}$/.test(d)) setDay(d);
+  }, []);
   const [layoutConfirm, setLayoutConfirm] = useState(false);
   const [layoutBusy, setLayoutBusy] = useState(false);
   const [sel, setSel] = useState<Selection>(null);
