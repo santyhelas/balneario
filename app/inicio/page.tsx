@@ -263,7 +263,7 @@ export default function InicioPage() {
       <header className="sticky top-0 z-40 bg-[#fbf7ee]/90 backdrop-blur">
         <div className="relative mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3">
           <a href="#arriba" className="flex items-center gap-2.5">
-            <img src="/logo.png" alt="" className="h-10 w-10" />
+            <img src="/logo.png" alt="" className="h-12 w-12" />
             <span className="display text-xl font-extrabold">Tu Balneario</span>
           </a>
           <nav className="hidden items-center gap-7 text-[15px] font-semibold md:flex">
