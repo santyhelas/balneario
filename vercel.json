@@ -1,5 +1,13 @@
 {
   "crons": [
-    { "path": "/api/cron/drive", "schedule": "0 7 * * *" }
-  ]
+    {
+      "path": "/api/cron/drive",
+      "schedule": "0 7 * * *"
+    }
+  ],
+  "git": {
+    "deploymentEnabled": {
+      "capturas": false
+    }
+  }
 }
