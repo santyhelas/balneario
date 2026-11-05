@@ -11,6 +11,7 @@ export const metadata: Metadata = {
 const NAV = [
   { href: "#funciones", label: "Funciones" },
   { href: "#como", label: "Cómo empezar" },
+  { href: "#planes", label: "Planes" },
   { href: "#preguntas", label: "Preguntas" },
   { href: "#contacto", label: "Contacto" },
 ];
@@ -93,13 +94,22 @@ const STEPS = [
   { n: "3", title: "Cargá tus tarifas y empezá", text: "Ponés los precios de la temporada y ya podés tomar reservas, cobrar y abrir la caja." },
 ];
 
+/**
+ * Planes: todavía sin definir. Cuando estén, completar nombre, precio y lo que incluye cada uno
+ * (si "items" queda vacío se muestra "Próximamente").
+ */
+const PLANS: { name: string; price: string | null; note: string; items: string[]; highlight?: boolean }[] = [
+  { name: "Plan 1", price: null, note: "Próximamente", items: [] },
+  { name: "Plan 2", price: null, note: "Próximamente", items: [], highlight: true },
+];
+
 const FAQ = [
   { q: "¿Tengo que instalar algo?", a: "No. Funciona desde el navegador (Chrome, Edge, Safari) en la computadora o en el celular. Si querés, en el celular lo agregás a la pantalla de inicio y se abre como una app." },
   { q: "¿Qué pasa con lo que cargo en la demo?", a: "La demo es un balneario de prueba solo para vos. Cuando salís o cerrás la pestaña se borra todo. Para guardar de verdad, creá tu balneario." },
   { q: "¿Mis datos y los de mis clientes están seguros?", a: "Cada balneario ve solo sus datos. La información se guarda en una base de datos protegida, no en tu computadora, y podés tener copias diarias en tu propio Google Drive." },
   { q: "¿Lo pueden usar mis empleados?", a: "Sí. Cada uno con su usuario, desde su celular o la compu del balneario, y todos ven lo mismo al instante." },
   { q: "¿Y si se corta internet?", a: "El sistema necesita internet para guardar. Si se corta, te avisa y no muestra datos viejos como si fueran los de ahora, así nunca reservás algo que ya está ocupado." },
-  { q: "¿Cuánto cuesta?", a: `Escribinos a ${SITE_EMAIL} y te contamos los planes disponibles.` },
+  { q: "¿Cuánto cuesta?", a: `Mirá la sección Planes más arriba o escribinos a ${SITE_EMAIL}.` },
 ];
 
 function Icon({ d, className = "h-5 w-5" }: { d: string; className?: string }) {
@@ -205,7 +215,7 @@ export default function InicioPage() {
               </p>
               <div className="mt-7 flex flex-wrap items-start gap-3">
                 <DemoButton className="bg-accent text-accent-fg shadow-sm hover:opacity-90" />
-                <a href="/login?modo=crear" className="inline-flex items-center justify-center rounded-xl border border-line bg-surface px-5 py-3 text-base font-semibold hover:bg-surface-2">
+                <a href="#planes" className="inline-flex items-center justify-center rounded-xl border border-line bg-surface px-5 py-3 text-base font-semibold hover:bg-surface-2">
                   Crear mi balneario
                 </a>
               </div>
@@ -283,11 +293,39 @@ export default function InicioPage() {
           </ol>
         </section>
 
+        {/* Planes */}
+        <section id="planes" className="border-t border-line bg-surface">
+          <div className="mx-auto max-w-4xl scroll-mt-20 px-4 py-16">
+            <h2 className="text-center text-3xl font-extrabold tracking-tight">Planes</h2>
+            <p className="mx-auto mt-2 max-w-xl text-center text-muted">Elegí el plan para crear tu balneario. Mientras tanto, podés probar todo en la demo.</p>
+            <div className="mt-10 grid gap-5 md:grid-cols-2">
+              {PLANS.map((p) => (
+                <article key={p.name} className={`flex flex-col rounded-2xl border bg-bg p-6 ${p.highlight ? "border-accent shadow-lg" : "border-line"}`}>
+                  <h3 className="text-xl font-bold">{p.name}</h3>
+                  <div className="mt-2 text-3xl font-extrabold tracking-tight">{p.price ?? <span className="text-muted">—</span>}</div>
+                  <p className="mt-1 text-sm font-medium text-accent">{p.note}</p>
+                  {p.items.length > 0 ? (
+                    <ul className="mt-4 flex flex-col gap-2 text-sm">
+                      {p.items.map((it) => <li key={it} className="flex gap-2"><Icon d="M20 6L9 17l-5-5" className="h-4 w-4 shrink-0 text-ok" />{it}</li>)}
+                    </ul>
+                  ) : (
+                    <p className="mt-4 flex-1 rounded-xl border border-dashed border-line p-4 text-center text-sm text-muted">Pronto vas a ver acá qué incluye este plan y su precio.</p>
+                  )}
+                  <a href={`mailto:${SITE_EMAIL}?subject=${encodeURIComponent(`Consulta por el ${p.name} de Tu Balneario`)}`}
+                    className={`mt-6 inline-flex items-center justify-center rounded-xl px-5 py-3 font-semibold ${p.highlight ? "bg-accent text-accent-fg hover:opacity-90" : "border border-line bg-surface hover:bg-surface-2"}`}>
+                    Consultar
+                  </a>
+                </article>
+              ))}
+            </div>
+          </div>
+        </section>
+
         {/* Preguntas */}
-        <section id="preguntas" className="border-t border-line bg-surface">
+        <section id="preguntas" className="border-t border-line">
           <div className="mx-auto max-w-3xl scroll-mt-20 px-4 py-16">
             <h2 className="text-center text-3xl font-extrabold tracking-tight">Preguntas frecuentes</h2>
-            <div className="mt-8 divide-y divide-line rounded-2xl border border-line bg-bg">
+            <div className="mt-8 divide-y divide-line rounded-2xl border border-line bg-surface">
               {FAQ.map((f) => (
                 <details key={f.q} className="group px-5 py-4">
                   <summary className="flex cursor-pointer list-none items-center justify-between gap-3 font-semibold">

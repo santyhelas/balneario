@@ -76,7 +76,7 @@ export function DemoEndedNotice() {
   if (!show) return null;
   return (
     <div role="status" className="border-b border-ok/40 bg-ok-soft px-4 py-2 text-center text-sm">
-      Saliste de la demo y se borró todo lo que cargaste. ¿Te gustó? <a href="/login?modo=crear" className="font-semibold text-accent underline">Creá tu balneario</a>.
+      Saliste de la demo y se borró todo lo que cargaste. ¿Te gustó? <a href="#planes" className="font-semibold text-accent underline">Mirá los planes</a>.
       <button type="button" onClick={() => setShow(false)} className="ml-3 text-muted hover:text-fg" aria-label="Cerrar aviso">×</button>
     </div>
   );
