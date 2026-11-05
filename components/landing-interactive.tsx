@@ -112,7 +112,7 @@ export function HeroBeach() {
           <rect x="0" y="226" width="490" height="18" fill="#efe2c4" />
           <text x="245" y="239" textAnchor="middle" fontSize="9" fill="#a08a5a" fontWeight="600">pasarela</text>
           {/* Sol y viento */}
-          <g transform="translate(452 286)">
+          <g transform="translate(458 28)">
             <circle r="11" fill="var(--sol)" opacity="0.95" />
             {[0, 45, 90, 135, 180, 225, 270, 315].map((a) => <line key={a} x1="0" y1="-15" x2="0" y2="-19" stroke="var(--sol)" strokeWidth="2" strokeLinecap="round" transform={`rotate(${a})`} />)}
           </g>
@@ -136,7 +136,7 @@ export function HeroBeach() {
         </g>
       </svg>
 
-      <div className="mt-3 grid gap-3 px-1 sm:grid-cols-[1fr_auto] sm:items-center">
+      <div className="mt-3 flex flex-col gap-3 px-1">
         <div className="min-h-[52px] rounded-2xl bg-[var(--foam)] px-4 py-2.5 text-sm" aria-live="polite">
           {sel && selInfo ? (
             <>
