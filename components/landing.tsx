@@ -23,7 +23,7 @@ export function DemoButton({ className, children = "Probar la demo" }: { classNa
     <span className="inline-flex flex-col">
       <button type="button" disabled={busy}
         onClick={async () => { setBusy(true); setError(null); const e = await startDemo(); if (e) { setBusy(false); setError(e); } }}
-        className={cx("inline-flex items-center justify-center rounded-xl px-5 py-3 text-base font-semibold transition disabled:opacity-60", className)}>
+        className={cx("inline-flex items-center justify-center py-3 text-base font-bold transition disabled:opacity-60", className ?? "rounded-xl px-5")}>
         {busy ? "Preparando la demo…" : children}
       </button>
       {error && <span role="alert" className="mt-1 max-w-xs text-xs text-danger">{error}</span>}

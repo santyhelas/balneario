@@ -1,0 +1,53 @@
+/* Página de presentación: paleta propia de la costa atlántica (no cambia con el tema del sistema). */
+.tb {
+  --atl: #0b4f6c;
+  --atl-2: #0f6e8f;
+  --atl-3: #8fc6d6;
+  --foam: #eaf5f6;
+  --sand: #f1dfb6;
+  --sand-2: #e3c98f;
+  --lona: #d6332f;
+  --sol: #f2b233;
+  --tinta: #13252e;
+  --gris: #51656e;
+  --verde: #2f9e5b;
+  --violeta: #8b5cf6;
+  --mant: #6b7280;
+  background: #fbf7ee;
+  color: var(--tinta);
+  font-family: var(--tb-body), ui-sans-serif, system-ui, sans-serif;
+}
+.tb h1, .tb h2, .tb h3, .tb .display {
+  font-family: var(--tb-display), ui-sans-serif, system-ui, sans-serif;
+  letter-spacing: -0.02em;
+}
+.tb a:focus-visible, .tb button:focus-visible, .tb input:focus-visible, .tb summary:focus-visible {
+  outline: 3px solid var(--sol);
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+
+/* Olas de la portada */
+@keyframes tb-wave { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+.tb-wave, .tb-wave-slow { transform-box: fill-box; }
+.tb-wave { animation: tb-wave 14s linear infinite; }
+.tb-wave-slow { animation: tb-wave 22s linear infinite reverse; }
+
+/* Tira de postales que se desliza sola */
+@keyframes tb-marquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+.tb-marquee { animation: tb-marquee 60s linear infinite; width: max-content; }
+.tb-marquee:hover, .tb-marquee:focus-within { animation-play-state: paused; }
+
+/* Carpa que se alquila en la portada */
+@keyframes tb-pop { 0% { transform: scale(0.8); } 60% { transform: scale(1.08); } 100% { transform: scale(1); } }
+.tb-pop { animation: tb-pop 0.35s ease-out; transform-box: fill-box; transform-origin: center; }
+
+/* Carrusel con deslizamiento */
+.tb-track { scroll-snap-type: x mandatory; scrollbar-width: none; overscroll-behavior-x: contain; }
+.tb-track::-webkit-scrollbar { display: none; }
+.tb-track > * { scroll-snap-align: start; }
+
+@media (prefers-reduced-motion: reduce) {
+  .tb-wave, .tb-wave-slow, .tb-marquee, .tb-pop { animation: none; }
+  .tb-track { scroll-behavior: auto; }
+}
