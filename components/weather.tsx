@@ -269,7 +269,7 @@ function Metric({ label, children }: { label: string; children: ReactNode }) {
 
 /**
  * Brújula sobre el plano, con el Norte arriba (igual que la flecha del pronóstico):
- * la flecha marca hacia dónde va el viento; el arco azul, de qué lado está el mar.
+ * solo los puntos cardinales, el sol donde está ahora y la flecha de hacia dónde va el viento.
  */
 export function WindCompass({ seaSide }: { seaSide: "top" | "bottom" | "left" | "right" }) {
   const { ws } = useWorkspace();
@@ -280,13 +280,8 @@ export function WindCompass({ seaSide }: { seaSide: "top" | "bottom" | "left" | 
     return () => window.clearInterval(id);
   }, []);
   void seaSide;
-  const seaBearing = Number(ws.sea_bearing ?? 90);
   // Norte arriba, como toda brújula (y como la flecha del pronóstico).
   const screen = (bearing: number) => ((bearing % 360) + 360) % 360;
-  const arc = (from: number, to: number, r: number) => {
-    const p = (b: number) => `${Math.sin((b * Math.PI) / 180) * r} ${-Math.cos((b * Math.PI) / 180) * r}`;
-    return `M ${p(from)} A ${r} ${r} 0 0 1 ${p(to)}`;
-  };
   const toward = w.data?.viento_desde != null ? (w.data.viento_desde + 180) % 360 : null;
   const sun = ws.latitude != null && ws.longitude != null ? sunPosition(now, Number(ws.latitude), Number(ws.longitude)) : null;
 
@@ -295,13 +290,10 @@ export function WindCompass({ seaSide }: { seaSide: "top" | "bottom" | "left" | 
     <div className="pointer-events-none absolute bottom-2 right-2 flex items-center gap-1.5 rounded-xl bg-surface/90 p-1.5 shadow-md backdrop-blur sm:bottom-3 sm:right-3 sm:gap-3 sm:rounded-2xl sm:p-3 print:hidden" aria-label="Orientación, viento y sol">
       <svg viewBox="-50 -50 100 100" className="h-12 w-12 sm:h-28 sm:w-28 lg:h-40 lg:w-40">
         <circle r="46" fill="none" stroke="var(--line)" strokeWidth="2" />
-        {/* de qué lado está el mar */}
-        <path d={arc(seaBearing - 35, seaBearing + 35, 46)} fill="none" stroke="#2b7fc4" strokeWidth="6" strokeLinecap="round" />
 
         {["N", "E", "S", "O"].map((l, i) => {
           const a = (screen(i * 90) * Math.PI) / 180;
-          const seaHere = Math.abs(((i * 90 - seaBearing + 540) % 360) - 180) <= 45;
-          return <text key={l} x={Math.sin(a) * 37} y={-Math.cos(a) * 37} textAnchor="middle" dominantBaseline="middle" fontSize="12" fontWeight={l === "N" || seaHere ? 800 : 600} fill={l === "N" ? "var(--danger)" : seaHere ? "#2b7fc4" : "var(--muted)"}>{l}</text>;
+          return <text key={l} x={Math.sin(a) * 37} y={-Math.cos(a) * 37} textAnchor="middle" dominantBaseline="middle" fontSize="12" fontWeight={l === "N" ? 800 : 600} fill={l === "N" ? "var(--danger)" : "var(--muted)"}>{l}</text>;
         })}
         {toward != null && (
           <g transform={`rotate(${screen(toward)})`}>
@@ -309,19 +301,6 @@ export function WindCompass({ seaSide }: { seaSide: "top" | "bottom" | "left" | 
             <path d="M0 -30 L9 -14 L-9 -14 Z" fill="var(--accent)" />
           </g>
         )}
-        {/* recorrido del sol hoy (cada 20 minutos mientras está sobre el horizonte) */}
-        {ws.latitude != null && ws.longitude != null && (() => {
-          const base = new Date(now);
-          base.setHours(0, 0, 0, 0);
-          const dots = [];
-          for (let m = 0; m < 24 * 60; m += 20) {
-            const p = sunPosition(new Date(base.getTime() + m * 60_000), Number(ws.latitude), Number(ws.longitude));
-            if (p.elevation <= 0) continue;
-            const a = (screen(p.azimuth) * Math.PI) / 180;
-            dots.push(<circle key={m} cx={Math.sin(a) * 46} cy={-Math.cos(a) * 46} r="1.6" fill="#f6b73c" opacity={0.7} />);
-          }
-          return dots;
-        })()}
         {sun && sun.elevation > 0 && (() => {
           const a = (screen(sun.azimuth) * Math.PI) / 180;
           return <circle cx={Math.sin(a) * 46} cy={-Math.cos(a) * 46} r="7" fill="#f6b73c" stroke="#fff" strokeWidth="2" />;
@@ -341,6 +320,11 @@ export function WindCompass({ seaSide }: { seaSide: "top" | "bottom" | "left" | 
             )}
           </>
         ) : <div className="text-muted">Sin datos de viento</div>}
+        {w.data && (
+          <div className="hidden text-[11px] text-muted sm:block">
+            Dato de las {hhmm(w.data.medido?.hora ?? w.data.hora_dato, ws.timezone)}{w.data.medido ? ` · ${w.data.medido.fuente ?? "SMN"}` : " · pronóstico"}
+          </div>
+        )}
         {sun && <div className="hidden sm:block">{sun.elevation > 0
           ? <div className="mt-1.5"><span className="text-[#e0a020]">●</span> <strong>Sol del {cardinal(sun.azimuth)}</strong><div className="text-muted">{Math.round(sun.elevation)}° de altura</div></div>
           : <div className="mt-1.5 text-muted">El sol ya se puso</div>}</div>}

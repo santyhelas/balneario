@@ -131,6 +131,8 @@ export async function GET(req: Request) {
     medido = smnText ? parseTiepre(smnText, lat, lon) : null;
     // Una medición de hace más de 3 horas ya no sirve como "ahora".
     if (medido && Date.now() - Date.parse(medido.hora) > 3 * 3600_000) medido = null;
+    // Si la medición del SMN es más nueva que el dato de OpenWeather (que a veces se queda quieto), manda el SMN.
+    if (ow && medido && Date.parse(medido.hora) > Date.parse(ow.hora) + 5 * 60_000) ow = null;
   } catch (e) {
     return json({ error: e instanceof Error ? e.message : "El servicio del clima no responde en este momento." }, 502);
   }
