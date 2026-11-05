@@ -4,7 +4,7 @@ import { getSupabase, setRememberPreference } from "@/lib/supabase/client";
 import { friendlyError } from "@/lib/errors";
 import { Alert, Button, Field, Input, TextField } from "@/components/ui";
 import { GoogleG } from "@/components/google";
-import { GUEST_MARK } from "@/lib/remember";
+import { startDemo } from "@/lib/demo";
 import { SITE_EMAIL } from "@/lib/site";
 
 type Mode = "ingresar" | "crear" | "recuperar";
@@ -35,7 +35,8 @@ export default function LoginPage() {
   useEffect(() => {
     const p = new URLSearchParams(window.location.search);
     if (p.get("error") === "enlace") setError("El enlace venció o ya fue usado. Pedí uno nuevo.");
-    if (p.get("invitado") === "fin") setInfo("Saliste del modo invitado. Todo lo que cargaste se borró.");
+    if (p.get("invitado") === "fin") setInfo("Saliste de la demo. Todo lo que cargaste se borró.");
+    if (p.get("modo") === "crear") setMode("crear");
     fetch("/auth/registrar").then((r) => r.json()).then((d: { abierto?: boolean }) => setCanRegister(!!d.abierto)).catch(() => undefined);
   }, []);
 
@@ -69,28 +70,16 @@ export default function LoginPage() {
     }
   }
 
-  // Invitado: balneario de demostración propio, que se borra al salir o al cerrar la pestaña.
+  // Demo: balneario de prueba propio, que se borra al salir o al cerrar la pestaña.
   async function guest() {
     setBusy(true);
     setError(null);
     setInfo(null);
-    setRememberPreference(false); // la sesión del invitado no se recuerda
-    const sb = getSupabase();
-    const { error: e1 } = await sb.auth.signInAnonymously();
-    if (e1) {
+    const err = await startDemo();
+    if (err) {
       setBusy(false);
-      return setError(/anonymous/i.test(e1.message)
-        ? "El modo invitado todavía no está activado en el servidor (Supabase → Authentication → Allow anonymous sign-ins)."
-        : friendlyError(e1));
+      setError(err);
     }
-    const { error: e2 } = await sb.rpc("start_guest_session");
-    if (e2) {
-      await sb.auth.signOut();
-      setBusy(false);
-      return setError(friendlyError(e2));
-    }
-    try { sessionStorage.setItem(GUEST_MARK, "1"); } catch { /* sin almacenamiento: igual funciona en esta pestaña */ }
-    window.location.assign("/");
   }
 
   async function submit(e: FormEvent) {
@@ -221,8 +210,8 @@ export default function LoginPage() {
             </div>
             <button type="button" onClick={guest} disabled={busy}
               className="mt-4 w-full rounded-lg border border-dashed border-line py-2.5 text-sm font-medium text-muted hover:bg-surface-2 hover:text-fg disabled:opacity-50">
-              Entrar como invitado
-              <span className="block text-xs font-normal">Para ver cómo funciona. Usa datos inventados y no guarda nada.</span>
+              Probar la demo
+              <span className="block text-xs font-normal">Un balneario de prueba con datos inventados. No se guarda nada.</span>
             </button>
           </>
         )}
@@ -242,7 +231,8 @@ export default function LoginPage() {
           )}
         </div>
         <p className="mt-5 border-t border-line pt-3 text-center text-xs text-muted">
-          Consultas: <a href={`mailto:${SITE_EMAIL}`} className="text-accent hover:underline">{SITE_EMAIL}</a>
+          <a href="/inicio" className="text-accent hover:underline">Conocé todo lo que hace Tu Balneario</a>
+          {" · "}Consultas: <a href={`mailto:${SITE_EMAIL}`} className="text-accent hover:underline">{SITE_EMAIL}</a>
         </p>
       </div>
     </main>

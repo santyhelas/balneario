@@ -15,7 +15,7 @@ const MSG: Record<string, { tone: "ok" | "danger" | "warn"; text: string }> = {
   "sin-permiso": { tone: "danger", text: "Google no dio el permiso para guardar archivos. Volvé a intentar y dejá tildada la opción de Google Drive." },
   vencido: { tone: "danger", text: "La conexión tardó demasiado. Volvé a intentar." },
   "solo-propietario": { tone: "danger", text: "Solo el propietario puede conectar Google Drive." },
-  invitado: { tone: "danger", text: "En el modo invitado no se puede conectar Google Drive." },
+  invitado: { tone: "danger", text: "En la demo no se puede conectar Google Drive." },
   "sin-configurar": { tone: "danger", text: "Falta configurar Google Drive en el servidor (Vercel). Seguí los pasos de configuración." },
   error: { tone: "danger", text: "No se pudo conectar Google Drive. Volvé a intentar en un rato." },
 };

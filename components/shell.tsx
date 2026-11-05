@@ -265,8 +265,8 @@ export function Shell({ children }: { children: ReactNode }) {
 
         {isGuest && (
           <div className="px-safe flex flex-wrap items-center justify-between gap-2 border-b border-amber-300 bg-amber-100 py-2 text-sm text-amber-950 print:hidden dark:border-amber-700/60 dark:bg-amber-900/40 dark:text-amber-100">
-            <span><strong>Modo invitado:</strong> es un balneario de demostración con datos inventados. Podés probar todo, pero <strong>nada se guarda</strong>: al salir o cerrar la pestaña se borra.</span>
-            <button onClick={() => setConfirmLogout(true)} className="rounded-lg border border-amber-400 bg-white/60 px-3 py-1 font-semibold hover:bg-white dark:bg-transparent">Salir del modo invitado</button>
+            <span><strong>Demo:</strong> es un balneario de prueba con datos inventados. Podés probar todo, pero <strong>nada se guarda</strong>: al salir o cerrar la pestaña se borra.</span>
+            <button onClick={() => setConfirmLogout(true)} className="rounded-lg border border-amber-400 bg-white/60 px-3 py-1 font-semibold hover:bg-white dark:bg-transparent">Salir de la demo</button>
           </div>
         )}
         <InstallBanner />
@@ -352,7 +352,7 @@ export function Shell({ children }: { children: ReactNode }) {
       <CashGuard closeRequest={closeForLogout} onClosedForLogout={() => { setCloseForLogout(false); logout(); }} onCancelClose={() => setCloseForLogout(false)} />
       <ConfirmDialog
         open={confirmLogout}
-        title={isGuest ? "¿Salir del modo invitado?" : "¿Cerrar sesión?"}
+        title={isGuest ? "¿Salir de la demo?" : "¿Cerrar sesión?"}
         message={isGuest ? "Se borra todo lo que cargaste en la demostración." : cashOpen ? (
           <div className="flex flex-col gap-3">
             <p>La <strong>caja de hoy sigue abierta</strong>. ¿Querés cerrarla antes de salir?</p>

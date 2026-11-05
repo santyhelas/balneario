@@ -6,7 +6,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 // Rutas que se pueden ver sin haber iniciado sesión.
 // /api/cron: tareas automáticas de Vercel (no tienen sesión; cada una se protege sola).
-const PUBLIC_PATHS = ["/login", "/auth/callback", "/auth/restablecer", "/auth/ingresar", "/auth/registrar", "/api/cron"];
+const PUBLIC_PATHS = ["/inicio", "/login", "/auth/callback", "/auth/restablecer", "/auth/ingresar", "/auth/registrar", "/api/cron"];
 
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({ request });
@@ -35,6 +35,12 @@ export async function middleware(request: NextRequest) {
   const path = request.nextUrl.pathname;
   const isPublic = PUBLIC_PATHS.some((p) => path === p || path.startsWith(p + "/"));
 
+  // Sin sesión, la dirección principal muestra la página de presentación.
+  if (!user && path === "/") {
+    const url = request.nextUrl.clone();
+    url.pathname = "/inicio";
+    return NextResponse.rewrite(url, { request });
+  }
   if (!user && !isPublic) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
