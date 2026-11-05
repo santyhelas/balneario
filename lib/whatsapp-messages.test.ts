@@ -40,3 +40,14 @@ test("renovación de temporada", () => {
   assert.match(m, /temporada 2026\/2027/);
   assert.match(m, /Carpa 17/);
 });
+
+test("mensaje propio de deuda", () => {
+  const t = { deuda_hoy: "Che {nombre}, hoy te vas de la {lugar} y debés {saldo}. {otro}" };
+  const m = debtReminder({ ...base, today: "2027-01-07" }, t);
+  assert.match(m, /^Che Juan, hoy te vas de la Carpa 17 y debés \$\s?50\.000\. \{otro\}$/);
+  // los otros casos siguen con el mensaje de siempre
+  assert.match(debtReminder({ ...base, today: "2027-01-06" }, t), /termina mañana/);
+  // sin carpa no queda "(, reserva"
+  assert.match(debtReminder({ ...base, places: "", today: "2027-01-07" }), /\(reserva #12\)/);
+  assert.doesNotMatch(debtReminder({ ...base, places: "", today: "2027-01-07" }), /\(,/);
+});

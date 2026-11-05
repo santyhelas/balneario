@@ -10,8 +10,8 @@ import { useStatus } from "@/components/status";
 import { PageHeader, SyncNotice } from "@/components/shell";
 import { Alert, Badge, Button, Card, EmptyState, Input, Spinner, cx } from "@/components/ui";
 import { PaymentModal } from "@/components/payments";
-import { whatsappLink } from "@/lib/reservations";
 import { debtReminder } from "@/lib/whatsapp-messages";
+import { WhatsAppSend, useMessageTemplates } from "@/components/whatsapp";
 import { VoucherList } from "@/components/vouchers";
 
 type DebtRow = {
@@ -30,6 +30,7 @@ export default function CobrosPage() {
   const status = useStatus();
   const sb = getSupabase();
   const today = todayISO(ws.timezone);
+  const templates = useMessageTemplates();
   const [q, setQ] = useState("");
   const [paying, setPaying] = useState<DebtRow | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
@@ -106,16 +107,10 @@ export default function CobrosPage() {
                       {(() => {
                         const places = [...new Set((d.reservation_segments ?? []).filter((x) => x.active).sort((a, b) => a.start_date.localeCompare(b.start_date))
                           .map((x) => `${x.spaces?.kind === "sombrilla" ? "Sombrilla" : "Carpa"} ${x.spaces?.code ?? ""}`))].join(" y ");
-                        const link = whatsappLink(d.customers.phone, debtReminder({
-                          firstName: d.customers.first_name, balneario: ws.name, number: d.number, places,
-                          start: d.start_date, end: d.end_date, due: d.due, today,
-                        }));
-                        return link ? (
-                          <a href={link} target="_blank" rel="noopener noreferrer" title="Mandar recordatorio por WhatsApp"
-                            className="rounded-lg border border-green-600/40 bg-green-50 px-2.5 py-2 text-sm font-semibold text-green-800 hover:bg-green-100 dark:bg-green-900/30 dark:text-green-200">
-                            WhatsApp
-                          </a>
-                        ) : <span className="text-xs text-muted" title="El cliente no tiene teléfono cargado">Sin teléfono</span>;
+                        return (
+                          <WhatsAppSend phone={d.customers.phone} className="py-2" title="Mandar recordatorio por WhatsApp (podés editar el mensaje)"
+                            text={debtReminder({ firstName: d.customers.first_name, balneario: ws.name, number: d.number, places, start: d.start_date, end: d.end_date, due: d.due, today }, templates)} />
+                        );
                       })()}
                       <Button onClick={() => { setMsg(null); setPaying(d); }} disabled={!cajaAbierta}>Cobrar</Button>
                     </div>

@@ -9,7 +9,8 @@ import { addDays, formatDate, formatDateTime, formatMoney, inclusiveDays, parseM
 import { METHOD_LABEL } from "@/lib/methods";
 import { VoucherList } from "@/components/vouchers";
 import { ArrivalButtons, NoShowPanel } from "@/components/arrival";
-import { receiptMessage } from "@/lib/whatsapp-messages";
+import { debtReminder, receiptMessage } from "@/lib/whatsapp-messages";
+import { WhatsAppSend, useMessageTemplates } from "@/components/whatsapp";
 import { loadReservation, spacesSummary, whatsappLink, type Full, type PaymentRow } from "@/lib/reservations";
 import { daysOf, indexGrid, isFreeFor, type GridRow } from "@/lib/stay";
 import { useWorkspace } from "@/components/workspace";
@@ -24,6 +25,7 @@ export default function ReservaPage() {
   const status = useStatus();
   const today = todayISO(ws.timezone);
   const q = useLoader<Full>(() => loadReservation(id), [id]);
+  const templates = useMessageTemplates();
   const [modal, setModal] = useState<null | "pago" | "reubicar" | "cancelar" | "devolucion" | "notas">(null);
   const [voiding, setVoiding] = useState<PaymentRow | null>(null);
   const [reverting, setReverting] = useState<string | null>(null);
@@ -37,16 +39,18 @@ export default function ReservaPage() {
   const due = Number(balance.due_amount);
   const voided = new Set(payments.filter((p) => p.voids_payment_id).map((p) => p.voids_payment_id));
   const daysLeft = confirmed && today <= r.end_date ? inclusiveDays(today < r.start_date ? r.start_date : today, r.end_date) : 0;
-  const wa = whatsappLink(r.customers.phone,
-    `Hola ${r.customers.first_name}, te escribimos de ${ws.name}. Reserva #${r.number}: ${spacesSummary(segments)} del ${formatDate(r.start_date)} al ${formatDate(r.end_date)}.` +
-    (due > 0 ? ` Saldo pendiente: ${formatMoney(due)}.` : " Está paga. ¡Te esperamos!"));
+  const placesText = spacesSummary(segments).split(" → ").filter(Boolean).map((c) => `${segments.find((s) => s.spaces.code === c)?.spaces.kind === "sombrilla" ? "Sombrilla" : "Carpa"} ${c}`).join(" → ");
+  const waText = confirmed && !r.is_courtesy && due > 0
+    ? debtReminder({ firstName: r.customers.first_name, balneario: ws.name, number: r.number, places: placesText, start: r.start_date, end: r.end_date, due, today }, templates)
+    : `Hola ${r.customers.first_name}, te escribimos de ${ws.name}. Reserva #${r.number}: ${spacesSummary(segments)} del ${formatDate(r.start_date)} al ${formatDate(r.end_date)}.` +
+      (due > 0 ? ` Saldo pendiente: ${formatMoney(due)}.` : " Está paga. ¡Te esperamos!");
 
-  const waReceipt = whatsappLink(r.customers.phone, receiptMessage({
+  const receiptText = receiptMessage({
     balneario: ws.name, number: r.number, customer: `${r.customers.first_name} ${r.customers.last_name ?? ""}`.trim(),
     places: spacesSummary(segments).split(" → ").map((c) => `${segments.find((s) => s.spaces.code === c)?.spaces.kind === "sombrilla" ? "Sombrilla" : "Carpa"} ${c}`).join(" → "),
     start: r.start_date, end: r.end_date, total: Number(r.total_amount), paid: Number(balance.paid_amount), due, courtesy: r.is_courtesy,
     payments: payments.map((p) => ({ date: formatDateISO(p.created_at, ws.timezone), kind: p.kind, method: METHOD_LABEL[p.method] ?? p.method, amount: Number(p.amount), voided: voided.has(p.id) })),
-  }));
+  });
 
   function done(text: string) {
     setModal(null);
@@ -67,8 +71,8 @@ export default function ReservaPage() {
             {confirmed && !r.is_courtesy && due > 0 && <Button onClick={() => setModal("pago")}>Registrar pago</Button>}
             {confirmed && r.end_date >= today && <Button variant="secondary" onClick={() => setModal("reubicar")}>Cambiar de carpa</Button>}
             <Link href={`/reservas/${r.id}/recibo`}><Button variant="secondary">Comprobante</Button></Link>
-            {wa && <a href={wa} target="_blank" rel="noopener noreferrer"><Button variant="secondary">WhatsApp</Button></a>}
-            {waReceipt && <a href={waReceipt} target="_blank" rel="noopener noreferrer" title="Mandar el comprobante con el detalle de pagos"><Button variant="secondary">Comprobante por WhatsApp</Button></a>}
+            {whatsappLink(r.customers.phone, waText) && <WhatsAppSend phone={r.customers.phone} text={waText} label={due > 0 && confirmed && !r.is_courtesy ? "Recordar deuda por WhatsApp" : "WhatsApp"} className="py-2" />}
+            {whatsappLink(r.customers.phone, receiptText) && <WhatsAppSend phone={r.customers.phone} text={receiptText} label="Comprobante por WhatsApp" title="Mandar el comprobante con el detalle de pagos" className="py-2" />}
             {confirmed && <Button variant="danger" onClick={() => setModal("cancelar")}>Cancelar reserva</Button>}
           </>
         }

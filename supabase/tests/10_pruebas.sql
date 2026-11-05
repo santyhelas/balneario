@@ -870,6 +870,12 @@ select t.throws(format($$select public.release_no_show_day(%L, %L, true)$$, t.ge
 select set_config('request.jwt.claims', '{"sub":"11111111-1111-1111-1111-111111111111","email":"duenio@test.com"}', false);
 select t.throws(format($$select public.release_no_show_day(%L, %L, false)$$, t.get('resP'), '2027-01-13'), 'Primero marcá', 'No vino: hay que marcar "no vino" antes de liberar');
 
+-- 31. Mensajes de WhatsApp propios
+update public.workspaces set message_templates = '{"deuda_hoy": "Hola {nombre}, hoy es tu último día"}'::jsonb, version = version + 1 where id = t.uid('ws');
+select t.ok((select message_templates ->> 'deuda_hoy' from public.workspaces where id = t.uid('ws')) like 'Hola {nombre}%', 'Mensajes: el administrador guarda su mensaje');
+select t.throws(format($q$update public.workspaces set message_templates = '{"cualquiera": "x"}'::jsonb, version = version + 1 where id = %L$q$, t.get('ws')), 'check', 'Mensajes: solo los mensajes conocidos');
+select t.throws(format($q$update public.workspaces set message_templates = jsonb_build_object('deuda_hoy', repeat('a', 1001)), version = version + 1 where id = %L$q$, t.get('ws')), 'check', 'Mensajes: máximo 1000 letras');
+
 reset role;
 \o
 -- Resultado ----------------------------------------------------------

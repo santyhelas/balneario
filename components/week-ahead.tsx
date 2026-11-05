@@ -3,12 +3,12 @@ import Link from "next/link";
 import { getSupabase } from "@/lib/supabase/client";
 import { unwrap, useLoader } from "@/lib/data";
 import { addDays, formatMoney, todayISO } from "@/lib/format";
-import { whatsappLink } from "@/lib/reservations";
 import { debtReminder } from "@/lib/whatsapp-messages";
 import { useWorkspace } from "@/components/workspace";
 import { useStatus } from "@/components/status";
 import { describeSymbol, useWeather, WeatherIcon } from "@/components/weather";
 import { Spinner, cx } from "@/components/ui";
+import { WhatsAppSend, useMessageTemplates } from "@/components/whatsapp";
 
 type Seg = {
   reservation_id: string; start_date: string; end_date: string;
@@ -130,13 +130,14 @@ const TONE = { accent: "text-accent", orange: "text-orange-600 dark:text-orange-
 
 function TomorrowList({ title, tone, items, empty, today, showDebtWa = false }: { title: string; tone: keyof typeof TONE; items: Item[]; empty: string; today: string; showDebtWa?: boolean }) {
   const { ws } = useWorkspace();
+  const templates = useMessageTemplates();
   return (
     <div className="mb-3 last:mb-0">
       <div className={cx("mb-1 text-xs font-bold uppercase tracking-wide", TONE[tone])}>{title} ({items.length})</div>
       {items.length === 0 ? <p className="text-sm text-muted">{empty}</p> : (
         <ul className="divide-y divide-line text-sm">
           {items.map((x) => {
-            const wa = showDebtWa && x.due > 0 ? whatsappLink(x.phone, debtReminder({ firstName: x.firstName, balneario: ws.name, number: x.number, places: x.places, start: x.start, end: x.end, due: x.due, today })) : null;
+            const waText = showDebtWa && x.due > 0 ? debtReminder({ firstName: x.firstName, balneario: ws.name, number: x.number, places: x.places, start: x.start, end: x.end, due: x.due, today }, templates) : null;
             return (
               <li key={x.id} className="flex flex-wrap items-center justify-between gap-2 py-1.5">
                 <Link href={`/reservas/${x.id}`} className="min-w-0 hover:underline">
@@ -145,7 +146,7 @@ function TomorrowList({ title, tone, items, empty, today, showDebtWa = false }: 
                 </Link>
                 <span className="flex items-center gap-2">
                   {x.due > 0 && <span className="tabular text-xs font-bold text-danger">Debe {formatMoney(x.due)}</span>}
-                  {wa && <a href={wa} target="_blank" rel="noopener noreferrer" className="rounded-md border border-green-600/40 bg-green-50 px-2 py-1 text-xs font-semibold text-green-800 hover:bg-green-100 dark:bg-green-900/30 dark:text-green-200">WhatsApp</a>}
+                  {waText && <WhatsAppSend phone={x.phone} text={waText} className="rounded-md px-2 py-1 text-xs" />}
                 </span>
               </li>
             );

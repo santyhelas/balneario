@@ -10,19 +10,61 @@ export type DebtInfo = {
   start: string; end: string; due: number; today: string;
 };
 
-/** Recordatorio de saldo, según cuánto falta para que termine la estadía. */
-export function debtReminder(d: DebtInfo): string {
-  const hi = `Hola ${d.firstName.trim() || ""}! Te escribimos de ${d.balneario}.`.replace(" !", "!");
-  const what = `${d.places ? `${d.places}, ` : ""}reserva #${d.number}`;
+/** Casos del recordatorio de deuda; cada uno tiene su mensaje (editable en Configuración). */
+export type DebtCase = "deuda_hoy" | "deuda_manana" | "deuda_vencida" | "deuda_otros";
+
+export const DEBT_CASES: { key: DebtCase; label: string; help: string }[] = [
+  { key: "deuda_hoy", label: "Último día", help: "Cuando hoy es el último día de la estadía." },
+  { key: "deuda_manana", label: "Termina mañana", help: "El día anterior al último." },
+  { key: "deuda_vencida", label: "Ya terminó", help: "Cuando la estadía terminó y quedó deuda." },
+  { key: "deuda_otros", label: "Otros días", help: "Antes de llegar o con varios días por delante." },
+];
+
+/** Datos que se pueden poner en los mensajes. */
+export const PLACEHOLDERS: { key: string; label: string }[] = [
+  { key: "nombre", label: "Nombre" },
+  { key: "balneario", label: "Balneario" },
+  { key: "lugar", label: "Carpa o sombrilla" },
+  { key: "reserva", label: "N° de reserva" },
+  { key: "desde", label: "Desde" },
+  { key: "hasta", label: "Hasta" },
+  { key: "saldo", label: "Saldo" },
+];
+
+export const DEFAULT_TEMPLATES: Record<DebtCase, string> = {
+  deuda_hoy: "Hola {nombre}! Te escribimos de {balneario}.\nHoy es el último día de tu estadía ({lugar}, reserva #{reserva}). Queda un saldo de {saldo} por abonar.\nPodés pagar en efectivo, transferencia o tarjeta. ¡Gracias!",
+  deuda_manana: "Hola {nombre}! Te escribimos de {balneario}.\nTe recordamos que tu estadía ({lugar}, reserva #{reserva}) termina mañana, {hasta}. Queda un saldo de {saldo} por abonar.\nPodés pagar en efectivo, transferencia o tarjeta. ¡Gracias!",
+  deuda_vencida: "Hola {nombre}! Te escribimos de {balneario}.\nTu estadía ({lugar}, reserva #{reserva}) terminó el {hasta} y quedó un saldo pendiente de {saldo}. ¿Cuándo podés pasar a abonarlo?\nPodés pagar en efectivo, transferencia o tarjeta. ¡Gracias!",
+  deuda_otros: "Hola {nombre}! Te escribimos de {balneario}.\nTe recordamos tu reserva del {desde} al {hasta} ({lugar}, reserva #{reserva}). Queda un saldo de {saldo} por abonar.\nPodés pagar en efectivo, transferencia o tarjeta. ¡Gracias!",
+};
+
+export type Templates = Partial<Record<DebtCase, string>>;
+
+export function debtCase(d: { end: string; today: string }): DebtCase {
   const left = daysBetween(d.today, d.end);
-  const owe = `Queda un saldo de ${money(d.due)} por abonar.`;
-  let body: string;
-  if (left < 0) body = `Tu estadía (${what}) terminó el ${dmy(d.end)} y quedó un saldo pendiente de ${money(d.due)}. ¿Cuándo podés pasar a abonarlo?`;
-  else if (left === 0) body = `Hoy es el último día de tu estadía (${what}). ${owe}`;
-  else if (left === 1) body = `Te recordamos que tu estadía (${what}) termina mañana, ${dmy(d.end)}. ${owe}`;
-  else if (d.start > d.today) body = `Te recordamos tu reserva del ${dmy(d.start)} al ${dmy(d.end)} (${what}). ${owe}`;
-  else body = `Te recordamos que tu estadía (${what}) termina el ${dmy(d.end)}. ${owe}`;
-  return `${hi}\n${body}\nPodés pagar en efectivo, transferencia o tarjeta. ¡Gracias!`;
+  return left < 0 ? "deuda_vencida" : left === 0 ? "deuda_hoy" : left === 1 ? "deuda_manana" : "deuda_otros";
+}
+
+/** Reemplaza {nombre}, {saldo}, etc. Si falta la carpa, limpia el "(, " que quedaría. */
+export function fillTemplate(tpl: string, vars: Record<string, string>): string {
+  return tpl
+    .replace(/\{(\w+)\}/g, (m, k: string) => (k in vars ? vars[k] : m))
+    .replace(/\(\s*,\s*/g, "(").replace(/\s*,\s*\)/g, ")").replace(/\(\s*\)/g, "")
+    .replace(/ +!/g, "!").replace(/[ \t]+\n/g, "\n");
+}
+
+export function debtVars(d: DebtInfo): Record<string, string> {
+  return {
+    nombre: d.firstName.trim(), balneario: d.balneario, lugar: d.places, reserva: String(d.number),
+    desde: dmy(d.start), hasta: dmy(d.end), saldo: money(d.due),
+  };
+}
+
+/** Recordatorio de saldo, según cuánto falta para que termine la estadía (con el mensaje propio si hay). */
+export function debtReminder(d: DebtInfo, templates?: Templates | null): string {
+  const c = debtCase(d);
+  const tpl = templates?.[c]?.trim() ? templates[c]! : DEFAULT_TEMPLATES[c];
+  return fillTemplate(tpl, debtVars(d));
 }
 
 export type ReceiptInfo = {

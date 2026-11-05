@@ -11,6 +11,7 @@ import { BrandLogo, PageHeader, SyncNotice } from "@/components/shell";
 import { Alert, Badge, Button, Card, Field, Select, Spinner, TextField } from "@/components/ui";
 import { LinkedAccountsCard } from "@/components/linked-accounts";
 import { MyUsernameField, UsersCard } from "@/components/users";
+import { DEBT_CASES, DEFAULT_TEMPLATES, PLACEHOLDERS, debtVars, fillTemplate, type DebtCase, type Templates } from "@/lib/whatsapp-messages";
 
 type WsRow = { name: string; subtitle: string | null; logo_data: string | null; legal_id: string | null; phone: string | null; address: string | null; latitude: number | null; longitude: number | null; version: number };
 type Member = { user_id: string; role: string; email: string | null; created_at: string };
@@ -32,6 +33,7 @@ export default function ConfiguracionPage() {
         <div className="grid gap-4 lg:grid-cols-2">
           <div className="flex flex-col gap-4">
           <BalnearioCard key={q.data.row.version} row={q.data.row} editable={isAdmin} onSaved={async () => { await reloadWorkspace(); q.reload(); }} onConflict={q.reload} />
+          <MessagesCard key={`m${q.data.row.version}`} editable={isAdmin} onSaved={q.reload} />
           </div>
           <div className="flex flex-col gap-4">
             <ProfileCard />
@@ -241,5 +243,106 @@ function ProfileCard() {
       </form>
       <p className="mt-3 text-xs text-muted">Última sincronización: {status.updatedAt ? status.updatedAt.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" }) : "—"}</p>
     </Card>
+  );
+}
+
+/** Mensajes de WhatsApp propios (recordatorio de deuda). Vacío = el mensaje de siempre. */
+function MessagesCard({ editable, onSaved }: { editable: boolean; onSaved: () => void }) {
+  const { ws } = useWorkspace();
+  const sb = getSupabase();
+  const q = useLoader(async () => {
+    const res = await sb.from("workspaces").select("message_templates, version").eq("id", ws.id).single();
+    if (res.error) return { missing: true, templates: {} as Templates, version: 0 };
+    const row = res.data as { message_templates: Templates | null; version: number };
+    return { missing: false, templates: row.message_templates ?? {}, version: row.version };
+  }, [ws.id], 0);
+  const [draft, setDraft] = useState<Record<DebtCase, string> | null>(null);
+  const [tab, setTab] = useState<DebtCase>("deuda_hoy");
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ tone: "ok" | "danger"; text: string } | null>(null);
+  const area = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    if (!q.data) return;
+    const t = q.data.templates;
+    setDraft(Object.fromEntries(DEBT_CASES.map((c) => [c.key, t[c.key]?.trim() ? t[c.key]! : DEFAULT_TEMPLATES[c.key]])) as Record<DebtCase, string>);
+  }, [q.data]);
+  useEffect(() => {
+    if (window.location.hash === "#mensajes") document.getElementById("mensajes")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [draft === null]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (!q.data || !draft) return <Card title="Mensajes de WhatsApp"><div className="flex items-center gap-2 text-sm text-muted"><Spinner small /> Cargando…</div></Card>;
+  if (q.data.missing) return <Card title="Mensajes de WhatsApp"><p className="text-sm text-muted">Para cambiar los mensajes hay que aplicar la actualización 0027 de la base de datos.</p></Card>;
+
+  const sample = debtVars({ firstName: "Juan", balneario: ws.name, number: 125, places: "Carpa 17", start: "2027-01-05", end: "2027-01-20", due: 45000, today: "2027-01-20" });
+
+  function insert(key: string) {
+    const el = area.current;
+    const tag = `{${key}}`;
+    const cur = draft![tab];
+    const at = el ? el.selectionStart : cur.length;
+    const end = el ? el.selectionEnd : cur.length;
+    setDraft({ ...draft!, [tab]: cur.slice(0, at) + tag + cur.slice(end) });
+    setTimeout(() => { el?.focus(); el?.setSelectionRange(at + tag.length, at + tag.length); }, 0);
+  }
+
+  async function save() {
+    setBusy(true);
+    setMsg(null);
+    // Solo se guarda lo que es distinto del mensaje de siempre.
+    const out: Templates = {};
+    for (const c of DEBT_CASES) {
+      const v = draft![c.key].trim();
+      if (v && v !== DEFAULT_TEMPLATES[c.key]) out[c.key] = v.slice(0, 1000);
+    }
+    const { error } = await sb.from("workspaces").update({ message_templates: Object.keys(out).length ? out : null, version: q.data!.version + 1 }).eq("id", ws.id).select("id").single();
+    setBusy(false);
+    if (error) {
+      setMsg({ tone: "danger", text: friendlyError(error) });
+      if (isVersionConflict(error)) q.reload();
+      return;
+    }
+    setMsg({ tone: "ok", text: "Mensajes guardados. Se usan en todas las computadoras y celulares." });
+    window.dispatchEvent(new Event("plantillas-cambiaron"));
+    onSaved(); // la versión del balneario cambió: se recargan las dos tarjetas
+  }
+
+  const info = DEBT_CASES.find((c) => c.key === tab)!;
+  return (
+    <section id="mensajes" className="scroll-mt-20">
+      <Card title="Mensajes de WhatsApp: recordatorio de deuda">
+        <div className="mb-2 flex flex-wrap gap-1">
+          {DEBT_CASES.map((c) => (
+            <button key={c.key} type="button" onClick={() => setTab(c.key)}
+              className={`rounded-lg border px-2.5 py-1 text-sm ${tab === c.key ? "border-accent bg-accent-soft font-semibold text-accent" : "border-line hover:bg-surface-2"}`}>
+              {c.label}{draft[c.key] !== DEFAULT_TEMPLATES[c.key] ? " *" : ""}
+            </button>
+          ))}
+        </div>
+        <p className="mb-2 text-xs text-muted">{info.help}</p>
+        <textarea ref={area} value={draft[tab]} onChange={(e) => setDraft({ ...draft, [tab]: e.target.value })} rows={6} maxLength={1000} disabled={!editable}
+          className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg" aria-label={`Mensaje: ${info.label}`} />
+        {editable && (
+          <div className="mt-2 flex flex-wrap items-center gap-1 text-xs">
+            <span className="text-muted">Agregar dato:</span>
+            {PLACEHOLDERS.map((p) => (
+              <button key={p.key} type="button" onClick={() => insert(p.key)} className="rounded-md border border-line px-2 py-0.5 hover:bg-surface-2">{p.label}</button>
+            ))}
+          </div>
+        )}
+        <div className="mt-3 rounded-lg bg-surface-2 p-3 text-sm">
+          <div className="mb-1 text-xs font-semibold text-muted">Así le llega (ejemplo)</div>
+          <p className="whitespace-pre-wrap">{fillTemplate(draft[tab], sample)}</p>
+        </div>
+        {msg && <Alert tone={msg.tone} className="mt-2">{msg.text}</Alert>}
+        {editable ? (
+          <div className="mt-3 flex flex-wrap justify-between gap-2">
+            <Button type="button" variant="ghost" disabled={draft[tab] === DEFAULT_TEMPLATES[tab]} onClick={() => setDraft({ ...draft, [tab]: DEFAULT_TEMPLATES[tab] })}>Volver al mensaje original</Button>
+            <Button type="button" loading={busy} onClick={save}>Guardar mensajes</Button>
+          </div>
+        ) : <p className="mt-2 text-xs text-muted">Solo un administrador puede cambiar los mensajes.</p>}
+        <p className="mt-2 text-xs text-muted">Los datos entre llaves, como {"{nombre}"} o {"{saldo}"}, se completan solos con los de cada cliente. Antes de mandar cada mensaje también lo podés retocar.</p>
+      </Card>
+    </section>
   );
 }
