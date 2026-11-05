@@ -4,7 +4,6 @@ import { getSupabase, setRememberPreference } from "@/lib/supabase/client";
 import { friendlyError } from "@/lib/errors";
 import { Alert, Button, Field, Input, TextField } from "@/components/ui";
 import { GoogleG } from "@/components/google";
-import { startDemo } from "@/lib/demo";
 import { SITE_EMAIL } from "@/lib/site";
 
 type Mode = "ingresar" | "crear" | "recuperar";
@@ -67,18 +66,6 @@ export default function LoginPage() {
     if (error) {
       setBusy(false);
       setError(friendlyError(error));
-    }
-  }
-
-  // Demo: balneario de prueba propio, que se borra al salir o al cerrar la pestaña.
-  async function guest() {
-    setBusy(true);
-    setError(null);
-    setInfo(null);
-    const err = await startDemo();
-    if (err) {
-      setBusy(false);
-      setError(err);
     }
   }
 
@@ -210,11 +197,6 @@ export default function LoginPage() {
                 <GoogleG />
               </button>
             </div>
-            <button type="button" onClick={guest} disabled={busy}
-              className="mt-4 w-full rounded-lg border border-dashed border-line py-2.5 text-sm font-medium text-muted hover:bg-surface-2 hover:text-fg disabled:opacity-50">
-              Probar la demo
-              <span className="block text-xs font-normal">Un balneario de prueba con datos inventados. No se guarda nada.</span>
-            </button>
           </>
         )}
 
