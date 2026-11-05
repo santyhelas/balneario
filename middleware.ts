@@ -41,9 +41,10 @@ export async function middleware(request: NextRequest) {
     url.pathname = "/inicio";
     return NextResponse.rewrite(url, { request });
   }
+  // Sin sesión, cualquier pantalla del sistema lleva a la presentación (desde ahí se ingresa).
   if (!user && !isPublic) {
     const url = request.nextUrl.clone();
-    url.pathname = "/login";
+    url.pathname = "/";
     url.search = "";
     return NextResponse.redirect(url);
   }

@@ -116,7 +116,7 @@ export function Shell({ children }: { children: ReactNode }) {
       /* nada */
     }
     allowLeave();
-    window.location.assign("/login");
+    window.location.assign(isGuest ? "/?demo=fin" : "/");
   }
 
   function cycleTheme() {

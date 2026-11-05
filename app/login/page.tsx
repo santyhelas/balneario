@@ -121,7 +121,9 @@ export default function LoginPage() {
 
   return (
     <main className="flex min-h-dvh items-center justify-center p-4">
-      <div className="w-full max-w-sm rounded-2xl border border-line bg-surface p-6 shadow-sm">
+      <div className="w-full max-w-sm">
+      <a href="/" className="mb-3 inline-flex items-center gap-1 text-sm text-muted hover:text-fg">← Volver a la página principal</a>
+      <div className="rounded-2xl border border-line bg-surface p-6 shadow-sm">
         <div className="mb-6 flex flex-col items-center gap-2 text-center">
           <img src="/logo.png" alt="" className="h-20 w-20" />
           <h1 className="text-xl font-bold">Tu Balneario</h1>
@@ -231,9 +233,9 @@ export default function LoginPage() {
           )}
         </div>
         <p className="mt-5 border-t border-line pt-3 text-center text-xs text-muted">
-          <a href="/inicio" className="text-accent hover:underline">Conocé todo lo que hace Tu Balneario</a>
-          {" · "}Consultas: <a href={`mailto:${SITE_EMAIL}`} className="text-accent hover:underline">{SITE_EMAIL}</a>
+          Consultas: <a href={`mailto:${SITE_EMAIL}`} className="text-accent hover:underline">{SITE_EMAIL}</a>
         </p>
+      </div>
       </div>
     </main>
   );

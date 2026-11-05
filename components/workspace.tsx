@@ -84,7 +84,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     try {
       const { data: auth, error: authErr } = await sb.auth.getUser();
       if (authErr || !auth.user) {
-        window.location.assign("/login");
+        window.location.assign("/");
         return;
       }
       const user = auth.user;
@@ -96,7 +96,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         if (!marked) {
           await sb.rpc("end_guest_session").then(() => undefined, () => undefined);
           await sb.auth.signOut();
-          window.location.assign("/login?invitado=fin");
+          window.location.assign("/?demo=fin");
           return;
         }
       }
@@ -237,7 +237,7 @@ function Onboarding({ email, onDone }: { email: string | null; onDone: () => Pro
 
   async function logout() {
     await getSupabase().auth.signOut();
-    window.location.assign("/login");
+    window.location.assign("/");
   }
 
   return (

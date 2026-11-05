@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { SITE_EMAIL } from "@/lib/site";
-import { DemoButton, LoginLink, MobileMenu } from "@/components/landing";
+import { DemoButton, DemoEndedNotice, LoginLink, MobileMenu } from "@/components/landing";
 
 export const metadata: Metadata = {
   title: "Tu Balneario · Sistema de gestión para balnearios",
@@ -187,6 +187,7 @@ export default function InicioPage() {
           </div>
         </div>
       </header>
+      <DemoEndedNotice />
 
       <main id="arriba">
         {/* Portada */}
