@@ -829,6 +829,47 @@ select set_config('request.jwt.claims', '{"sub":"11111111-1111-1111-1111-1111111
 select t.set('bkR', (public.create_backup(t.uid('ws'), 'manual', 'Con renovaciones') ->> 'backup_id'));
 select t.ok((select jsonb_array_length(data -> 'renewal_marks') = 1 from public.backups where id = t.uid('bkR')), 'Renovación: las marcas van en la copia de seguridad');
 
+-- 30. No vino: liberar y descontar
+select t.set('r1d', (public.create_reservation_v2(t.uid('ws'), gen_random_uuid(), t.uid('juan'), t.get('hoy')::date, t.get('hoy')::date,
+  jsonb_build_array(jsonb_build_object('space_id', t.space('77'), 'start_date', t.get('hoy'), 'end_date', t.get('hoy'))),
+  '{"manual_base": 10000}'::jsonb, null, null) ->> 'reservation_id'));
+select t.ok((public.set_arrival(t.uid('r1d'), 'no_vino') ->> 'liberado')::boolean, 'No vino (1 día): avisa que se liberó');
+select t.ok((select r.status = 'confirmada' and b.due_amount = 10000 from public.reservations r join public.reservation_balances b on b.reservation_id = r.id where r.id = t.uid('r1d'))
+        and not exists (select 1 from public.reservation_segments where reservation_id = t.uid('r1d') and active), 'No vino (1 día): la carpa queda libre y la reserva sigue (con su deuda)');
+select t.set('r1o', (public.create_reservation_v2(t.uid('ws'), gen_random_uuid(), t.uid('luis'), t.get('hoy')::date, t.get('hoy')::date,
+  jsonb_build_array(jsonb_build_object('space_id', t.space('77'), 'start_date', t.get('hoy'), 'end_date', t.get('hoy'))),
+  '{"manual_base": 10000}'::jsonb, null, null) ->> 'reservation_id'));
+select t.ok(t.get('r1o') is not null, 'No vino (1 día): otro cliente puede tomar esa carpa');
+select t.throws(format($$select public.set_arrival(%L, 'llego')$$, t.get('r1d')), 'No se puede revertir', 'No vino (1 día): si ya la tomó otro, no se puede volver a ocupar');
+select t.set('r1e', (public.create_reservation_v2(t.uid('ws'), gen_random_uuid(), t.uid('juan'), t.get('hoy')::date, t.get('hoy')::date,
+  jsonb_build_array(jsonb_build_object('space_id', t.space('76'), 'start_date', t.get('hoy'), 'end_date', t.get('hoy'))),
+  '{"manual_base": 10000}'::jsonb, null, null) ->> 'reservation_id'));
+select public.set_arrival(t.uid('r1e'), 'no_vino');
+select public.set_arrival(t.uid('r1e'), null);
+select t.ok(exists (select 1 from public.reservation_segments where reservation_id = t.uid('r1e') and active and space_id = t.space('76')), 'No vino (1 día): al corregir la marca vuelve a ocupar la carpa');
+
+-- Varios días: la reserva sigue; se libera el día y se puede descontar
+select public.set_arrival(t.uid('resHoy'), 'no_vino');
+select t.ok((select count(*) from public.reservation_segments where reservation_id = t.uid('resHoy') and active and start_date = t.get('hoy')::date) = 1, 'No vino (varios días): no se libera nada solo');
+select public.release_no_show_day(t.uid('resHoy'), t.get('hoy')::date, false);
+select t.ok(not exists (select 1 from public.reservation_segments where reservation_id = t.uid('resHoy') and active and t.get('hoy')::date between start_date and end_date)
+        and exists (select 1 from public.reservation_segments where reservation_id = t.uid('resHoy') and active and start_date = t.get('hoy')::date + 1 and end_date = t.get('hoy')::date + 2),
+        'No vino (varios días): se libera solo ese día');
+select t.ok((select total_amount = 30000 from public.reservations where id = t.uid('resHoy')), 'No vino: liberar no cambia el precio');
+select t.ok((public.release_no_show_day(t.uid('resHoy'), t.get('hoy')::date, true) ->> 'descuento')::numeric = 10000, 'No vino: el descuento es lo que vale un día (30.000 ÷ 3)');
+select t.ok((select r.total_amount = 20000 and b.due_amount = 20000 from public.reservations r join public.reservation_balances b on b.reservation_id = r.id where r.id = t.uid('resHoy'))
+        and exists (select 1 from public.reservation_discounts where reservation_id = t.uid('resHoy') and label = 'Día no usado (no vino)'), 'No vino: total y deuda bajan, queda el descuento registrado');
+select t.throws(format($$select public.release_no_show_day(%L, %L, true)$$, t.get('resHoy'), t.get('hoy')), 'ya se descontó', 'No vino: no se descuenta dos veces el mismo día');
+select t.throws(format($$select public.release_no_show_day(%L, %L, false)$$, t.get('resHoy'), (t.get('hoy')::date + 1)::text), 'hoy o anteriores', 'No vino: no se liberan días futuros');
+select t.throws(format($$select public.set_arrival(%L, 'llego')$$, t.get('resHoy')), 'ya se descontó', 'No vino: con el día descontado no se vuelve a ocupar solo');
+select public.relocate_reservation(t.uid('resHoy'), t.space('75'), t.get('hoy')::date + 2, t.get('hoy')::date + 2,
+  (select version from public.reservations where id = t.uid('resHoy')), 'Pidió cambio');
+select t.ok(exists (select 1 from public.reservation_segments where reservation_id = t.uid('resHoy') and active and space_id = t.space('75')), 'No vino: después de liberar se puede seguir cambiando de carpa');
+select set_config('request.jwt.claims', '{"sub":"33333333-3333-3333-3333-333333333333","email":"operador@test.com"}', false);
+select t.throws(format($$select public.release_no_show_day(%L, %L, true)$$, t.get('resHoy'), t.get('hoy')), 'No tenés permiso', 'No vino: solo un administrador descuenta');
+select set_config('request.jwt.claims', '{"sub":"11111111-1111-1111-1111-111111111111","email":"duenio@test.com"}', false);
+select t.throws(format($$select public.release_no_show_day(%L, %L, false)$$, t.get('resP'), '2027-01-13'), 'Primero marcá', 'No vino: hay que marcar "no vino" antes de liberar');
+
 reset role;
 \o
 -- Resultado ----------------------------------------------------------

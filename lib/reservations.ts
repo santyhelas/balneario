@@ -36,6 +36,8 @@ export type PaymentRow = {
 export type ChangeRow = {
   id: string; kind: string; description: string; reason: string | null; at: string; actor_email: string | null;
   reverted_by_change_id: string | null; reverts_change_id: string | null;
+  /** Para "no vino": { liberado: "AAAA-MM-DD", space_code } */
+  after_state?: { liberado?: string; space_code?: string } | null;
 };
 export type Balance = { paid_amount: number; due_amount: number; credit_amount: number };
 
@@ -60,7 +62,7 @@ export async function loadReservation(id: string): Promise<Full> {
     sb.from("reservation_charges").select("id, position, description, amount").eq("reservation_id", id).order("position"),
     sb.from("reservation_discounts").select("id, position, kind, label, percent, amount, reason").eq("reservation_id", id).order("position"),
     sb.from("payments").select("*").eq("reservation_id", id).order("created_at"),
-    sb.from("reservation_changes").select("id, kind, description, reason, at, actor_email, reverted_by_change_id, reverts_change_id").eq("reservation_id", id).order("at", { ascending: false }),
+    sb.from("reservation_changes").select("id, kind, description, reason, at, actor_email, reverted_by_change_id, reverts_change_id, after_state").eq("reservation_id", id).order("at", { ascending: false }),
     sb.from("reservation_balances").select("paid_amount, due_amount, credit_amount").eq("reservation_id", id).single(),
   ]);
   return {

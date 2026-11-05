@@ -8,7 +8,7 @@ import { friendlyError } from "@/lib/errors";
 import { addDays, formatDate, formatDateTime, formatMoney, inclusiveDays, parseMoney, todayISO } from "@/lib/format";
 import { METHOD_LABEL } from "@/lib/methods";
 import { VoucherList } from "@/components/vouchers";
-import { ArrivalButtons } from "@/components/arrival";
+import { ArrivalButtons, NoShowPanel } from "@/components/arrival";
 import { receiptMessage } from "@/lib/whatsapp-messages";
 import { loadReservation, spacesSummary, whatsappLink, type Full, type PaymentRow } from "@/lib/reservations";
 import { daysOf, indexGrid, isFreeFor, type GridRow } from "@/lib/stay";
@@ -92,9 +92,20 @@ export default function ReservaPage() {
                   <ArrivalButtons reservationId={r.id} state={r.arrival_status ?? null} onChanged={() => { q.reload(); status.reload(); }} />
                   <span className="text-xs text-muted">
                     {r.arrival_status && r.arrival_at ? `Marcado ${formatDateTime(r.arrival_at, ws.timezone)}` : "Sin marcar"}
-                    {r.arrival_status === "no_vino" ? " · la carpa sigue reservada: si la querés liberar, cancelá la reserva" : ""}
                   </span>
                 </dd>
+                {r.arrival_status === "no_vino" && (
+                  <div className="mt-2">
+                    <NoShowPanel
+                      r={r} today={today} isAdmin={isAdmin}
+                      releasedDays={changes.filter((c) => c.after_state?.liberado && !c.reverted_by_change_id).map((c) => c.after_state!.liberado!)}
+                      discountedDays={discounts.filter((d) => d.kind === "manual" && d.reason?.startsWith("No vino el ")).map((d) => { const [dd, mm, yy] = d.reason!.slice(11).split("/"); return `${yy}-${mm}-${dd}`; })}
+                      noShowDiscounts={discounts.filter((d) => d.kind === "manual" && d.reason?.startsWith("No vino el ")).reduce((a, d) => a + Number(d.amount), 0)}
+                      hasSpaceOn={(day) => segments.some((s) => s.start_date <= day && s.end_date >= day)}
+                      onDone={done}
+                    />
+                  </div>
+                )}
               </div>
             )}
             {r.is_courtesy && <div className="col-span-2"><dt className="text-xs text-muted">Cortesía familiar para</dt><dd>{r.courtesy_beneficiary ?? "—"}</dd></div>}
