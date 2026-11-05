@@ -3,9 +3,9 @@ import type { MetadataRoute } from "next";
 // Permite instalar el sistema como app en Android (Chrome) e iPhone (Safari → Agregar a inicio).
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "Balneario · Gestión",
-    short_name: "Balneario",
-    description: "Reservas, mapa, caja y clientes del balneario.",
+    name: "Tu Balneario",
+    short_name: "Tu Balneario",
+    description: "Tu Balneario: reservas, mapa, caja y clientes de tu balneario.",
     lang: "es-AR",
     start_url: "/",
     scope: "/",
