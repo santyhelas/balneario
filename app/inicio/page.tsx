@@ -1,13 +1,12 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
-import { Bricolage_Grotesque, Figtree } from "next/font/google";
+import "@fontsource-variable/bricolage-grotesque";
+import "@fontsource-variable/figtree";
 import { SITE_EMAIL, SITE_INSTAGRAM, SITE_INSTAGRAM_URL, SITE_URL } from "@/lib/site";
 import { DemoButton, DemoEndedNotice, LoginLink, MobileMenu } from "@/components/landing";
 import { DayTimeline, HeroBeach, PhotoStrip, Slider, type DayStep } from "@/components/landing-interactive";
 import "./landing.css";
 
-const display = Bricolage_Grotesque({ subsets: ["latin"], variable: "--tb-display", weight: ["500", "700", "800"] });
-const body = Figtree({ subsets: ["latin"], variable: "--tb-body", weight: ["400", "500", "600", "700"] });
 
 const DESCRIPTION =
   "Sistema de gestión de balnearios: alquiler y reservas de carpas y sombrillas por fecha, mapa de la playa, cobros, señas, deudas, caja diaria, clientes y WhatsApp. Desde la computadora o el celular.";
@@ -259,7 +258,7 @@ const POSTCARDS: { key: string; caption: string; node: ReactNode }[] = PHOTOS.ma
 
 export default function InicioPage() {
   return (
-    <div className={`tb ${display.variable} ${body.variable} min-h-dvh`}>
+    <div className="tb min-h-dvh">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(JSON_LD) }} />
       <header className="sticky top-0 z-40 bg-[#fbf7ee]/90 backdrop-blur">
         <div className="relative mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3">

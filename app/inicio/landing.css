@@ -1,5 +1,8 @@
 /* Página de presentación: paleta propia de la costa atlántica (no cambia con el tema del sistema). */
 .tb {
+  /* Tipografías incluidas en la web (no se descargan de Google al compilar). */
+  --tb-display: "Bricolage Grotesque Variable";
+  --tb-body: "Figtree Variable";
   --atl: #0b4f6c;
   --atl-2: #0f6e8f;
   --atl-3: #8fc6d6;
