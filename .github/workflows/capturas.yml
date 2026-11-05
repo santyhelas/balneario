@@ -30,6 +30,7 @@ jobs:
       - name: Guardar capturas en la rama "capturas"
         run: |
           cd capturas
+          echo '{ "git": { "deploymentEnabled": false } }' > vercel.json
           git init -q -b capturas
           git config user.name "capturas" && git config user.email "capturas@users.noreply.github.com"
           git add -A && git commit -qm "Capturas de ${GITHUB_SHA::7}"
