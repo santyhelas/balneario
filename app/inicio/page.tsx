@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { Bricolage_Grotesque, Figtree } from "next/font/google";
-import { SITE_EMAIL, SITE_INSTAGRAM, SITE_INSTAGRAM_URL } from "@/lib/site";
+import { SITE_EMAIL, SITE_INSTAGRAM, SITE_INSTAGRAM_URL, SITE_URL } from "@/lib/site";
 import { DemoButton, DemoEndedNotice, LoginLink, MobileMenu } from "@/components/landing";
 import { DayTimeline, HeroBeach, PhotoStrip, Slider, type DayStep } from "@/components/landing-interactive";
 import "./landing.css";
@@ -9,10 +9,38 @@ import "./landing.css";
 const display = Bricolage_Grotesque({ subsets: ["latin"], variable: "--tb-display", weight: ["500", "700", "800"] });
 const body = Figtree({ subsets: ["latin"], variable: "--tb-body", weight: ["400", "500", "600", "700"] });
 
+const DESCRIPTION =
+  "Sistema de gestión de balnearios: alquiler y reservas de carpas y sombrillas por fecha, mapa de la playa, cobros, señas, deudas, caja diaria, clientes y WhatsApp. Desde la computadora o el celular.";
+
 export const metadata: Metadata = {
-  title: "Tu Balneario · Sistema de gestión para balnearios",
-  description:
-    "Reservas por fecha, mapa de carpas y sombrillas, cobros, señas, deudas, caja diaria, clientes, tarifas, WhatsApp y copias de seguridad. Desde la computadora o el celular.",
+  metadataBase: new URL(SITE_URL),
+  title: "Tu Balneario · Sistema de gestión de balnearios y alquiler de carpas",
+  description: DESCRIPTION,
+  keywords: ["gestión de balnearios", "sistema para balnearios", "alquiler de carpas", "reservas de carpas", "sombrillas", "software balneario", "Argentina"],
+  alternates: { canonical: "/" },
+  openGraph: {
+    type: "website", locale: "es_AR", url: "/", siteName: "Tu Balneario",
+    title: "Tu Balneario · Sistema de gestión de balnearios",
+    description: DESCRIPTION,
+    images: [{ url: "/icon-512.png", width: 512, height: 512, alt: "Tu Balneario" }],
+  },
+  twitter: { card: "summary", title: "Tu Balneario · Sistema de gestión de balnearios", description: DESCRIPTION, images: ["/icon-512.png"] },
+  // Código de verificación de Google Search Console (se carga en Vercel; ver README).
+  verification: process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION ? { google: process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION } : undefined,
+};
+
+/** Datos estructurados para Google: qué es la página. */
+const JSON_LD = {
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  name: "Tu Balneario",
+  applicationCategory: "BusinessApplication",
+  operatingSystem: "Web",
+  inLanguage: "es-AR",
+  description: DESCRIPTION,
+  url: SITE_URL,
+  email: SITE_EMAIL,
+  sameAs: [SITE_INSTAGRAM_URL],
 };
 
 const NAV = [
@@ -283,6 +311,7 @@ const POSTCARDS: { key: string; caption: string; node: ReactNode }[] = PHOTOS.le
 export default function InicioPage() {
   return (
     <div className={`tb ${display.variable} ${body.variable} min-h-dvh`}>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(JSON_LD) }} />
       <header className="sticky top-0 z-40 bg-[#fbf7ee]/90 backdrop-blur">
         <div className="relative mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3">
           <a href="#arriba" className="flex items-center gap-2.5">
@@ -309,7 +338,8 @@ export default function InicioPage() {
                 Tu balneario entero, en un mapa que sabe quién está en cada carpa.
               </h1>
               <p className="mt-5 max-w-lg text-lg leading-relaxed text-[var(--gris)]">
-                Elegí un día y mirá qué está libre. Tocá una carpa y ves quién la tiene, hasta cuándo y si pagó.
+                Tu Balneario es un sistema de gestión de balnearios para el alquiler de carpas y sombrillas.
+                Elegí un día y mirá qué está libre; tocá una carpa y ves quién la tiene, hasta cuándo y si pagó.
                 Reservas, cobros, deudas y caja, desde la compu o el celular.
               </p>
               <div className="mt-8 flex flex-wrap items-start gap-3">
