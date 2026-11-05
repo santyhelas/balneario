@@ -11,6 +11,7 @@ import { BrandLogo, PageHeader, SyncNotice } from "@/components/shell";
 import { Alert, Badge, Button, Card, Field, Select, Spinner, TextField } from "@/components/ui";
 import { LinkedAccountsCard } from "@/components/linked-accounts";
 import { MyUsernameField, UsersCard } from "@/components/users";
+import { LocationPicker } from "@/components/location-picker";
 import { DEBT_CASES, DEFAULT_TEMPLATES, PLACEHOLDERS, debtVars, fillTemplate, type DebtCase, type Templates } from "@/lib/whatsapp-messages";
 
 type WsRow = { name: string; subtitle: string | null; logo_data: string | null; legal_id: string | null; phone: string | null; address: string | null; latitude: number | null; longitude: number | null; version: number };
@@ -103,17 +104,15 @@ function BalnearioCard({ row, editable, onSaved, onConflict }: { row: WsRow; edi
   const [legalId, setLegalId] = useState(row.legal_id ?? "");
   const [phone, setPhone] = useState(row.phone ?? "");
   const [address, setAddress] = useState(row.address ?? "");
-  const [lat, setLat] = useState(row.latitude?.toString() ?? "");
-  const [lon, setLon] = useState(row.longitude?.toString() ?? "");
+  const [lat, setLat] = useState<number | null>(row.latitude == null ? null : Number(row.latitude));
+  const [lon, setLon] = useState<number | null>(row.longitude == null ? null : Number(row.longitude));
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ tone: "ok" | "danger"; text: string } | null>(null);
 
   async function submit(e: FormEvent) {
     e.preventDefault();
-    const la = lat.trim() === "" ? null : Number(lat.replace(",", "."));
-    const lo = lon.trim() === "" ? null : Number(lon.replace(",", "."));
-    if (la !== null && !(la >= -90 && la <= 90)) return setMsg({ tone: "danger", text: "Latitud inválida (entre -90 y 90)." });
-    if (lo !== null && !(lo >= -180 && lo <= 180)) return setMsg({ tone: "danger", text: "Longitud inválida (entre -180 y 180)." });
+    const la = lat;
+    const lo = lon;
     if (!name.trim()) return setMsg({ tone: "danger", text: "El nombre no puede quedar vacío." });
     setBusy(true);
     setMsg(null);
@@ -150,11 +149,8 @@ function BalnearioCard({ row, editable, onSaved, onConflict }: { row: WsRow; edi
           <TextField label="Teléfono (opcional)" value={phone} onChange={(e) => setPhone(e.target.value)} maxLength={40} disabled={!editable} />
         </div>
         <TextField label="Dirección (opcional)" value={address} onChange={(e) => setAddress(e.target.value)} maxLength={200} disabled={!editable} />
-        <div className="grid gap-3 sm:grid-cols-2">
-          <TextField label="Latitud" inputMode="decimal" value={lat} onChange={(e) => setLat(e.target.value)} placeholder="-37.2639" disabled={!editable} />
-          <TextField label="Longitud" inputMode="decimal" value={lon} onChange={(e) => setLon(e.target.value)} placeholder="-56.9731" disabled={!editable} />
-        </div>
-        <p className="text-xs text-muted">La ubicación se usa para el clima, el viento y el recorrido del sol. Aparecen en el comprobante el nombre, el CUIT, el teléfono y la dirección.</p>
+        <LocationPicker lat={lat} lon={lon} onChange={(a, b) => { setLat(a); setLon(b); }} disabled={!editable} />
+        <p className="text-xs text-muted">La ubicación se usa para el clima, el viento y el sol de tu balneario; se guarda al tocar «Guardar cambios». En el comprobante aparecen el nombre, el CUIT, el teléfono y la dirección.</p>
         {msg && <Alert tone={msg.tone}>{msg.text}</Alert>}
         {editable ? <Button type="submit" loading={busy}>Guardar cambios</Button> : <p className="text-sm text-muted">Solo el propietario o un administrador pueden modificar estos datos.</p>}
       </form>

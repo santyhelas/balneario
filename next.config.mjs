@@ -16,7 +16,7 @@ const nextConfig = {
           // Al abrir enlaces externos no se manda la dirección completa de la página.
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
           // La página no usa cámara, micrófono ni ubicación del dispositivo.
-          { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(), payment=(), usb=()" },
+          { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(self), payment=(), usb=()" },
           // Siempre por conexión cifrada (https).
           { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains" },
         ],

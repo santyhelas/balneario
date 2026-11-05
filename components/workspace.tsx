@@ -4,6 +4,7 @@ import { getSupabase } from "@/lib/supabase/client";
 import { friendlyError } from "@/lib/errors";
 import { Alert, Button, Spinner, TextField } from "@/components/ui";
 import { GUEST_MARK } from "@/lib/remember";
+import { LocationPicker } from "@/components/location-picker";
 
 export type Role = "propietario" | "administrador" | "operador";
 export type ThemePref = "claro" | "oscuro" | "sistema";
@@ -221,17 +222,26 @@ function Onboarding({ email, onDone }: { email: string | null; onDone: () => Pro
   const [error, setError] = useState<string | null>(null);
   const [tents, setTents] = useState("90");
   const [umbrellas, setUmbrellas] = useState("10");
+  const [lat, setLat] = useState<number | null>(null);
+  const [lon, setLon] = useState<number | null>(null);
 
   async function submit(e: FormEvent) {
     e.preventDefault();
     setBusy(true);
     setError(null);
-    const { error } = await getSupabase().rpc("create_workspace", { p_name: name, p_tents: Number(tents) || 0, p_umbrellas: Number(umbrellas) || 0 });
-    setBusy(false);
+    const sb = getSupabase();
+    const { data: wsId, error } = await sb.rpc("create_workspace", { p_name: name, p_tents: Number(tents) || 0, p_umbrellas: Number(umbrellas) || 0 });
     if (error) {
+      setBusy(false);
       setError(friendlyError(error));
       return;
     }
+    // Ubicación para el clima (si la eligió). Si fallara, se puede cargar después en Configuración.
+    if (lat != null && lon != null && typeof wsId === "string") {
+      const cur = await sb.from("workspaces").select("version").eq("id", wsId).single();
+      if (!cur.error) await sb.from("workspaces").update({ latitude: lat, longitude: lon, version: (cur.data as { version: number }).version + 1 }).eq("id", wsId);
+    }
+    setBusy(false);
     await onDone();
   }
 
@@ -254,7 +264,8 @@ function Onboarding({ email, onDone }: { email: string | null; onDone: () => Pro
             <TextField label="Carpas" type="number" inputMode="numeric" min={0} max={600} value={tents} onChange={(e) => setTents(e.target.value)} />
             <TextField label="Sombrillas" type="number" inputMode="numeric" min={0} max={300} value={umbrellas} onChange={(e) => setUmbrellas(e.target.value)} />
           </div>
-          <p className="text-xs text-muted">Después podés agregar, quitar y renombrar carpas y sombrillas, y cargar la ubicación en Configuración para ver el clima.</p>
+          <LocationPicker lat={lat} lon={lon} onChange={(a, b) => { setLat(a); setLon(b); }} />
+          <p className="text-xs text-muted">La ubicación es para mostrarte el clima, el viento y el sol de tu playa. Si no la ponés ahora, la cargás después en Configuración. Las carpas y sombrillas se pueden agregar, quitar y renombrar cuando quieras.</p>
           {error && <Alert tone="danger">{error}</Alert>}
           <Button type="submit" loading={busy}>Crear balneario</Button>
           <button type="button" className="text-sm text-muted hover:underline" onClick={logout}>Usar otra cuenta</button>
