@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { Bricolage_Grotesque, Figtree } from "next/font/google";
-import { SITE_EMAIL } from "@/lib/site";
+import { SITE_EMAIL, SITE_INSTAGRAM, SITE_INSTAGRAM_URL } from "@/lib/site";
 import { DemoButton, DemoEndedNotice, LoginLink, MobileMenu } from "@/components/landing";
 import { DayTimeline, HeroBeach, PhotoStrip, Slider, type DayStep } from "@/components/landing-interactive";
 import "./landing.css";
@@ -45,6 +45,15 @@ const FAQ = [
   { q: "¿Y si se corta internet?", a: "Para guardar hace falta internet. Si se corta, el sistema te avisa y no te muestra datos viejos como si fueran los de ahora, así no reservás algo que ya está ocupado." },
   { q: "¿Cuánto cuesta?", a: `Mirá la sección Planes o escribinos a ${SITE_EMAIL}.` },
 ];
+
+/** Ícono de Instagram (dibujo simple de cámara). */
+function InstagramIcon({ className = "h-5 w-5" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.9} className={className} aria-hidden>
+      <rect x="3" y="3" width="18" height="18" rx="5" /><circle cx="12" cy="12" r="4" /><circle cx="17.5" cy="6.5" r="1" fill="currentColor" />
+    </svg>
+  );
+}
 
 function Icon({ d, className = "h-5 w-5" }: { d: string; className?: string }) {
   return (
@@ -422,6 +431,9 @@ export default function InicioPage() {
               <a href={`mailto:${SITE_EMAIL}`} className="mt-5 inline-flex items-center gap-2 text-lg font-bold underline decoration-[var(--sol)] decoration-2 underline-offset-4">
                 <Icon d="M4 6h16v12H4zM4 7l8 6 8-6" />{SITE_EMAIL}
               </a>
+              <a href={SITE_INSTAGRAM_URL} target="_blank" rel="noopener noreferrer" className="mt-3 flex w-fit items-center gap-2 text-lg font-bold underline decoration-[var(--sol)] decoration-2 underline-offset-4">
+                <InstagramIcon />@{SITE_INSTAGRAM}
+              </a>
             </div>
             <DemoButton className="rounded-full bg-[var(--sol)] px-8 text-[var(--tinta)] hover:brightness-105" />
           </div>
@@ -434,6 +446,7 @@ export default function InicioPage() {
           <span className="flex gap-5">
             <LoginLink className="hover:text-white" />
             <a href={`mailto:${SITE_EMAIL}`} className="hover:text-white">Contacto</a>
+            <a href={SITE_INSTAGRAM_URL} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 hover:text-white"><InstagramIcon className="h-4 w-4" />Instagram</a>
           </span>
         </div>
       </footer>
