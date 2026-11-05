@@ -1,5 +1,7 @@
 "use client";
 import { useState, type FormEvent } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { getSupabase } from "@/lib/supabase/client";
 import { newKey, unwrap, useLoader } from "@/lib/data";
 import { friendlyError } from "@/lib/errors";
@@ -40,6 +42,7 @@ export default function CajaPage() {
   const { ws, isAdmin } = useWorkspace();
   const status = useStatus();
   const sb = getSupabase();
+  const router = useRouter();
   const today = todayISO(ws.timezone);
 
   const { data, error, loading, reload, stale, updatedAt } = useLoader<PageData>(async () => {
@@ -90,6 +93,7 @@ export default function CajaPage() {
         subtitle={current ? `Caja del ${formatDate(current.business_date)}` : `Hoy ${formatDate(today)}`}
         actions={
           <>
+            {current && <Button variant="secondary" onClick={() => router.push(`/caja/tarjetas?sesion=${current.id}`)}>Cierre de tarjetas</Button>}
             {canOperate && <Button variant="secondary" onClick={() => setIncomeOpen(true)}>Otro ingreso</Button>}
             {canOperate && <Button variant="secondary" onClick={() => setExpenseOpen(true)}>Registrar salida / gasto</Button>}
             {isOpen && <Button onClick={() => setCloseCash(true)}>Cerrar caja</Button>}
@@ -197,7 +201,7 @@ export default function CajaPage() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="text-left text-xs text-muted">
-                <tr><th className="py-2 pr-3">Fecha</th><th className="pr-3 text-right">Apertura</th><th className="pr-3 text-right">Esperado</th><th className="pr-3 text-right">Contado</th><th className="text-right">Diferencia</th></tr>
+                <tr><th className="py-2 pr-3">Fecha</th><th className="pr-3 text-right">Apertura</th><th className="pr-3 text-right">Esperado</th><th className="pr-3 text-right">Contado</th><th className="pr-3 text-right">Diferencia</th><th /></tr>
               </thead>
               <tbody className="divide-y divide-line tabular">
                 {data.sessions.filter((s) => s.closed_at).map((s) => (
@@ -206,7 +210,8 @@ export default function CajaPage() {
                     <td className="pr-3 text-right">{formatMoney(s.opening_cash)}</td>
                     <td className="pr-3 text-right">{formatMoney(s.expected_cash)}</td>
                     <td className="pr-3 text-right">{formatMoney(s.counted_cash)}</td>
-                    <td className={`text-right ${Number(s.difference) !== 0 ? "text-warn font-medium" : ""}`}>{formatMoney(s.difference)}</td>
+                    <td className={`pr-3 text-right ${Number(s.difference) !== 0 ? "text-warn font-medium" : ""}`}>{formatMoney(s.difference)}</td>
+                    <td className="text-right"><Link href={`/caja/tarjetas?sesion=${s.id}`} className="text-xs text-accent hover:underline">Tarjetas</Link></td>
                   </tr>
                 ))}
               </tbody>
