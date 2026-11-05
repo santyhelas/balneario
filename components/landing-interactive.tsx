@@ -163,65 +163,59 @@ export function HeroBeach() {
 /* Carrusel que se desliza (con flechas, puntos y deslizando con el dedo) */
 /* ------------------------------------------------------------------ */
 
-export function Slider({ slides, label, auto = 7000 }: { slides: { key: string; node: ReactNode }[]; label: string; auto?: number }) {
-  const track = useRef<HTMLDivElement>(null);
+/**
+ * Las partes del sistema, de a una: arranca siempre en la primera, se pasa con flechas,
+ * con las pestañas, deslizando con el dedo o con las flechas del teclado. No se mueve solo.
+ */
+export function Slider({ slides, label }: { slides: { key: string; title: string; node: ReactNode }[]; label: string }) {
   const [i, setI] = useState(0);
-  const [paused, setPaused] = useState(false);
-  const reduced = useReducedMotion();
-
-  const go = (n: number) => {
-    const el = track.current;
-    if (!el) return;
-    const k = (n + slides.length) % slides.length;
-    const child = el.children[k] as HTMLElement | undefined;
-    if (child) el.scrollTo({ left: child.offsetLeft - el.offsetLeft, behavior: reduced ? "auto" : "smooth" });
-  };
-  useEffect(() => {
-    const el = track.current;
-    if (!el) return;
-    const on = () => {
-      const w = (el.children[0] as HTMLElement | undefined)?.offsetWidth ?? 1;
-      setI(Math.round(el.scrollLeft / (w + 16)));
-    };
-    el.addEventListener("scroll", on, { passive: true });
-    return () => el.removeEventListener("scroll", on);
-  }, []);
-  useEffect(() => {
-    if (paused || reduced || !auto) return;
-    const t = setTimeout(() => go(i + 1), auto);
-    return () => clearTimeout(t);
-  }); // se reprograma en cada render
+  const start = useRef<number | null>(null);
+  const n = slides.length;
+  const go = (k: number) => setI(Math.max(0, Math.min(n - 1, k)));
 
   return (
-    <div onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)} onFocus={() => setPaused(true)} onBlur={() => setPaused(false)}
-      onTouchStart={() => setPaused(true)} aria-roledescription="carrusel" aria-label={label}>
-      <div ref={track} className="tb-track -mx-4 flex gap-4 overflow-x-auto px-4 pb-2">
+    <div role="region" aria-roledescription="carrusel" aria-label={label}
+      onKeyDown={(e) => { if (e.key === "ArrowRight") go(i + 1); if (e.key === "ArrowLeft") go(i - 1); }}>
+      <div role="tablist" aria-label="Partes" className="mb-5 flex flex-wrap gap-2">
         {slides.map((s, k) => (
-          <div key={s.key} className="w-[86%] shrink-0 sm:w-[62%] lg:w-[46%]" role="group" aria-roledescription="diapositiva" aria-label={`${k + 1} de ${slides.length}`}>
-            {s.node}
-          </div>
+          <button key={s.key} role="tab" aria-selected={k === i} onClick={() => go(k)}
+            className={`rounded-full px-4 py-2 text-sm font-bold transition ${k === i ? "bg-[var(--atl)] text-white" : "bg-white text-[var(--atl)] ring-1 ring-[var(--sand-2)] hover:ring-[var(--atl)]"}`}>
+            {s.title}
+          </button>
         ))}
       </div>
-      <div className="mt-4 flex items-center justify-between gap-3">
-        <div className="flex flex-wrap gap-1.5">
+      <div className="overflow-hidden rounded-[32px] touch-pan-y"
+        onPointerDown={(e) => { start.current = e.clientX; }}
+        onPointerUp={(e) => {
+          if (start.current === null) return;
+          const dx = e.clientX - start.current;
+          start.current = null;
+          if (Math.abs(dx) > 50) go(i + (dx < 0 ? 1 : -1));
+        }}
+        onPointerCancel={() => { start.current = null; }}>
+        <div className="flex transition-transform duration-500 ease-out motion-reduce:transition-none" style={{ transform: `translateX(-${i * 100}%)` }}>
           {slides.map((s, k) => (
-            <button key={s.key} onClick={() => go(k)} aria-label={`Ir a la ${k + 1}`}
-              className={`h-2.5 rounded-full transition-all ${k === i ? "w-7 bg-[var(--atl)]" : "w-2.5 bg-[var(--sand-2)] hover:bg-[var(--atl-3)]"}`} />
+            <div key={s.key} className="w-full shrink-0" role="tabpanel" aria-label={`${k + 1} de ${n}: ${s.title}`} aria-hidden={k !== i} inert={k !== i}>
+              {s.node}
+            </div>
           ))}
         </div>
+      </div>
+      <div className="mt-5 flex items-center justify-between gap-3">
+        <span className="text-sm font-semibold text-[var(--gris)]" aria-live="polite">{i + 1} de {n}</span>
         <div className="flex gap-2">
-          <ArrowBtn dir={-1} onClick={() => go(i - 1)} />
-          <ArrowBtn dir={1} onClick={() => go(i + 1)} />
+          <ArrowBtn dir={-1} onClick={() => go(i - 1)} disabled={i === 0} />
+          <ArrowBtn dir={1} onClick={() => go(i + 1)} disabled={i === n - 1} />
         </div>
       </div>
     </div>
   );
 }
 
-function ArrowBtn({ dir, onClick }: { dir: 1 | -1; onClick: () => void }) {
+function ArrowBtn({ dir, onClick, disabled }: { dir: 1 | -1; onClick: () => void; disabled?: boolean }) {
   return (
-    <button onClick={onClick} aria-label={dir === 1 ? "Siguiente" : "Anterior"}
-      className="flex h-11 w-11 items-center justify-center rounded-full border-2 border-[var(--atl)] text-[var(--atl)] transition hover:bg-[var(--atl)] hover:text-white">
+    <button onClick={onClick} disabled={disabled} aria-label={dir === 1 ? "Siguiente" : "Anterior"}
+      className="flex h-12 w-12 items-center justify-center rounded-full border-2 border-[var(--atl)] text-[var(--atl)] transition hover:bg-[var(--atl)] hover:text-white disabled:pointer-events-none disabled:opacity-30">
       <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
         <path d={dir === 1 ? "M9 5l7 7-7 7" : "M15 5l-7 7 7 7"} />
       </svg>

@@ -16,6 +16,13 @@ for (const [name, opts] of [
   await page.locator("#tb-hora").fill("3");
   await page.locator("#un-dia").scrollIntoViewIfNeeded();
   await page.screenshot({ path: `capturas/${name}-un-dia.png` });
+  await page.locator("#funciones").scrollIntoViewIfNeeded();
+  await page.screenshot({ path: `capturas/${name}-funciones-1.png` });
+  await page.getByRole("button", { name: "Siguiente" }).click();
+  await page.getByRole("button", { name: "Siguiente" }).click();
+  await page.getByRole("button", { name: "Siguiente" }).click();
+  await page.waitForTimeout(700);
+  await page.screenshot({ path: `capturas/${name}-funciones-4.png` });
   await page.close();
 }
 await browser.close();

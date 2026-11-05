@@ -52,7 +52,7 @@ const NAV = [
 
 /**
  * Fotos reales: poné los archivos en public/landing/ y agregalos acá ({ src: "/landing/playa.jpg", caption: "…" }).
- * Mientras esté vacía se muestran las postales dibujadas.
+ * Mientras esté vacía, la tira de fotos no se muestra.
  */
 const PHOTOS: { src: string; caption: string }[] = [];
 
@@ -222,22 +222,26 @@ const GROUPS: { key: string; title: string; lead: string; color: string; items: 
   },
 ];
 
-function GroupSlide({ g }: { g: (typeof GROUPS)[number] }) {
+function GroupSlide({ g, n, total }: { g: (typeof GROUPS)[number]; n: number; total: number }) {
   return (
-    <article className="h-full overflow-hidden rounded-[28px] bg-white ring-1 ring-[var(--sand-2)]">
-      <div className="relative px-6 pb-8 pt-7 text-white" style={{ background: g.color }}>
-        <svg viewBox="0 0 400 40" preserveAspectRatio="none" className="absolute inset-x-0 -bottom-px h-6 w-full" aria-hidden>
-          <path d="M0 40 V20 Q50 0 100 20 T200 20 T300 20 T400 20 V40 Z" fill="#fff" />
+    <article className="grid min-h-[480px] overflow-hidden bg-white ring-1 ring-inset ring-[var(--sand-2)] lg:grid-cols-[0.8fr_1.2fr]">
+      <div className="relative flex flex-col justify-between overflow-hidden p-8 text-white sm:p-10" style={{ background: g.color }}>
+        <svg viewBox="0 0 200 200" className="pointer-events-none absolute -bottom-16 -right-16 h-64 w-64 opacity-15" aria-hidden>
+          <path d="M0 120 Q25 100 50 120 T100 120 T150 120 T200 120 M0 150 Q25 130 50 150 T100 150 T150 150 T200 150 M0 180 Q25 160 50 180 T100 180 T150 180 T200 180" fill="none" stroke="#fff" strokeWidth="8" />
         </svg>
-        <h3 className="text-3xl font-extrabold">{g.title}</h3>
-        <p className="mt-1 text-white/85">{g.lead}</p>
+        <div>
+          <span className="text-sm font-semibold text-white/70">Parte {n} de {total}</span>
+          <h3 className="mt-2 text-5xl font-extrabold leading-none sm:text-6xl">{g.title}</h3>
+          <p className="mt-4 max-w-xs text-xl leading-snug text-white/90">{g.lead}</p>
+        </div>
+        <span className="relative mt-10 flex h-20 w-20 items-center justify-center rounded-3xl bg-white/15"><Icon d={g.items[0].icon} className="h-10 w-10" /></span>
       </div>
-      <ul className="grid gap-5 px-6 pb-7 pt-3 sm:grid-cols-2">
+      <ul className="grid content-center gap-x-8 gap-y-8 p-8 sm:grid-cols-2 sm:p-10">
         {g.items.map((f) => (
           <li key={f.title}>
-            <span className="mb-2 flex h-10 w-10 items-center justify-center rounded-2xl" style={{ background: `color-mix(in srgb, ${g.color} 13%, white)`, color: g.color }}><Icon d={f.icon} /></span>
-            <h4 className="font-bold">{f.title}</h4>
-            <p className="mt-0.5 text-sm leading-relaxed text-[var(--gris)]">{f.text}</p>
+            <span className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl" style={{ background: `color-mix(in srgb, ${g.color} 13%, white)`, color: g.color }}><Icon d={f.icon} className="h-6 w-6" /></span>
+            <h4 className="text-lg font-bold">{f.title}</h4>
+            <p className="mt-1 leading-relaxed text-[var(--gris)]">{f.text}</p>
           </li>
         ))}
       </ul>
@@ -245,68 +249,13 @@ function GroupSlide({ g }: { g: (typeof GROUPS)[number] }) {
   );
 }
 
-/* ---------------- Postales dibujadas (hasta tener fotos reales) ---------------- */
+/* ---------------- Fotos reales (cuando se carguen en PHOTOS) ---------------- */
 
-type Kind = "amanecer" | "carpas" | "sombrillas" | "mediodia" | "atardecer";
-function Postcard({ kind }: { kind: Kind }) {
-  const sky = { amanecer: ["#ffd8a8", "#ffefd6"], carpas: ["#8fd0e6", "#dff3f8"], sombrillas: ["#7cc3df", "#d7eff6"], mediodia: ["#5fb4d8", "#cbe9f4"], atardecer: ["#f59e6b", "#fcd9a8"] }[kind];
-  const sea = kind === "atardecer" ? "#3c6f8f" : kind === "amanecer" ? "#5f9fbd" : "#1e7fa8";
-  return (
-    <svg viewBox="0 0 320 240" className="h-full w-full" aria-hidden>
-      <defs>
-        <linearGradient id={`s-${kind}`} x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor={sky[0]} /><stop offset="1" stopColor={sky[1]} /></linearGradient>
-      </defs>
-      <rect width="320" height="240" fill={`url(#s-${kind})`} />
-      {(kind === "amanecer" || kind === "atardecer") && <circle cx={kind === "amanecer" ? 90 : 230} cy="108" r="30" fill={kind === "amanecer" ? "#ffb347" : "#f4663f"} opacity="0.95" />}
-      {(kind === "mediodia" || kind === "carpas") && <circle cx="262" cy="42" r="18" fill="#ffd34d" />}
-      <rect y="112" width="320" height="46" fill={sea} />
-      <path d="M0 158 Q40 148 80 158 T160 158 T240 158 T320 158 V240 H0 Z" fill="#f1dfb6" />
-      <path d="M0 158 Q40 148 80 158 T160 158 T240 158 T320 158" fill="none" stroke="#fff" strokeWidth="3" opacity="0.85" />
-      {kind === "carpas" && [0, 1, 2, 3, 4].map((k) => (
-        <g key={k} transform={`translate(${18 + k * 60} 178)`}>
-          <rect width="48" height="40" fill="#fff" />
-          {[0, 1, 2].map((s) => <rect key={s} x={s * 16} width="8" height="40" fill={k % 2 ? "#1e7fa8" : "#d6332f"} />)}
-          <path d="M-4 0 L24 -14 L52 0 Z" fill={k % 2 ? "#1e7fa8" : "#d6332f"} />
-        </g>
-      ))}
-      {kind === "sombrillas" && [0, 1, 2, 3].map((k) => (
-        <g key={k} transform={`translate(${45 + k * 75} ${176 + (k % 2) * 16})`}>
-          <line x1="0" y1="0" x2="0" y2="34" stroke="#7a5b2e" strokeWidth="3" />
-          <path d="M-30 2 Q0 -26 30 2 Z" fill={["#f2b233", "#d6332f", "#0b4f6c", "#2f9e5b"][k]} />
-          <ellipse cx="0" cy="40" rx="22" ry="5" fill="#000" opacity="0.08" />
-        </g>
-      ))}
-      {kind === "mediodia" && (
-        <g>
-          {[0, 1, 2, 3, 4, 5].map((k) => <rect key={k} x={20 + k * 50} y={180 + (k % 2) * 14} width="34" height="22" rx="4" fill={k === 2 ? "#2f9e5b" : "#d6332f"} />)}
-          <rect x="0" y="222" width="320" height="10" fill="#e9dcc0" />
-        </g>
-      )}
-      {kind === "amanecer" && (
-        <g>
-          {[0, 1, 2].map((k) => <rect key={k} x={170 + k * 46} y="186" width="36" height="28" rx="3" fill="#fff" stroke="#d6332f" strokeWidth="2" />)}
-        </g>
-      )}
-      {kind === "atardecer" && (
-        <g fill="#5b3a2a" opacity="0.75">
-          <rect x="40" y="186" width="40" height="30" /><rect x="96" y="186" width="40" height="30" /><rect x="152" y="186" width="40" height="30" />
-          <path d="M36 186 L60 172 L84 186 Z M92 186 L116 172 L140 186 Z M148 186 L172 172 L196 186 Z" />
-        </g>
-      )}
-    </svg>
-  );
-}
-
-const POSTCARDS: { key: string; caption: string; node: ReactNode }[] = PHOTOS.length
+const POSTCARDS: { key: string; caption: string; node: ReactNode }[] = PHOTOS.map((p) => ({
+  key: p.src, caption: p.caption,
   // eslint-disable-next-line @next/next/no-img-element
-  ? PHOTOS.map((p) => ({ key: p.src, caption: p.caption, node: <img src={p.src} alt={p.caption} className="h-full w-full object-cover" /> }))
-  : [
-      { key: "amanecer", caption: "Temprano, se arma la playa", node: <Postcard kind="amanecer" /> },
-      { key: "carpas", caption: "Las carpas de siempre", node: <Postcard kind="carpas" /> },
-      { key: "sombrillas", caption: "Sombrillas en primera fila", node: <Postcard kind="sombrillas" /> },
-      { key: "mediodia", caption: "Enero a pleno", node: <Postcard kind="mediodia" /> },
-      { key: "atardecer", caption: "Al atardecer, cierre de caja", node: <Postcard kind="atardecer" /> },
-    ];
+  node: <img src={p.src} alt={p.caption} className="h-full w-full object-cover" />,
+}));
 
 export default function InicioPage() {
   return (
@@ -354,10 +303,12 @@ export default function InicioPage() {
           </div>
         </section>
 
-        {/* Postales que pasan solas */}
-        <section className="pb-16" aria-label="La temporada">
-          <PhotoStrip items={POSTCARDS} />
-        </section>
+        {/* Fotos del balneario (solo cuando haya fotos reales cargadas en PHOTOS) */}
+        {PHOTOS.length > 0 && (
+          <section className="pb-16" aria-label="Fotos">
+            <PhotoStrip items={POSTCARDS} />
+          </section>
+        )}
 
         {/* Un día en el balneario */}
         <section id="un-dia" className="scroll-mt-16 bg-[var(--atl)] text-white">
@@ -375,9 +326,9 @@ export default function InicioPage() {
           <div className="mx-auto max-w-6xl px-4 py-20">
             <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
               <h2 className="max-w-xl text-4xl font-extrabold leading-tight sm:text-5xl">Todo lo que hace, en cuatro partes.</h2>
-              <p className="max-w-sm text-[var(--gris)]">Deslizá para ver cada una. También podés probarlas todas en la demo.</p>
+              <p className="max-w-sm text-[var(--gris)]">Pasá de a una con las flechas, las pestañas o deslizando. Todas se pueden probar en la demo.</p>
             </div>
-            <Slider label="Funciones del sistema" slides={GROUPS.map((g) => ({ key: g.key, node: <GroupSlide g={g} /> }))} />
+            <Slider label="Funciones del sistema" slides={GROUPS.map((g, k) => ({ key: g.key, title: g.title, node: <GroupSlide g={g} n={k + 1} total={GROUPS.length} /> }))} />
           </div>
         </section>
 
