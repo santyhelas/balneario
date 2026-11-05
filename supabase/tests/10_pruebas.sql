@@ -50,8 +50,9 @@ insert into auth.users values
 select t.set('d0', ((now() at time zone 'America/Argentina/San_Juan')::date + 60)::text);
 
 -- =====================================================================
--- 1. Alta del balneario
+-- 1. Alta del balneario (las altas están cerradas: el dueño tiene su correo habilitado)
 -- =====================================================================
+select private.permitir_alta('duenio@test.com', 'Prueba');
 set role authenticated;
 select set_config('request.jwt.claims', '{"sub":"11111111-1111-1111-1111-111111111111","email":"duenio@test.com"}', false);
 
@@ -692,7 +693,17 @@ reset role;
 insert into auth.users (id, email) values ('77777777-7777-7777-7777-777777777777', 'otro@test.com');
 set role authenticated;
 select set_config('request.jwt.claims', '{"sub":"77777777-7777-7777-7777-777777777777","email":"otro@test.com"}', false);
+select t.ok(not public.can_create_workspace(), 'Altas cerradas: una cuenta nueva sin plan no puede crear balneario');
+select t.throws($$select public.create_workspace('Sin plan', 20, 5)$$, 'hace falta un plan', 'Altas cerradas: se rechaza el alta sin plan');
+reset role;
+select private.permitir_alta('OTRO@test.com', 'Plan 1');
+set role authenticated;
+select t.ok(public.can_create_workspace(), 'Altas cerradas: con el correo habilitado (sin importar mayúsculas) sí puede');
+select t.throws($$select private.permitir_alta('yo@test.com')$$, 'permission denied', 'Altas cerradas: nadie se habilita a sí mismo desde la web');
 select t.set('ws2', public.create_workspace('Balneario Los Médanos', 20, 5)::text);
+reset role;
+select t.ok((select used_at is not null from private.signup_allowlist where email = 'otro@test.com'), 'Altas cerradas: la habilitación queda usada');
+set role authenticated;
 select t.ok((select count(*) from public.spaces where kind = 'carpa') = 20 and (select count(*) from public.spaces where kind = 'sombrilla') = 5, 'Multi: el balneario nuevo arranca con las carpas y sombrillas pedidas');
 select t.ok((select string_agg(code, ',' order by code) from public.spaces where kind = 'sombrilla') = '21,22,23,24,25', 'Multi: las sombrillas siguen la numeración');
 select t.ok((select count(*) from public.workspaces) = 1 and (select id from public.workspaces) = t.uid('ws2'), 'Multi: cada uno ve solo su balneario');

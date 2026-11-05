@@ -66,18 +66,23 @@ export function MobileMenu({ links }: { links: { href: string; label: string }[]
 
 /** Aviso al volver de la demo (?demo=fin). */
 export function DemoEndedNotice() {
-  const [show, setShow] = useState(false);
+  const [show, setShow] = useState<null | "demo" | "plan">(null);
   useEffect(() => {
-    if (new URLSearchParams(window.location.search).get("demo") === "fin") {
-      setShow(true);
-      window.history.replaceState(null, "", window.location.pathname);
+    const p = new URLSearchParams(window.location.search);
+    const kind = p.get("demo") === "fin" ? "demo" : p.get("sin_plan") ? "plan" : null;
+    if (kind) {
+      setShow(kind);
+      window.history.replaceState(null, "", window.location.pathname + window.location.hash);
+      if (kind === "plan") document.getElementById("planes")?.scrollIntoView({ behavior: "smooth" });
     }
   }, []);
   if (!show) return null;
   return (
-    <div role="status" className="border-b border-ok/40 bg-ok-soft px-4 py-2 text-center text-sm">
-      Saliste de la demo y se borró todo lo que cargaste. ¿Te gustó? <a href="#planes" className="font-semibold text-accent underline">Mirá los planes</a>.
-      <button type="button" onClick={() => setShow(false)} className="ml-3 text-muted hover:text-fg" aria-label="Cerrar aviso">×</button>
+    <div role="status" className={show === "plan" ? "border-b border-amber-300 bg-amber-50 px-4 py-2 text-center text-sm text-amber-950" : "border-b border-ok/40 bg-ok-soft px-4 py-2 text-center text-sm"}>
+      {show === "plan"
+        ? <>Esa cuenta todavía no tiene un balneario. Para crear el tuyo hace falta un plan: <a href="#planes" className="font-semibold underline">mirá los planes</a> o escribinos.</>
+        : <>Saliste de la demo y se borró todo lo que cargaste. ¿Te gustó? <a href="#planes" className="font-semibold text-accent underline">Mirá los planes</a>.</>}
+      <button type="button" onClick={() => setShow(null)} className="ml-3 text-muted hover:text-fg" aria-label="Cerrar aviso">×</button>
     </div>
   );
 }

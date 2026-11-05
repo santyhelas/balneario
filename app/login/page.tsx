@@ -35,7 +35,7 @@ export default function LoginPage() {
     const p = new URLSearchParams(window.location.search);
     if (p.get("error") === "enlace") setError("El enlace venció o ya fue usado. Pedí uno nuevo.");
     if (p.get("invitado") === "fin") setInfo("Saliste de la demo. Todo lo que cargaste se borró.");
-    if (p.get("modo") === "crear") setMode("crear");
+    if (p.get("modo") === "crear") window.location.replace("/#planes"); // las altas son por plan
     fetch("/auth/registrar").then((r) => r.json()).then((d: { abierto?: boolean }) => setCanRegister(!!d.abierto)).catch(() => undefined);
   }, []);
 
@@ -207,7 +207,10 @@ export default function LoginPage() {
               {canRegister ? (
                 <button className="text-muted hover:underline" onClick={() => go("crear")}>¿No tenés cuenta? Registrate y creá tu balneario</button>
               ) : (
-                <p className="text-center text-xs text-muted">¿No tenés usuario? Pedíselo al propietario del balneario.</p>
+                <p className="text-center text-xs text-muted">
+                  ¿Todavía no usás Tu Balneario? <a href="/#planes" className="font-medium text-accent hover:underline">Mirá los planes</a>.
+                  <br />Si trabajás en un balneario, pedile tu usuario al propietario.
+                </p>
               )}
             </>
           ) : (

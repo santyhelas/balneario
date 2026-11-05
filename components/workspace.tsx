@@ -127,6 +127,14 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       }
       if (mem.error) throw mem.error;
       if (!mem.data) {
+        // Las altas son por plan: solo puede crear su balneario una cuenta habilitada.
+        // Si la función no existe todavía (falta la actualización 0028), también se bloquea.
+        const allowed = await sb.rpc("can_create_workspace");
+        if (allowed.error || allowed.data !== true) {
+          await sb.auth.signOut();
+          window.location.assign("/?sin_plan=1#planes");
+          return;
+        }
         setState({ kind: "onboarding", userId: user.id, email: user.email ?? null });
         return;
       }
