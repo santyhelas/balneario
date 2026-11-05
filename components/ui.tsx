@@ -85,9 +85,9 @@ export function TextField({ label, hint, error, ...rest }: InputHTMLAttributes<H
   );
 }
 
-export function Card({ title, actions, children, className }: { title?: ReactNode; actions?: ReactNode; children: ReactNode; className?: string }) {
+export function Card({ title, actions, children, className, tour }: { title?: ReactNode; actions?: ReactNode; children: ReactNode; className?: string; tour?: string }) {
   return (
-    <section className={cx("rounded-xl border border-line bg-surface p-4", className)}>
+    <section data-tour={tour} className={cx("rounded-xl border border-line bg-surface p-4", className)}>
       {(title || actions) && (
         <div className="mb-3 flex items-center justify-between gap-2">
           {title && <h2 className="text-base font-semibold">{title}</h2>}

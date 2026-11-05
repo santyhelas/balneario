@@ -68,6 +68,7 @@ export default function CobrosPage() {
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
         <Card
+          tour="cobros"
           title={<>Saldos pendientes <span className="ml-2 text-base font-normal text-danger">{formatMoney(totalDue)}</span></>}
           actions={
             <div className="flex flex-wrap items-center gap-2">

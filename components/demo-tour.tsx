@@ -1,0 +1,233 @@
+"use client";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { cx } from "@/components/ui";
+
+/**
+ * Tutorial de la demo: recorre el sistema paso a paso. En cada paso difumina la pantalla
+ * y deja a la vista solo la parte que explica. Solo se muestra en la demo (modo invitado).
+ */
+
+type Step = { path: string; sel: string | null; title: string; text: string };
+
+const STEPS: Step[] = [
+  { path: "/", sel: null, title: "Bienvenido a la demo", text: "Es un balneario de prueba con clientes y reservas inventados. Te mostramos para qué sirve cada parte; después podés tocar todo lo que quieras." },
+  { path: "/", sel: "panel-stats", title: "Panel del día", text: "Lo primero que ves al entrar: carpas libres y ocupadas hoy, quién llega, quién se va, lo cobrado y lo gastado. Cada recuadro te lleva a su pantalla." },
+  { path: "/", sel: "semana", title: "Mañana y la semana", text: "Quién llega, quién se va o cambia de carpa mañana, y la ocupación de los próximos 7 días con el pronóstico. Desde acá le mandás el WhatsApp a quien se va debiendo." },
+  { path: "/", sel: "nueva-reserva", title: "Nueva reserva", text: "El botón más usado. Elegís cliente, fechas y carpa, el sistema calcula el precio y registrás el cobro o la seña." },
+  { path: "/", sel: "notas", title: "Notas del día", text: "Avisos para el personal, como «hoy viene el proveedor de hielo». Se ven en todas las computadoras y celulares y se tildan cuando están hechas." },
+  { path: "/", sel: "caja-chip", title: "Estado de la caja", text: "Te muestra si la caja del día está abierta. Tocándolo vas a la caja." },
+  { path: "/mapa", sel: "mapa", title: "Mapa del balneario", text: "La playa vista desde arriba. Rojo es ocupada (con el apellido), verde libre y amarillo llega mañana. Tocá una carpa para ver quién la tiene o reservarla. Con «Editar» las movés arrastrando." },
+  { path: "/disponibilidad", sel: "disp-filtros", title: "Disponibilidad", text: "Todas las carpas y sombrillas, día por día. Elegí desde y hasta, filtrá por tipo o buscá por apellido. Tocá un día libre y arrancás una reserva desde ahí." },
+  { path: "/reservas/nueva", sel: "nr-espacio", title: "Elegir la carpa", text: "Verde: libre todos los días. Ámbar: libre solo algunos. Si la que pide está ocupada unos días, te ofrece pasarlo a otra esos días o acortar la estadía. Vos decidís." },
+  { path: "/reservas/nueva", sel: "nr-resumen", title: "Precio y presupuesto", text: "El total exacto con descuentos. Si el cliente solo pregunta, tocá «Presupuesto por WhatsApp» y se lo mandás sin reservar nada." },
+  { path: "/cobros", sel: "cobros", title: "Cobros y deudas", text: "Quién debe y cuánto, primero los que terminan antes. Cobrás en efectivo, transferencia, tarjeta, Mercado Pago o dólares, y le mandás el recordatorio por WhatsApp." },
+  { path: "/caja", sel: "caja", title: "Caja diaria", text: "Abrís con el efectivo inicial, registrás gastos y al cerrar contás la plata: el sistema te dice si sobra o falta. También imprimís el cierre de tarjetas." },
+  { path: "/clientes", sel: "clientes", title: "Clientes", text: "Cada cliente con su historial de temporadas, carpas, pagos y deudas. Se puede descargar todo en Excel." },
+  { path: "/tarifas", sel: "tarifas", title: "Tarifario", text: "Los precios por día de cada quincena, para carpas y sombrillas. Se copian de un mes a otro o de una temporada a la otra." },
+  { path: "/renovacion", sel: "renovacion", title: "Renovación de temporada", text: "Los clientes del año pasado con su carpa de siempre, para ofrecérsela primero por WhatsApp. Te avisa si ya reservaron o si su lugar está tomado." },
+  { path: "/reportes", sel: "reportes", title: "Reportes", text: "Ocupación, lo contratado y lo cobrado, deudas, gastos y cierres de caja, entre las fechas que elijas. Todo se descarga." },
+  { path: "/historial", sel: "historial", title: "Historial", text: "Quién hizo cada cambio y cuándo. Nada se borra a escondidas, y muchos cambios se pueden deshacer." },
+  { path: "/", sel: "demo", title: "¡Listo! Ahora probalo vos", text: "Hacé reservas, cobrá, abrí la caja, mové carpas. Todo se borra al salir de la demo. Podés volver a ver este tutorial con «Ver tutorial»." },
+];
+
+const KEY_STEP = "bal_tour_paso";
+const KEY_DONE = "bal_tour_visto";
+const EVT = "tutorial-cambio";
+
+const ss = {
+  get: (k: string) => { try { return sessionStorage.getItem(k); } catch { return null; } },
+  set: (k: string, v: string) => { try { sessionStorage.setItem(k, v); } catch { /* sin almacenamiento */ } },
+  del: (k: string) => { try { sessionStorage.removeItem(k); } catch { /* sin almacenamiento */ } },
+};
+
+/** Vuelve a empezar el tutorial desde el primer paso. */
+export function startTour() {
+  ss.set(KEY_STEP, "0");
+  window.dispatchEvent(new Event(EVT));
+}
+
+/** ¿Está el tutorial en curso (o todavía no se vio)? Para no tapar con otras ventanas. */
+export function useTourActive(enabled: boolean): boolean {
+  const [active, setActive] = useState(false);
+  useEffect(() => {
+    if (!enabled) { setActive(false); return; }
+    const read = () => setActive(ss.get(KEY_STEP) !== null || ss.get(KEY_DONE) === null);
+    read();
+    window.addEventListener(EVT, read);
+    return () => window.removeEventListener(EVT, read);
+  }, [enabled]);
+  return active;
+}
+
+type Rect = { top: number; left: number; width: number; height: number };
+
+/** El primer elemento visible con esa marca (en la compu y en el celular hay botones distintos). */
+function findVisible(tag: string): HTMLElement | null {
+  for (const el of Array.from(document.querySelectorAll<HTMLElement>(`[data-tour="${tag}"]`))) {
+    const r = el.getBoundingClientRect();
+    if (r.width > 0 && r.height > 0) return el;
+  }
+  return null;
+}
+
+export function DemoTour({ enabled }: { enabled: boolean }) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const [step, setStep] = useState<number | null>(null);
+  const [rect, setRect] = useState<Rect | null>(null);
+  const [searching, setSearching] = useState(false);
+  const target = useRef<HTMLElement | null>(null);
+  const card = useRef<HTMLDivElement>(null);
+
+  // Arranca solo la primera vez que se entra a la demo; sigue donde estaba si se recarga.
+  useEffect(() => {
+    if (!enabled) return;
+    const read = () => {
+      const saved = ss.get(KEY_STEP);
+      if (saved !== null) setStep(Math.min(Number(saved) || 0, STEPS.length - 1));
+      else if (ss.get(KEY_DONE) === null) { ss.set(KEY_STEP, "0"); setStep(0); }
+      else setStep(null);
+    };
+    const t = setTimeout(read, 600);
+    window.addEventListener(EVT, read);
+    return () => { clearTimeout(t); window.removeEventListener(EVT, read); };
+  }, [enabled]);
+
+  const finish = useCallback(() => {
+    ss.del(KEY_STEP);
+    ss.set(KEY_DONE, "1");
+    setStep(null);
+    setRect(null);
+    window.dispatchEvent(new Event(EVT));
+  }, []);
+
+  const go = useCallback((n: number) => {
+    if (n < 0) return;
+    if (n >= STEPS.length) return finish();
+    ss.set(KEY_STEP, String(n));
+    setStep(n);
+  }, [finish]);
+
+  // Lleva a la pantalla del paso y busca la parte a mostrar.
+  useEffect(() => {
+    if (step === null) return;
+    const s = STEPS[step];
+    if (pathname !== s.path) { router.push(s.path); return; }
+    target.current = null;
+    setRect(null);
+    if (!s.sel) { setSearching(false); return; }
+    setSearching(true);
+    let tries = 0;
+    const id = setInterval(() => {
+      const el = findVisible(s.sel!);
+      tries += 1;
+      if (el || tries > 40) {
+        clearInterval(id);
+        setSearching(false);
+        if (el) {
+          target.current = el;
+          el.scrollIntoView({ block: "center", behavior: "auto" });
+          const r = el.getBoundingClientRect();
+          setRect({ top: r.top, left: r.left, width: r.width, height: r.height });
+        }
+      }
+    }, 150);
+    return () => clearInterval(id);
+  }, [step, pathname, router]);
+
+  // Sigue a la parte resaltada si la pantalla se mueve o cambia de tamaño.
+  useEffect(() => {
+    if (step === null) return;
+    let raf = 0;
+    const update = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        const el = target.current;
+        if (!el) return;
+        const r = el.getBoundingClientRect();
+        setRect({ top: r.top, left: r.left, width: r.width, height: r.height });
+      });
+    };
+    window.addEventListener("resize", update);
+    window.addEventListener("scroll", update, true);
+    return () => { cancelAnimationFrame(raf); window.removeEventListener("resize", update); window.removeEventListener("scroll", update, true); };
+  }, [step]);
+
+  // Teclado: flechas para pasar, Escape para salir.
+  useEffect(() => {
+    if (step === null) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") finish();
+      if (e.key === "ArrowRight") go(step + 1);
+      if (e.key === "ArrowLeft") go(step - 1);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [step, go, finish]);
+
+  // Ubica la tarjeta de explicación cerca de la parte resaltada, sin taparla.
+  const [cardPos, setCardPos] = useState<{ top: number; left: number } | null>(null);
+  useLayoutEffect(() => {
+    if (!rect || !card.current) { setCardPos(null); return; }
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    if (vw < 640) { setCardPos(null); return; } // celular: abajo de todo
+    const cw = card.current.offsetWidth;
+    const ch = card.current.offsetHeight;
+    const gap = 16;
+    let top = rect.top + rect.height + gap;
+    if (top + ch > vh - 12) top = rect.top - ch - gap;
+    if (top < 12) top = Math.max(12, Math.min(vh - ch - 12, rect.top + rect.height / 2 - ch / 2));
+    let left = rect.left + rect.width / 2 - cw / 2;
+    left = Math.max(12, Math.min(vw - cw - 12, left));
+    setCardPos({ top, left });
+  }, [rect]);
+
+  if (!enabled || step === null) return null;
+  const s = STEPS[step];
+  const pad = 8;
+  const hole = rect ? { top: rect.top - pad, left: rect.left - pad, width: rect.width + pad * 2, height: rect.height + pad * 2 } : null;
+  const shade = "fixed bg-slate-900/55 backdrop-blur-[3px] transition-all duration-300";
+
+  return (
+    <div className="print:hidden" role="dialog" aria-modal="true" aria-labelledby="tour-titulo">
+      {/* Pantalla difuminada, con un hueco donde está la parte que se explica */}
+      {hole ? (
+        <>
+          <div className={cx(shade, "z-[90]")} style={{ top: 0, left: 0, right: 0, height: Math.max(0, hole.top) }} />
+          <div className={cx(shade, "z-[90]")} style={{ top: hole.top + hole.height, left: 0, right: 0, bottom: 0 }} />
+          <div className={cx(shade, "z-[90]")} style={{ top: hole.top, left: 0, width: Math.max(0, hole.left), height: hole.height }} />
+          <div className={cx(shade, "z-[90]")} style={{ top: hole.top, left: hole.left + hole.width, right: 0, height: hole.height }} />
+          <div className="pointer-events-none fixed z-[91] rounded-2xl ring-4 ring-white/90 transition-all duration-300" style={hole} />
+        </>
+      ) : (
+        <div className={cx(shade, "inset-0 z-[90]")} />
+      )}
+
+      {/* Explicación */}
+      <div ref={card}
+        className={cx("fixed z-[92] w-auto rounded-2xl border border-line bg-surface p-5 text-fg shadow-2xl sm:w-[380px]",
+          cardPos ? "" : rect ? "inset-x-3 bottom-3 sm:inset-x-auto sm:left-1/2 sm:-translate-x-1/2" : "inset-x-3 top-1/2 -translate-y-1/2 sm:inset-x-auto sm:left-1/2 sm:-translate-x-1/2")}
+        style={cardPos ?? undefined}>
+        <div className="mb-2 flex items-center justify-between gap-3">
+          <span className="text-xs font-semibold text-muted">Paso {step + 1} de {STEPS.length}</span>
+          <button onClick={finish} className="text-xs font-medium text-muted hover:text-fg">Saltar tutorial</button>
+        </div>
+        <div className="mb-3 h-1.5 overflow-hidden rounded-full bg-surface-2" aria-hidden>
+          <div className="h-full rounded-full bg-accent transition-all" style={{ width: `${((step + 1) / STEPS.length) * 100}%` }} />
+        </div>
+        <h2 id="tour-titulo" className="text-lg font-bold">{s.title}</h2>
+        <p className="mt-1 text-sm leading-relaxed text-muted">{searching ? "Cargando…" : s.text}</p>
+        <div className="mt-4 flex items-center justify-between gap-2">
+          <button onClick={() => go(step - 1)} disabled={step === 0}
+            className="rounded-lg border border-line px-3 py-2 text-sm font-semibold hover:bg-surface-2 disabled:opacity-40">Anterior</button>
+          <button onClick={() => go(step + 1)} autoFocus
+            className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-accent-fg hover:opacity-90">
+            {step === STEPS.length - 1 ? "Empezar a probar" : "Siguiente"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}

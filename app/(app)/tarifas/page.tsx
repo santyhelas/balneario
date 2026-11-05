@@ -77,6 +77,7 @@ export default function TarifasPage() {
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
         <Card
+          tour="tarifas"
           title="Precios por día"
           actions={
             <div className="flex flex-wrap items-center gap-2">

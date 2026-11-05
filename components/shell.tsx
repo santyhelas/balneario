@@ -10,6 +10,7 @@ import { useUndo } from "@/components/undo";
 import { ConfirmDialog, cx } from "@/components/ui";
 import { DayNotes, usePendingNotes } from "@/components/day-notes";
 import { CloseCashModal, OpenCashModal, type CashSummary } from "@/components/cash";
+import { DemoTour, startTour } from "@/components/demo-tour";
 
 type NavItem = { href: string; label: string; icon: string };
 
@@ -219,18 +220,18 @@ export function Shell({ children }: { children: ReactNode }) {
             <div className="truncate text-sm font-bold">{status.summary ? longDate(status.summary.fecha, ws.timezone) : "…"}</div>
           </div>
           <SyncChip />
-          <CashChip />
-          <NotesButton />
-          <Link href="/reservas/nueva" className="flex items-center gap-1.5 rounded-lg bg-accent px-3 py-2 text-sm font-semibold text-accent-fg hover:opacity-90" title="Nueva reserva">
+          <div data-tour="caja-chip"><CashChip /></div>
+          <div data-tour="notas"><NotesButton /></div>
+          <Link data-tour="nueva-reserva" href="/reservas/nueva" className="flex items-center gap-1.5 rounded-lg bg-accent px-3 py-2 text-sm font-semibold text-accent-fg hover:opacity-90" title="Nueva reserva">
             <Icon d="M12 5v14M5 12h14" className="h-4 w-4" /><span className="hidden xl:inline">Nueva reserva</span>
           </Link>
-          <Link href="/cobros" className="flex items-center gap-1.5 rounded-lg bg-ok px-3 py-2 text-sm font-semibold text-bg hover:opacity-90" title="Registrar cobro">
+          <Link data-tour="cobro" href="/cobros" className="flex items-center gap-1.5 rounded-lg bg-ok px-3 py-2 text-sm font-semibold text-bg hover:opacity-90" title="Registrar cobro">
             Registrar cobro
           </Link>
           <Link href="/gastos?nuevo=1" className="flex items-center gap-1.5 rounded-lg border border-line bg-surface-2 px-3 py-2 text-sm font-semibold hover:opacity-90" title="Nuevo gasto">
             <Icon d="M5 12h14" className="h-4 w-4" /><span className="hidden xl:inline">Nuevo gasto</span>
           </Link>
-          <button onClick={undo.start} className="flex items-center gap-1.5 rounded-lg border border-line bg-surface-2 px-3 py-2 text-sm font-semibold hover:opacity-90" title="Deshacer último cambio">
+          <button data-tour="deshacer" onClick={undo.start} className="flex items-center gap-1.5 rounded-lg border border-line bg-surface-2 px-3 py-2 text-sm font-semibold hover:opacity-90" title="Deshacer último cambio">
             <Icon d="M9 14L4 9l5-5M4 9h11a5 5 0 0 1 0 10h-3" className="h-4 w-4" /><span className="hidden 2xl:inline">Deshacer cambio</span>
           </button>
           <button onClick={cycleTheme} className="rounded-lg p-2 hover:bg-surface-2" title={`Tema: ${THEME_LABEL[theme]}`} aria-label={`Tema: ${THEME_LABEL[theme]}`}>
@@ -258,20 +259,24 @@ export function Shell({ children }: { children: ReactNode }) {
           </Link>
           <div className="flex items-center">
             <button onClick={cycleTheme} className="rounded-lg p-2" aria-label={`Tema: ${THEME_LABEL[theme]}`}><Icon d={THEME_ICON[theme]} /></button>
-            <NotesButton compact />
+            <div data-tour="notas"><NotesButton compact /></div>
             <NoticesBell notices={status.notices} count={alerts} />
           </div>
         </header>
 
         {isGuest && (
-          <div className="px-safe flex flex-wrap items-center justify-between gap-2 border-b border-amber-300 bg-amber-100 py-2 text-sm text-amber-950 print:hidden dark:border-amber-700/60 dark:bg-amber-900/40 dark:text-amber-100">
+          <div data-tour="demo" className="px-safe flex flex-wrap items-center justify-between gap-2 border-b border-amber-300 bg-amber-100 py-2 text-sm text-amber-950 print:hidden dark:border-amber-700/60 dark:bg-amber-900/40 dark:text-amber-100">
             <span><strong>Demo:</strong> es un balneario de prueba con datos inventados. Podés probar todo, pero <strong>nada se guarda</strong>: al salir o cerrar la pestaña se borra.</span>
-            <button onClick={() => setConfirmLogout(true)} className="rounded-lg border border-amber-400 bg-white/60 px-3 py-1 font-semibold hover:bg-white dark:bg-transparent">Salir de la demo</button>
+            <span className="flex gap-2">
+              <button onClick={startTour} className="rounded-lg border border-amber-400 bg-white/60 px-3 py-1 font-semibold hover:bg-white dark:bg-transparent">Ver tutorial</button>
+              <button onClick={() => setConfirmLogout(true)} className="rounded-lg border border-amber-400 bg-white/60 px-3 py-1 font-semibold hover:bg-white dark:bg-transparent">Salir de la demo</button>
+            </span>
           </div>
         )}
         <InstallBanner />
         {undo.message && <div className="px-safe pt-3">{undo.message}</div>}
         <main className="px-safe pb-tabbar w-full flex-1 pt-4 md:pt-6 print:p-0">{children}</main>
+        <DemoTour enabled={isGuest} />
       </div>
 
       {/* ---------------- Barra inferior (celular) ---------------- */}
@@ -280,7 +285,7 @@ export function Shell({ children }: { children: ReactNode }) {
           {TABS.map((t) => {
             if (t === "+") {
               return (
-                <Link key={t} href="/reservas/nueva" className="flex flex-col items-center gap-0.5 pb-1 text-[11px] font-medium text-accent" aria-label="Nueva reserva">
+                <Link key={t} data-tour="nueva-reserva" href="/reservas/nueva" className="flex flex-col items-center gap-0.5 pb-1 text-[11px] font-medium text-accent" aria-label="Nueva reserva">
                   <span className="-mt-4 flex h-12 w-12 items-center justify-center rounded-full bg-accent text-accent-fg shadow-lg">
                     <Icon d="M12 5v14M5 12h14" className="h-6 w-6" />
                   </span>

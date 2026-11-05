@@ -76,7 +76,7 @@ export default function DisponibilidadPage() {
   return (
     <>
       <PageHeader title="Disponibilidad" subtitle="Planificación por espacio y por día. Tocá un día libre para reservar desde esa fecha." actions={<Link href="/reservas/nueva"><Button>Nueva reserva</Button></Link>} />
-      <div className="mb-3 flex flex-wrap items-end gap-2">
+      <div data-tour="disp-filtros" className="mb-3 flex flex-wrap items-end gap-2">
         <Field label="Desde"><Input type="date" value={from} onChange={(e) => e.target.value && setFrom(e.target.value)} className="w-auto" /></Field>
         <Field label="Hasta"><Input type="date" value={to} min={from} onChange={(e) => e.target.value && setToInput(e.target.value)} className="w-auto" /></Field>
         <span className="pb-2 text-sm text-muted">{span} {span === 1 ? "día" : "días"}</span>

@@ -76,7 +76,7 @@ export default function ClientesPage() {
       {exportMsg && <Alert tone={exportMsg.tone} className="mb-3">{exportMsg.text}</Alert>}
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
-        <Card>
+        <Card tour="clientes">
           <Input type="search" placeholder="Ej: Pérez, Ana o 2641551234" value={q} onChange={(e) => setQ(e.target.value)} className="mb-3" aria-label="Buscar cliente" />
           {list.loading && !list.data ? (
             <div className="flex items-center gap-2 text-sm text-muted"><Spinner small /> Buscando…</div>

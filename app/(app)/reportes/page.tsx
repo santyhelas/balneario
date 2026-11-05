@@ -124,7 +124,7 @@ export default function ReportesPage() {
             <Kpi label="Diferencias de caja" value={formatMoney(calc.diffs)} tone={calc.diffs !== 0 ? "warn" : undefined} note={`${r.cierres.length} cierres`} />
           </div>
 
-          <Card title="Ocupación diaria" actions={<CsvBtn onClick={() => downloadCsv(`ocupacion_${from}_${to}.csv`, ["Fecha", "Carpas ocupadas", "Sombrillas ocupadas", "Cortesías", "% ocupación"], calc.occDays.map((d) => [formatDate(d.dia), n(d.carpas), n(d.sombrillas), n(d.cortesias), Math.round(d.pct)]))} />}>
+          <Card title="Ocupación diaria" tour="reportes" actions={<CsvBtn onClick={() => downloadCsv(`ocupacion_${from}_${to}.csv`, ["Fecha", "Carpas ocupadas", "Sombrillas ocupadas", "Cortesías", "% ocupación"], calc.occDays.map((d) => [formatDate(d.dia), n(d.carpas), n(d.sombrillas), n(d.cortesias), Math.round(d.pct)]))} />}>
             {calc.occDays.length === 0 ? <EmptyState>Sin datos.</EmptyState> : (
               <>
                 <div className="flex h-40 items-end gap-px overflow-x-auto rounded-lg bg-surface-2 p-2" role="img" aria-label="Gráfico de ocupación diaria">

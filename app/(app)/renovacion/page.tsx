@@ -128,7 +128,7 @@ export default function RenovacionPage() {
         <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar por nombre, carpa o teléfono" className="ml-auto w-full sm:w-64" aria-label="Buscar" />
       </div>
 
-      <Card>
+      <Card tour="renovacion">
         {q.loading && !q.data ? (
           <div className="flex items-center gap-2 text-sm text-muted"><Spinner small /> Cargando clientes…</div>
         ) : list.length === 0 ? (

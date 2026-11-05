@@ -245,7 +245,7 @@ export default function MapaPage() {
         </div>
       )}
 
-      <div className="relative">
+      <div className="relative" data-tour="mapa">
         {data ? (
           <BeachMap
             width={ws.map_width}

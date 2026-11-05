@@ -441,6 +441,7 @@ export default function NuevaReservaPage() {
           {/* 3. Espacio */}
           <Card
             title="3. Carpa o sombrilla"
+            tour="nr-espacio"
             actions={
               <Select value={kind} onChange={(e) => { setKind(e.target.value as "carpa" | "sombrilla"); setSpaceId(null); }} className="w-auto" aria-label="Tipo">
                 <option value="carpa">Carpas</option>
@@ -624,7 +625,7 @@ export default function NuevaReservaPage() {
 
         {/* Resumen */}
         <div className="flex flex-col gap-4 xl:sticky xl:top-4 xl:self-start">
-          <Card title="Resumen">
+          <Card title="Resumen" tour="nr-resumen">
             {!segments ? (
               <p className="text-sm text-muted">Elegí fechas y un espacio para ver el precio.</p>
             ) : quoteLoading && !quote ? (

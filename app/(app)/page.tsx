@@ -10,6 +10,7 @@ import { Icon, NAV } from "@/components/shell";
 import { Alert, Button, Spinner, cx } from "@/components/ui";
 import { CloseCashModal, OpenCashModal, type CashSummary } from "@/components/cash";
 import { WeatherStrip } from "@/components/weather";
+import { useTourActive } from "@/components/demo-tour";
 import { ArrivalButtons, type ArrivalState } from "@/components/arrival";
 
 type Tone = "accent" | "ok" | "danger" | "warn" | "orange" | "neutral";
@@ -24,9 +25,11 @@ const TONE: Record<Tone, { box: string; label: string; value: string }> = {
 const icon = (href: string) => NAV.find((n) => n.href === href)!.icon;
 
 export default function DashboardPage() {
-  const { ws } = useWorkspace();
+  const { ws, isGuest } = useWorkspace();
   const st = useStatus();
   const data = st.summary;
+  // En la demo, el pedido de abrir la caja espera a que termine el tutorial.
+  const touring = useTourActive(isGuest);
   const [cash, setCash] = useState<CashSummary | null>(null);
   const [openCash, setOpenCash] = useState(false);
   const [askedToday, setAskedToday] = useState(false);
@@ -56,11 +59,12 @@ export default function DashboardPage() {
 
   // Al iniciar un día sin caja abierta, la pide una sola vez (no insiste si se cierra la ventana).
   useEffect(() => {
+    if (touring) return;
     if (data && data.caja.estado === "sin_abrir" && !data.caja_anterior_sin_cerrar && !askedToday) {
       setOpenCash(true);
       setAskedToday(true);
     }
-  }, [data, askedToday]);
+  }, [data, askedToday, touring]);
 
   async function startClosePrevious() {
     if (!data?.caja_anterior_sin_cerrar) return;
@@ -131,7 +135,7 @@ export default function DashboardPage() {
       )}
 
       {/* Indicadores */}
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
+      <div data-tour="panel-stats" className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
         <Stat tone="neutral" label="Total espacios" value={String(total)} note={`${carpa?.total_activos ?? 0} carpas · ${sombrilla?.total_activos ?? 0} sombrillas${mant ? ` · ${mant} en mant.` : ""}`} icon={icon("/mapa")} href="/mapa" />
         <Stat tone="ok" label="Disponibles hoy" value={String(disponibles)} note={`${pct(disponibles)}% del balneario libre`} icon="M20 6L9 17l-5-5" href="/mapa" />
         <Stat tone="danger" label="Ocupados hoy" value={String(ocupados)} note={`${pct(ocupados)}% de ocupación${(carpa?.cortesias ?? 0) + (sombrilla?.cortesias ?? 0) ? ` · ${(carpa?.cortesias ?? 0) + (sombrilla?.cortesias ?? 0)} cortesía` : ""}`} icon="M3 20h18M6 20V9l6-5 6 5v11" href="/mapa" />
@@ -144,7 +148,7 @@ export default function DashboardPage() {
         <Stat tone="danger" label="Saldos a cobrar" value={formatMoney(saldo)} note={`${st.debts.length} ${st.debts.length === 1 ? "reserva adeudada" : "reservas adeudadas"}`} icon="M12 3v18M16.5 7.5c0-1.7-2-3-4.5-3s-4.5 1.3-4.5 3 2 2.5 4.5 3 4.5 1.3 4.5 3-2 3-4.5 3-4.5-1.3-4.5-3" href="/cobros" />
       </div>
 
-      <WeekAhead />
+      <div data-tour="semana"><WeekAhead /></div>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
         {/* Accesos directos */}

@@ -44,7 +44,9 @@ export default function HistorialPage() {
         )}
         <Field label="Buscar"><Input type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Cliente, carpa, N° de reserva…" className="w-64" /></Field>
       </div>
-      <HistoryFeed from={from} to={to} tables={tables} includePayments={includePayments} actorId={actor || undefined} search={search} />
+      <div data-tour="historial">
+        <HistoryFeed from={from} to={to} tables={tables} includePayments={includePayments} actorId={actor || undefined} search={search} />
+      </div>
     </>
   );
 }

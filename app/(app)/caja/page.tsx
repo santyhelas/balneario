@@ -116,7 +116,7 @@ export default function CajaPage() {
       )}
 
       {summary && (
-        <div className="grid gap-4 lg:grid-cols-3">
+        <div data-tour="caja" className="grid gap-4 lg:grid-cols-3">
           <Card title="Efectivo" className="lg:col-span-1">
             <dl className="flex flex-col gap-1.5 text-sm">
               <Row label="Apertura" value={formatMoney(summary.opening_cash)} />
