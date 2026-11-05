@@ -17,6 +17,7 @@ type HistoryRow = {
   number: number;
   start_date: string;
   end_date: string;
+  arrival_status?: "llego" | "no_vino" | null;
   status: string;
   is_courtesy: boolean;
   total_amount: number;
@@ -127,7 +128,7 @@ function CustomerDetail({ customer, onEdit }: { customer: Customer; onEdit: () =
   const history = useLoader(async () => {
     const rows = unwrap(
       await sb.from("reservations")
-        .select("id, number, start_date, end_date, status, is_courtesy, total_amount, reservation_segments(space_id, active, start_date, spaces(code))")
+        .select("*, reservation_segments(space_id, active, start_date, spaces(code))")
         .eq("customer_id", customer.id)
         .order("start_date", { ascending: false }),
     ) as unknown as HistoryRow[];
@@ -149,6 +150,7 @@ function CustomerDetail({ customer, onEdit }: { customer: Customer; onEdit: () =
   const totalPaid = rows.reduce((s, r) => s + Number(history.data?.balances[r.id]?.paid_amount ?? 0), 0);
   const totalDue = rows.reduce((s, r) => s + Number(history.data?.balances[r.id]?.due_amount ?? 0), 0);
   const seasons = new Set(active.map((r) => r.start_date.slice(0, 4))).size;
+  const noShows = active.filter((r) => r.arrival_status === "no_vino").length;
 
   return (
     <Card
@@ -167,6 +169,7 @@ function CustomerDetail({ customer, onEdit }: { customer: Customer; onEdit: () =
         <Badge tone="muted">{active.length} {active.length === 1 ? "alquiler" : "alquileres"}</Badge>
         <Badge tone="ok">Pagó {formatMoney(totalPaid)}</Badge>
         {totalDue > 0 && <Badge tone="danger">Debe {formatMoney(totalDue)}</Badge>}
+        {noShows > 0 && <Badge tone="warn">No vino {noShows} {noShows === 1 ? "vez" : "veces"}</Badge>}
         {(active.length >= 3 || seasons >= 2) && <span title="Criterio provisorio: 3 o más alquileres o 2 o más temporadas. Pendiente de confirmar."><Badge tone="info">Cliente frecuente</Badge></span>}
       </div>
 
@@ -203,6 +206,7 @@ function CustomerDetail({ customer, onEdit }: { customer: Customer; onEdit: () =
                           <div className="flex gap-1">
                             {r.status === "cancelada" && <Badge tone="muted">Cancelada</Badge>}
                             {r.is_courtesy && <Badge tone="info">Cortesía</Badge>}
+                            {r.status === "confirmada" && r.arrival_status === "no_vino" && <Badge tone="warn">No vino</Badge>}
                             {b && Number(b.due_amount) > 0 && <Badge tone="danger">Debe {formatMoney(b.due_amount)}</Badge>}
                             {b && Number(b.credit_amount) > 0 && <Badge tone="warn">A favor {formatMoney(b.credit_amount)}</Badge>}
                             {b && r.status === "confirmada" && !r.is_courtesy && Number(b.due_amount) === 0 && <Badge tone="ok">Pagada</Badge>}

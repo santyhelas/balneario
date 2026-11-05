@@ -22,6 +22,7 @@ export const NAV: NavItem[] = [
   { href: "/tarifas", label: "Tarifario", icon: "M20 12l-8 8-9-9V3h8l9 9zM7.5 7.5h.01" },
   { href: "/convenios", label: "Convenios y descuentos", icon: "M8 12l3 3 5-6M3 12a9 9 0 1 0 18 0 9 9 0 0 0-18 0" },
   { href: "/clientes", label: "Clientes", icon: "M16 19v-1a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v1M9.5 10a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM21 19v-1a4 4 0 0 0-3-3.9M16 3.1a3.5 3.5 0 0 1 0 6.8" },
+  { href: "/renovacion", label: "Renovación de temporada", icon: "M4 12a8 8 0 0 1 14-5.3L20 9M20 4v5h-5M20 12a8 8 0 0 1-14 5.3L4 15M4 20v-5h5" },
   { href: "/cobros", label: "Cobros y señas", icon: "M12 3v18M16.5 7.5c0-1.7-2-3-4.5-3s-4.5 1.3-4.5 3S9.5 10.5 12 11s4.5 1.3 4.5 3-2 3-4.5 3-4.5-1.3-4.5-3" },
   { href: "/caja", label: "Caja diaria", icon: "M3 7h18v12H3zM3 11h18M7 15h3" },
   { href: "/gastos", label: "Gastos", icon: "M3 7l6 6 4-4 8 8M15 17h6v-6" },

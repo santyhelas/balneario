@@ -10,6 +10,7 @@ import { Icon, NAV } from "@/components/shell";
 import { Alert, Button, Spinner, cx } from "@/components/ui";
 import { CloseCashModal, OpenCashModal, type CashSummary } from "@/components/cash";
 import { WeatherStrip } from "@/components/weather";
+import { ArrivalButtons, type ArrivalState } from "@/components/arrival";
 
 type Tone = "accent" | "ok" | "danger" | "warn" | "orange" | "neutral";
 const TONE: Record<Tone, { box: string; label: string; value: string }> = {
@@ -30,6 +31,18 @@ export default function DashboardPage() {
   const [openCash, setOpenCash] = useState(false);
   const [askedToday, setAskedToday] = useState(false);
   const [closing, setClosing] = useState<CashSummary | null>(null);
+
+  // Llegó / no vino de los que empiezan hoy (se lee aparte para no tocar el resumen del día).
+  const [arrivals, setArrivals] = useState<Record<string, ArrivalState>>({});
+  const arrivalIds = (data?.ingresan_hoy ?? []).map((r) => r.reservation_id).sort().join(",");
+  useEffect(() => {
+    if (!arrivalIds) { setArrivals({}); return; }
+    getSupabase().from("reservations").select("id, arrival_status").in("id", arrivalIds.split(","))
+      .then(({ data: rows, error }) => {
+        if (error) return; // sin la actualización 0025 no hay columna: no se muestran los botones
+        setArrivals(Object.fromEntries((rows as { id: string; arrival_status: ArrivalState }[]).map((r) => [r.id, r.arrival_status])));
+      });
+  }, [arrivalIds, st.updatedAt]);
 
   // Detalle de la caja de hoy (efectivo de apertura, entradas y salidas por medio)
   const sessionId = data?.caja.session_id;
@@ -158,7 +171,12 @@ export default function DashboardPage() {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <ResCard title={`Inician hoy (${data.ingresan_hoy.length})`} tone="accent" items={data.ingresan_hoy} empty="No hay ingresos previstos para hoy." right={formatDate(data.fecha)} />
+        <ResCard title={`Inician hoy (${data.ingresan_hoy.length})`} tone="accent" items={data.ingresan_hoy} empty="No hay ingresos previstos para hoy."
+          right={(() => {
+            const marked = data.ingresan_hoy.filter((r) => arrivals[r.reservation_id]).length;
+            return data.ingresan_hoy.length && Object.keys(arrivals).length ? `${marked} de ${data.ingresan_hoy.length} marcados` : formatDate(data.fecha);
+          })()}
+          arrivals={arrivals} onArrival={(id, v) => setArrivals((a) => ({ ...a, [id]: v }))} />
         <ResCard title={`Finalizan hoy (${data.finalizan_hoy.length})`} tone="orange" items={data.finalizan_hoy} empty="No hay finalizaciones previstas para hoy." right="Liberación de espacios" />
       </div>
 
@@ -222,7 +240,10 @@ function NoticeList({ notices }: { notices: Notice[] }) {
   );
 }
 
-function ResCard({ title, tone, items, empty, right }: { title: string; tone: Tone; items: ResItem[]; empty: string; right: string }) {
+function ResCard({ title, tone, items, empty, right, arrivals, onArrival }: {
+  title: string; tone: Tone; items: ResItem[]; empty: string; right: string;
+  arrivals?: Record<string, ArrivalState>; onArrival?: (id: string, v: ArrivalState) => void;
+}) {
   return (
     <section className="rounded-2xl border border-line bg-surface p-4">
       <div className="mb-3 flex items-center justify-between gap-2 border-b border-line pb-2">
@@ -248,6 +269,12 @@ function ResCard({ title, tone, items, empty, right }: { title: string; tone: To
                     {r.is_courtesy ? "Cortesía" : debt ? `Debe ${formatMoney(r.due_amount)}` : "Pagado"}
                   </span>
                 </Link>
+                {arrivals && onArrival && r.reservation_id in arrivals && (
+                  <div className="mt-1 flex items-center gap-2 pl-1 text-xs text-muted">
+                    <span>¿Vino?</span>
+                    <ArrivalButtons reservationId={r.reservation_id} state={arrivals[r.reservation_id]} onChanged={(v) => onArrival(r.reservation_id, v)} />
+                  </div>
+                )}
               </li>
             );
           })}

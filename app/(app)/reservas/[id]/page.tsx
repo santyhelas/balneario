@@ -8,6 +8,7 @@ import { friendlyError } from "@/lib/errors";
 import { addDays, formatDate, formatDateTime, formatMoney, inclusiveDays, parseMoney, todayISO } from "@/lib/format";
 import { METHOD_LABEL } from "@/lib/methods";
 import { VoucherList } from "@/components/vouchers";
+import { ArrivalButtons } from "@/components/arrival";
 import { receiptMessage } from "@/lib/whatsapp-messages";
 import { loadReservation, spacesSummary, whatsappLink, type Full, type PaymentRow } from "@/lib/reservations";
 import { daysOf, indexGrid, isFreeFor, type GridRow } from "@/lib/stay";
@@ -84,6 +85,18 @@ export default function ReservaPage() {
             <div><dt className="text-xs text-muted">Teléfono</dt><dd>{r.customers.phone ? <a className="text-accent underline" href={`tel:${r.customers.phone.replace(/[^\d+]/g, "")}`}>{r.customers.phone}</a> : "—"}</dd></div>
             <div><dt className="text-xs text-muted">Estadía</dt><dd>{inclusiveDays(r.start_date, r.end_date)} días</dd></div>
             <div><dt className="text-xs text-muted">Días restantes</dt><dd>{confirmed ? (r.end_date < today ? "Finalizada" : daysLeft) : "—"}</dd></div>
+            {confirmed && r.arrival_status !== undefined && r.start_date <= today && (
+              <div className="col-span-2">
+                <dt className="text-xs text-muted">Llegada</dt>
+                <dd className="flex flex-wrap items-center gap-2">
+                  <ArrivalButtons reservationId={r.id} state={r.arrival_status ?? null} onChanged={() => { q.reload(); status.reload(); }} />
+                  <span className="text-xs text-muted">
+                    {r.arrival_status && r.arrival_at ? `Marcado ${formatDateTime(r.arrival_at, ws.timezone)}` : "Sin marcar"}
+                    {r.arrival_status === "no_vino" ? " · la carpa sigue reservada: si la querés liberar, cancelá la reserva" : ""}
+                  </span>
+                </dd>
+              </div>
+            )}
             {r.is_courtesy && <div className="col-span-2"><dt className="text-xs text-muted">Cortesía familiar para</dt><dd>{r.courtesy_beneficiary ?? "—"}</dd></div>}
             <div className="col-span-2">
               <dt className="flex items-center justify-between text-xs text-muted">Observaciones {confirmed && <button className="text-accent hover:underline" onClick={() => setModal("notas")}>Editar</button>}</dt>

@@ -33,7 +33,7 @@ export const CATEGORY_LABEL: Record<Category | "cobros", string> = {
 /** Tablas del historial de cada categoría. */
 export const CATEGORY_TABLES: Record<Category, string[]> = {
   reservas: ["reservations", "reservation_segments"],
-  clientes: ["customers"],
+  clientes: ["customers", "renewal_marks"],
   tarifas: ["rates", "package_discounts"],
   convenios: ["agreements"],
   caja: ["cash_sessions"],
@@ -141,6 +141,10 @@ export function describeAudit(row: AuditRow, l: Lookups): Described {
       }
       if (o.status !== "cancelada" && n.status === "cancelada") return { category: "reservas", title: `${name} cancelada`, href, details: withReason([]) };
       if (o.status === "cancelada" && n.status === "confirmada") return { category: "reservas", title: `${name} reactivada (se revirtió la cancelación)`, href, details: withReason([]) };
+      if ((o.arrival_status ?? null) !== (n.arrival_status ?? null)) {
+        const what = n.arrival_status === "llego" ? "llegó" : n.arrival_status === "no_vino" ? "no vino" : "se quitó la marca de llegada";
+        return { category: "reservas", title: `${name}: ${what}`, href, details: [] };
+      }
       if (changes.length === 0) return null;
       return { category: "reservas", title: `${name} modificada`, href, details: withReason(changes) };
     }
@@ -225,6 +229,11 @@ export function describeAudit(row: AuditRow, l: Lookups): Described {
       if (o.text !== n.text) return { category: "notas", title: "Nota modificada", details: [`${str(o.text)} → ${str(n.text)}`] };
       if (o.day !== n.day) return { category: "notas", title: `Nota pasada al ${date(n.day)}: ${t}`, details: [] };
       return null;
+    }
+    case "renewal_marks": {
+      const c = l.customers.get(String(d.customer_id ?? "")) ?? "Cliente";
+      const what = n.status === "avisado" ? `se le ofreció su lugar a ${c}` : n.status === "no_vuelve" ? `${c} avisó que no vuelve` : `${c} vuelve a quedar pendiente`;
+      return { category: "clientes", title: `Renovación ${str(d.season)}: ${what}`, details: [] };
     }
     case "backups": {
       return { category: "configuracion", title: "Se restauró una copia de seguridad", details: withReason([n.restaurada ? `Copia del ${date(n.restaurada)}` : ""].filter(Boolean)) };

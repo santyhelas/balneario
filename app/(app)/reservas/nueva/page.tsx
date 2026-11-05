@@ -13,6 +13,8 @@ import { useStatus } from "@/components/status";
 import { PageHeader } from "@/components/shell";
 import { Alert, Badge, Button, Card, Field, Input, Modal, Select, Spinner, Textarea, TextField, cx } from "@/components/ui";
 import { CustomerForm, searchCustomers, type Customer } from "@/components/customers";
+import { whatsappLink } from "@/lib/reservations";
+import { quoteMessage } from "@/lib/whatsapp-messages";
 
 type Agreement = { id: string; name: string; percent: number; valid_from: string | null; valid_to: string | null };
 type Quote = {
@@ -35,11 +37,11 @@ export default function NuevaReservaPage() {
   const sb = getSupabase();
   const today = todayISO(ws.timezone);
 
-  // ---------- Datos iniciales (desde el mapa o la línea de tiempo: ?espacio=…&desde=…) ----------
-  const [prefill, setPrefill] = useState<{ space: string | null; from: string | null }>({ space: null, from: null });
+  // ---------- Datos iniciales (desde el mapa, la línea de tiempo o la renovación: ?espacio=…&desde=…&hasta=…&cliente=…) ----------
+  const [prefill, setPrefill] = useState<{ space: string | null; from: string | null; to: string | null; customer: string | null }>({ space: null, from: null, to: null, customer: null });
   useEffect(() => {
     const p = new URLSearchParams(window.location.search);
-    setPrefill({ space: p.get("espacio"), from: p.get("desde") });
+    setPrefill({ space: p.get("espacio"), from: p.get("desde"), to: p.get("hasta"), customer: p.get("cliente") });
   }, []);
 
   // ---------- Cliente ----------
@@ -71,8 +73,17 @@ export default function NuevaReservaPage() {
     setEnd(addDays(v, Math.max(nDays, 1) - 1));
   }
   useEffect(() => {
-    if (prefill.from && /^\d{4}-\d{2}-\d{2}$/.test(prefill.from)) setStart(prefill.from);
-  }, [prefill.from]); // eslint-disable-line react-hooks/exhaustive-deps
+    const iso = /^\d{4}-\d{2}-\d{2}$/;
+    if (prefill.from && iso.test(prefill.from)) {
+      setStart(prefill.from);
+      if (prefill.to && iso.test(prefill.to) && prefill.to >= prefill.from) setEnd(prefill.to);
+    }
+  }, [prefill.from, prefill.to]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!prefill.customer) return;
+    sb.from("customers").select("*").eq("workspace_id", ws.id).eq("id", prefill.customer).maybeSingle()
+      .then(({ data }) => { if (data) setCustomer(data as Customer); });
+  }, [prefill.customer]); // eslint-disable-line react-hooks/exhaustive-deps
   const datesOk = nDays >= 1 && nDays <= 120;
 
   // ---------- Disponibilidad ----------
@@ -196,6 +207,9 @@ export default function NuevaReservaPage() {
   const [quote, setQuote] = useState<Quote | null>(null);
   const [quoteError, setQuoteError] = useState<string | null>(null);
   const [quoteLoading, setQuoteLoading] = useState(false);
+  /** Precio pagando en efectivo (solo para el presupuesto, cuando no está marcado el descuento). */
+  const [cashTotal, setCashTotal] = useState<number | null>(null);
+  const [copied, setCopied] = useState(false);
   const quoteSeq = useRef(0);
   const segKey = JSON.stringify(segments);
   const optKey = JSON.stringify(options);
@@ -207,8 +221,14 @@ export default function NuevaReservaPage() {
     const my = ++quoteSeq.current;
     setQuoteLoading(true);
     const t = setTimeout(async () => {
-      const { data, error } = await sb.rpc("quote_reservation", { p_workspace_id: ws.id, p_start: start, p_end: end, p_segments: segments, p_options: options });
+      const withCash = !courtesy && !cash;
+      const [{ data, error }, cashRes] = await Promise.all([
+        sb.rpc("quote_reservation", { p_workspace_id: ws.id, p_start: start, p_end: end, p_segments: segments, p_options: options }),
+        withCash ? sb.rpc("quote_reservation", { p_workspace_id: ws.id, p_start: start, p_end: end, p_segments: segments, p_options: { ...options, cash: true } }) : Promise.resolve(null),
+      ]);
       if (my !== quoteSeq.current) return;
+      const cq = cashRes && !cashRes.error ? (cashRes.data as Quote) : null;
+      setCashTotal(cq?.ok ? Number(cq.total) : null);
       setQuoteLoading(false);
       if (error) {
         setQuote(null);
@@ -317,6 +337,18 @@ export default function NuevaReservaPage() {
     setPaymentKey(newKey());
     loadGrid();
   }
+
+  const quoteText = quote?.ok && segments && !courtesy ? quoteMessage({
+    firstName: customer?.first_name ?? null,
+    balneario: ws.name,
+    places: segments.length === 1
+      ? `${kind === "carpa" ? "Carpa" : "Sombrilla"} ${spaces.find((x) => x.space_id === segments[0].space_id)?.code ?? ""}`
+      : segments.map((sg) => `${kind === "carpa" ? "Carpa" : "Sombrilla"} ${spaces.find((x) => x.space_id === sg.space_id)?.code ?? ""} (${formatDate(sg.start_date).slice(0, 5)} al ${formatDate(sg.end_date).slice(0, 5)})`).join(", "),
+    start, end,
+    total: Number(quote.total),
+    cashTotal,
+    discounts: quote.discounts.map((d) => clientDiscountLabel(d, agreements)),
+  }) : null;
 
   if (done) {
     return (
@@ -618,6 +650,23 @@ export default function NuevaReservaPage() {
                 ))}
                 {courtesy && <div className="flex justify-between gap-3 text-ok"><span>Cortesía familiar</span><span className="tabular">− {formatMoney(quote.precio_base)}</span></div>}
                 <div className="mt-1 flex justify-between gap-3 border-t border-line pt-2 text-base font-semibold"><span>Total</span><span className="tabular">{formatMoney(quote.total)}</span></div>
+                {cashTotal !== null && cashTotal < Number(quote.total) && (
+                  <div className="flex justify-between gap-3 text-xs text-muted"><span>Pagando en efectivo</span><span className="tabular">{formatMoney(cashTotal)}</span></div>
+                )}
+                {!courtesy && quoteText && (
+                  <div className="mt-3 border-t border-line pt-3">
+                    <div className="mb-1.5 text-xs text-muted">¿Solo pregunta el precio? Mandale el presupuesto sin reservar:</div>
+                    <div className="flex flex-wrap gap-2">
+                      <a href={whatsappLink(customer?.phone ?? null, quoteText) ?? `https://wa.me/?text=${encodeURIComponent(quoteText)}`} target="_blank" rel="noopener noreferrer"
+                        className="rounded-lg border border-green-600/40 bg-green-50 px-3 py-1.5 text-sm font-semibold text-green-800 hover:bg-green-100 dark:bg-green-900/30 dark:text-green-200">
+                        Presupuesto por WhatsApp
+                      </a>
+                      <button type="button" onClick={() => navigator.clipboard?.writeText(quoteText).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); }).catch(() => { /* sin permiso */ })}
+                        className="rounded-lg border border-line px-3 py-1.5 text-sm hover:bg-surface-2">{copied ? "Copiado" : "Copiar texto"}</button>
+                    </div>
+                    {!customer?.phone && <p className="mt-1 text-xs text-muted">Sin cliente con teléfono: WhatsApp te deja elegir a quién mandarlo.</p>}
+                  </div>
+                )}
               </div>
             )}
           </Card>
@@ -747,6 +796,12 @@ function discountLabel(d: Quote["discounts"][number], agreements: Agreement[]): 
     case "manual": return `Descuento manual${pct}${d.reason ? ` · ${d.reason}` : ""}`;
     default: return d.kind;
   }
+}
+
+/** Igual que discountLabel pero sin el motivo interno de los descuentos manuales (va al cliente). */
+function clientDiscountLabel(d: Quote["discounts"][number], agreements: Agreement[]): string {
+  if (d.kind === "manual") return `Descuento${d.percent !== null && d.percent !== undefined ? ` ${Number(d.percent)}%` : ` de ${formatMoney(d.amount)}`}`;
+  return discountLabel(d, agreements);
 }
 
 function ChoiceCard({ active, onClick, title, detail }: { active: boolean; onClick: () => void; title: ReactNode; detail?: string }) {

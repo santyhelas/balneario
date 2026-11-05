@@ -19,6 +19,9 @@ export type ReservationDetail = {
   created_at: string;
   cancelled_at: string | null;
   cancel_reason: string | null;
+  /** undefined si todavía no se aplicó la actualización 0025. */
+  arrival_status?: "llego" | "no_vino" | null;
+  arrival_at?: string | null;
   customers: { id: string; first_name: string; last_name: string; phone: string | null; email: string | null; locality: string | null };
 };
 export type SegmentRow = { id: string; space_id: string; start_date: string; end_date: string; spaces: { code: string; kind: "carpa" | "sombrilla" } };
@@ -50,7 +53,8 @@ export async function loadReservation(id: string): Promise<Full> {
   const sb = getSupabase();
   const [r, segments, charges, discounts, payments, changes, balance] = await Promise.all([
     sb.from("reservations")
-      .select("id, workspace_id, number, start_date, end_date, status, is_courtesy, courtesy_beneficiary, list_amount, discount_amount, total_amount, notes, version, created_at, cancelled_at, cancel_reason, customers(id, first_name, last_name, phone, email, locality)")
+      // "*" para que funcione con y sin la columna de llegada (actualización 0025).
+      .select("*, customers(id, first_name, last_name, phone, email, locality)")
       .eq("id", id).single(),
     sb.from("reservation_segments").select("id, space_id, start_date, end_date, spaces(code, kind)").eq("reservation_id", id).eq("active", true).order("start_date"),
     sb.from("reservation_charges").select("id, position, description, amount").eq("reservation_id", id).order("position"),

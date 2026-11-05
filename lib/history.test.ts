@@ -46,3 +46,15 @@ test("nombre de usuario", () => {
   assert.equal(actorName("santi@usuarios.balneario.invalid", new Map(), null), "santi");
   assert.equal(actorName(null, new Map([["u1", "Santiago"]]), "u1"), "Santiago");
 });
+
+test("llegada y renovación en el historial", () => {
+  const l = { spaces: new Map(), customers: new Map([["c1", "Ana Gómez"]]), reservations: new Map() };
+  const base = { id: "a", at: "2027-01-05T12:00:00Z", actor_id: null, actor_email: null, reason: null } as const;
+  const arr = describeAudit({ ...base, table_name: "reservations", row_id: "r1", action: "modificacion",
+    old_data: { number: 5, customer_id: "c1", status: "confirmada", arrival_status: null },
+    new_data: { number: 5, customer_id: "c1", status: "confirmada", arrival_status: "no_vino" } } as never, l as never);
+  assert.equal(arr?.title, "Reserva #5 (Ana Gómez): no vino");
+  const ren = describeAudit({ ...base, table_name: "renewal_marks", row_id: "m1", action: "alta", old_data: null,
+    new_data: { customer_id: "c1", season: "2026/2027", status: "avisado" } } as never, l as never);
+  assert.equal(ren?.title, "Renovación 2026/2027: se le ofreció su lugar a Ana Gómez");
+});

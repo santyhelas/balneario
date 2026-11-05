@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { debtReminder, receiptMessage } from "./whatsapp-messages.ts";
+import { debtReminder, quoteMessage, receiptMessage, renewalMessage } from "./whatsapp-messages.ts";
 
 const base = { firstName: "Juan", balneario: "Parador Eólico", number: 12, places: "Carpa 17", start: "2027-01-01", end: "2027-01-07", due: 50000 };
 
@@ -20,4 +20,23 @@ test("comprobante con pagos y saldo", () => {
   assert.match(m, /Pago Efectivo/);
   assert.doesNotMatch(m, /Transferencia/);
   assert.match(m, /Saldo pendiente/);
+});
+
+test("presupuesto con precio en efectivo", () => {
+  const m = quoteMessage({ firstName: "Ana", balneario: "Tu Balneario", places: "Carpa 17", start: "2027-01-05", end: "2027-01-20", total: 300000, cashTotal: 270000, discounts: [] });
+  assert.match(m, /Hola Ana!/);
+  assert.match(m, /16 días/);
+  assert.match(m, /Total: \$\s?300\.000/);
+  assert.match(m, /efectivo: \$\s?270\.000/);
+  const sin = quoteMessage({ firstName: null, balneario: "X", places: "Sombrilla 2", start: "2027-01-05", end: "2027-01-05", total: 1000, cashTotal: 1000, discounts: ["Convenio Parque Bonito"] });
+  assert.match(sin, /^Hola! /);
+  assert.match(sin, /1 día\)/);
+  assert.doesNotMatch(sin, /efectivo/);
+  assert.match(sin, /Incluye: Convenio Parque Bonito/);
+});
+
+test("renovación de temporada", () => {
+  const m = renewalMessage({ firstName: "Juan", balneario: "Tu Balneario", places: "Carpa 17", lastSeason: "2025/2026", newSeason: "2026/2027" });
+  assert.match(m, /temporada 2026\/2027/);
+  assert.match(m, /Carpa 17/);
 });

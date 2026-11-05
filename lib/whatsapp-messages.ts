@@ -54,3 +54,31 @@ export function receiptMessage(r: ReceiptInfo): string {
   lines.push("¡Gracias por elegirnos!");
   return lines.join("\n");
 }
+
+export type QuoteInfo = {
+  firstName: string | null; balneario: string; places: string; start: string; end: string;
+  total: number; cashTotal: number | null; discounts: string[];
+};
+
+/** Presupuesto: precio exacto sin reservar. No guarda nada ni bloquea el espacio. */
+export function quoteMessage(q: QuoteInfo): string {
+  const nDays = daysBetween(q.start, q.end) + 1;
+  const lines = [
+    `Hola${q.firstName?.trim() ? ` ${q.firstName.trim()}` : ""}! Te pasamos el presupuesto de ${q.balneario}:`,
+    `${q.places} · del ${dmy(q.start)} al ${dmy(q.end)} (${nDays} ${nDays === 1 ? "día" : "días"})`,
+  ];
+  if (q.discounts.length) lines.push(`Incluye: ${q.discounts.join(", ")}`);
+  lines.push(`*Total: ${money(q.total)}*`);
+  if (q.cashTotal !== null && q.cashTotal < q.total) lines.push(`Pagando en efectivo: ${money(q.cashTotal)}`);
+  lines.push("El lugar queda reservado recién cuando se confirma la reserva, según disponibilidad en ese momento.");
+  lines.push("¿Te la reservamos?");
+  return lines.join("\n");
+}
+
+export type RenewalInfo = { firstName: string; balneario: string; places: string; lastSeason: string; newSeason: string };
+
+/** Ofrecimiento al cliente de la temporada pasada para que vuelva a su lugar. */
+export function renewalMessage(r: RenewalInfo): string {
+  const hi = `Hola ${r.firstName.trim()}! Te escribimos de ${r.balneario}.`.replace(" !", "!");
+  return `${hi}\nSe viene la temporada ${r.newSeason} y queríamos ofrecerte primero tu lugar de la temporada ${r.lastSeason} (${r.places}).\n¿Querés que te lo reservemos? Contanos qué fechas te interesan.`;
+}

@@ -795,6 +795,40 @@ select set_config('request.jwt.claims', '{"sub":"77777777-7777-7777-7777-7777777
 select t.throws(format($$select public.drive_status(%L)$$, t.get('ws')), 'No tenés permiso', 'Drive: otro balneario no ve tu conexión');
 select set_config('request.jwt.claims', '{"sub":"11111111-1111-1111-1111-111111111111","email":"duenio@test.com"}', false);
 
+-- 28. Llegó / no vino
+select t.set('hoy', ((now() at time zone 'America/Argentina/San_Juan')::date)::text);
+select t.set('resHoy', (public.create_reservation_v2(t.uid('ws'), gen_random_uuid(), t.uid('juan'), t.get('hoy')::date, t.get('hoy')::date + 2,
+  jsonb_build_array(jsonb_build_object('space_id', t.space('78'), 'start_date', t.get('hoy'), 'end_date', (t.get('hoy')::date + 2)::text)),
+  '{"manual_base": 30000}'::jsonb, null, null) ->> 'reservation_id'));
+select public.set_arrival(t.uid('resHoy'), 'llego');
+select t.ok((select arrival_status = 'llego' and arrival_by = '11111111-1111-1111-1111-111111111111' and arrival_at is not null from public.reservations where id = t.uid('resHoy')), 'Llegada: se marca que llegó, con quién y cuándo');
+select public.set_arrival(t.uid('resHoy'), 'no_vino');
+select t.ok((select r.arrival_status = 'no_vino' and r.total_amount = 30000 and b.due_amount = 30000 from public.reservations r join public.reservation_balances b on b.reservation_id = r.id where r.id = t.uid('resHoy'))
+        and exists (select 1 from public.reservation_segments where reservation_id = t.uid('resHoy') and active), 'Llegada: "no vino" no toca la deuda ni libera la carpa');
+select public.set_arrival(t.uid('resHoy'), null);
+select t.ok((select arrival_status is null and arrival_at is null from public.reservations where id = t.uid('resHoy')), 'Llegada: se puede quitar la marca');
+select t.ok((select count(*) from public.audit_log where row_id = t.uid('resHoy') and table_name = 'reservations' and new_data ? 'arrival_status') >= 3, 'Llegada: cada marca queda en el historial');
+select t.throws(format($$select public.set_arrival(%L, 'llego')$$, t.get('resP')), 'recién ese día', 'Llegada: no se marca antes del primer día');
+select t.throws(format($$select public.set_arrival(%L, 'perdido')$$, t.get('resHoy')), 'inválido', 'Llegada: estado inválido');
+select set_config('request.jwt.claims', '{"sub":"77777777-7777-7777-7777-777777777777","email":"otro@test.com"}', false);
+select t.throws(format($$select public.set_arrival(%L, 'llego')$$, t.get('resHoy')), 'No tenés permiso', 'Llegada: otro balneario no puede marcar');
+select set_config('request.jwt.claims', '{"sub":"11111111-1111-1111-1111-111111111111","email":"duenio@test.com"}', false);
+
+-- 29. Renovación de temporada
+select public.set_renewal_mark(t.uid('ws'), t.uid('ana'), '2025/2026', 'avisado');
+select t.ok((select status = 'avisado' and contacted_at is not null from public.renewal_marks where customer_id = t.uid('ana')), 'Renovación: queda marcado que se le avisó');
+select public.set_renewal_mark(t.uid('ws'), t.uid('ana'), '2025/2026', 'no_vuelve');
+select t.ok((select status = 'no_vuelve' and version = 2 and contacted_at is not null from public.renewal_marks where customer_id = t.uid('ana')), 'Renovación: se cambia a "no vuelve" sin perder cuándo se avisó');
+select t.ok((select count(*) from public.renewal_marks where customer_id = t.uid('ana')) = 1, 'Renovación: una sola marca por cliente y temporada');
+select t.throws(format($$select public.set_renewal_mark(%L, %L, '2025', 'avisado')$$, t.get('ws'), t.get('ana')), 'Temporada inválida', 'Renovación: temporada inválida');
+select t.throws(format($$insert into public.renewal_marks (workspace_id, customer_id, season, status) values (%L, %L, '2025/2026', 'avisado')$$, t.get('ws'), t.get('juan')), 'permission denied', 'Renovación: no se escribe directo en la tabla');
+select set_config('request.jwt.claims', '{"sub":"77777777-7777-7777-7777-777777777777","email":"otro@test.com"}', false);
+select t.ok((select count(*) from public.renewal_marks where workspace_id = t.uid('ws')) = 0, 'Renovación: otro balneario no ve las marcas');
+select t.throws(format($$select public.set_renewal_mark(%L, %L, '2025/2026', 'avisado')$$, t.get('ws2'), t.get('ana')), 'no existe', 'Renovación: no se marca un cliente de otro balneario');
+select set_config('request.jwt.claims', '{"sub":"11111111-1111-1111-1111-111111111111","email":"duenio@test.com"}', false);
+select t.set('bkR', (public.create_backup(t.uid('ws'), 'manual', 'Con renovaciones') ->> 'backup_id'));
+select t.ok((select jsonb_array_length(data -> 'renewal_marks') = 1 from public.backups where id = t.uid('bkR')), 'Renovación: las marcas van en la copia de seguridad');
+
 reset role;
 \o
 -- Resultado ----------------------------------------------------------

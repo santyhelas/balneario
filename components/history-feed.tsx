@@ -89,7 +89,7 @@ export function HistoryFeed({
       for (const a of audit) {
         const d = a.new_data ?? a.old_data ?? {};
         if (a.table_name === "reservation_segments" && d.reservation_id) resIds.add(String(d.reservation_id));
-        if (a.table_name === "reservations" && d.customer_id) custIds.add(String(d.customer_id));
+        if ((a.table_name === "reservations" || a.table_name === "renewal_marks") && d.customer_id) custIds.add(String(d.customer_id));
       }
       for (const p of pays) resIds.add(p.reservation_id);
       const resRows = resIds.size
