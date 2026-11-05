@@ -1,0 +1,30 @@
+name: Capturas de la presentación
+
+on:
+  workflow_dispatch:
+  push:
+    paths: ["app/inicio/**", "components/landing*.tsx", "scripts/capturas.mjs"]
+
+jobs:
+  capturas:
+    runs-on: ubuntu-latest
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: https://ejemplo.supabase.co
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_ejemplo
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --no-audit --no-fund && npm install --no-save playwright@1.49.1
+      - run: npx playwright install --with-deps chromium
+      - run: npm run build
+      - name: Sacar capturas
+        run: |
+          npm start & 
+          npx -y wait-on@8 http://localhost:3000/inicio --timeout 60000
+          mkdir -p capturas && node scripts/capturas.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: capturas
+          path: capturas/
