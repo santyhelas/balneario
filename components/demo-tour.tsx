@@ -49,7 +49,8 @@ export function startTour() {
 
 /** ¿Está el tutorial en curso (o todavía no se vio)? Para no tapar con otras ventanas. */
 export function useTourActive(enabled: boolean): boolean {
-  const [active, setActive] = useState(false);
+  // Se calcula desde el primer momento, para que nada se abra encima antes de que empiece.
+  const [active, setActive] = useState(() => enabled && (ss.get(KEY_STEP) !== null || ss.get(KEY_DONE) === null));
   useEffect(() => {
     if (!enabled) { setActive(false); return; }
     const read = () => setActive(ss.get(KEY_STEP) !== null || ss.get(KEY_DONE) === null);
