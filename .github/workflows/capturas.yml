@@ -5,6 +5,9 @@ on:
   push:
     paths: ["app/inicio/**", "components/landing*.tsx", "scripts/capturas.mjs"]
 
+permissions:
+  contents: write
+
 jobs:
   capturas:
     runs-on: ubuntu-latest
@@ -24,7 +27,10 @@ jobs:
           npm start & 
           npx -y wait-on@8 http://localhost:3000/inicio --timeout 60000
           mkdir -p capturas && node scripts/capturas.mjs
-      - uses: actions/upload-artifact@v4
-        with:
-          name: capturas
-          path: capturas/
+      - name: Guardar capturas en la rama "capturas"
+        run: |
+          cd capturas
+          git init -q -b capturas
+          git config user.name "capturas" && git config user.email "capturas@users.noreply.github.com"
+          git add -A && git commit -qm "Capturas de ${GITHUB_SHA::7}"
+          git push -qf "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git" capturas
