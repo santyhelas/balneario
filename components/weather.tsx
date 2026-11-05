@@ -18,6 +18,8 @@ export type Weather = {
   viento_kmh: number | null;
   rafagas_kmh: number | null;
   viento_desde: number | null;
+  /** De dónde sale el viento que se muestra y de qué hora es. */
+  viento_fuente?: { fuente: "SMN" | "OpenWeather" | "Pronóstico"; hora: string; lugar: string | null; distancia_km: number };
   simbolo: string | null;
   lluvia_1h_mm: number | null;
   lluvia_1h_prob: number | null;
@@ -215,6 +217,7 @@ export function WeatherStrip({ className }: { className?: string }) {
             {d.viento_desde != null ? `Sopla hacia el ${cardinalName((d.viento_desde + 180) % 360)} (viene del ${cardinal(d.viento_desde)})` : d.viento_kmh === 0 ? "Calma" : ""}
             {d.rafagas_kmh != null ? ` · Ráfagas ${d.rafagas_kmh} km/h` : ""}
           </span>
+          {d.viento_fuente && <span className="text-[11px] text-muted">{windSourceText(d.viento_fuente, ws.timezone)}</span>}
         </Metric>
         <Metric label="Lluvia">
           <span className="tabular font-bold">{d.lluvia_1h_mm != null ? `${d.lluvia_1h_mm} mm` : "—"} <span className="text-xs font-normal text-muted">próxima hora</span></span>
@@ -256,6 +259,12 @@ export function WeatherStrip({ className }: { className?: string }) {
       </div>
     </div>
   );
+}
+
+function windSourceText(f: NonNullable<Weather["viento_fuente"]>, tz: string) {
+  if (f.fuente === "SMN") return `Viento medido a las ${hhmm(f.hora, tz)} en ${f.lugar}${f.distancia_km > 15 ? ` (a ${f.distancia_km} km)` : ""} · SMN`;
+  if (f.fuente === "OpenWeather") return `Viento de las ${hhmm(f.hora, tz)} · OpenWeather`;
+  return `Viento pronosticado para las ${hhmm(f.hora, tz)} · MET Norway`;
 }
 
 function Metric({ label, children }: { label: string; children: ReactNode }) {
@@ -320,10 +329,8 @@ export function WindCompass({ seaSide }: { seaSide: "top" | "bottom" | "left" | 
             )}
           </>
         ) : <div className="text-muted">Sin datos de viento</div>}
-        {w.data && (
-          <div className="hidden text-[11px] text-muted sm:block">
-            Dato de las {hhmm(w.data.medido?.hora ?? w.data.hora_dato, ws.timezone)}{w.data.medido ? ` · ${w.data.medido.fuente ?? "SMN"}` : " · pronóstico"}
-          </div>
+        {w.data?.viento_fuente && (
+          <div className="hidden text-[11px] text-muted sm:block">{windSourceText(w.data.viento_fuente, ws.timezone)}</div>
         )}
         {sun && <div className="hidden sm:block">{sun.elevation > 0
           ? <div className="mt-1.5"><span className="text-[#e0a020]">●</span> <strong>Sol del {cardinal(sun.azimuth)}</strong><div className="text-muted">{Math.round(sun.elevation)}° de altura</div></div>
