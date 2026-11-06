@@ -1,10 +1,11 @@
 "use client";
 import { useState, type FormEvent } from "react";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { getSupabase } from "@/lib/supabase/client";
 import { friendlyError } from "@/lib/errors";
-import { formatDate } from "@/lib/format";
+import { formatDate, formatMoney } from "@/lib/format";
 import { useWorkspace } from "@/components/workspace";
-import { Alert, Badge, Button, Card, EmptyState, Field, Input, Modal, Textarea, TextField } from "@/components/ui";
+import { Alert, Badge, Button, Card, ConfirmDialog, EmptyState, Field, Input, Modal, Textarea, TextField, cx } from "@/components/ui";
 
 export type Pkg = { id: string; min_days: number; percent: number; active: boolean; version: number };
 export type Agreement = { id: string; name: string; percent: number; active: boolean; valid_from: string | null; valid_to: string | null; conditions: string | null; version: number };
@@ -89,9 +90,31 @@ export function PackagesCard({ pkgs, cashPercent, wsVersion, editable, onChanged
   );
 }
 
+/** Convenios del balneario, sin los eliminados (si falta la actualización 0032, los trae todos). */
+export async function loadAgreements(sb: SupabaseClient, wsId: string): Promise<Agreement[]> {
+  const cols = "id, name, percent, active, valid_from, valid_to, conditions, version";
+  let res = await sb.from("agreements").select(cols).eq("workspace_id", wsId).is("deleted_at", null).order("active", { ascending: false }).order("name");
+  if (res.error?.code === "42703") res = await sb.from("agreements").select(cols).eq("workspace_id", wsId).order("active", { ascending: false }).order("name");
+  if (res.error) throw res.error;
+  return (res.data ?? []) as Agreement[];
+}
+
 export function AgreementsCard({ agreements, editable, onChanged }: { agreements: Agreement[]; editable: boolean; onChanged: () => void }) {
   const [editing, setEditing] = useState<Agreement | null>(null);
   const [creating, setCreating] = useState(false);
+  const [deleting, setDeleting] = useState<Agreement | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  async function remove() {
+    if (!deleting) return;
+    setBusy(true);
+    setErr(null);
+    const { error } = await getSupabase().rpc("delete_agreement", { p_agreement_id: deleting.id, p_expected_version: deleting.version });
+    setBusy(false);
+    if (error) { setErr(friendlyError(error)); return; }
+    setDeleting(null);
+    onChanged();
+  }
   return (
     <Card title="Convenios" actions={editable ? <Button variant="secondary" onClick={() => setCreating(true)}>Nuevo convenio</Button> : undefined}>
       {agreements.length === 0 ? <EmptyState>Sin convenios.</EmptyState> : (
@@ -105,11 +128,20 @@ export function AgreementsCard({ agreements, editable, onChanged }: { agreements
                   {a.conditions ? ` · ${a.conditions}` : ""}
                 </div>
               </div>
-              {editable && <button className="text-xs text-accent hover:underline" onClick={() => setEditing(a)}>Editar</button>}
+              {editable && (
+                <span className="flex shrink-0 gap-3">
+                  <button className="text-xs text-accent hover:underline" onClick={() => setEditing(a)}>Editar</button>
+                  <button className="text-xs text-danger hover:underline" onClick={() => { setErr(null); setDeleting(a); }}>Eliminar</button>
+                </span>
+              )}
             </li>
           ))}
         </ul>
       )}
+      {err && <Alert tone="danger" className="mt-2">{err}</Alert>}
+      <ConfirmDialog open={!!deleting} title="Eliminar convenio" confirmLabel="Eliminar" danger busy={busy}
+        message={<>¿Eliminar el convenio <strong>{deleting?.name}</strong>? Deja de aparecer y no se ofrece más en las reservas nuevas. Las reservas que ya lo usaron conservan su descuento tal cual.</>}
+        onCancel={() => setDeleting(null)} onConfirm={remove} />
       <AgreementModal open={creating || editing !== null} agreement={editing} onClose={() => { setCreating(false); setEditing(null); }} onDone={() => { setCreating(false); setEditing(null); onChanged(); }} />
     </Card>
   );
@@ -186,3 +218,78 @@ export function AgreementModal({ open, agreement, onClose, onDone }: { open: boo
   );
 }
 
+
+export type DiscountMode = "cascada" | "sumados" | "mayor";
+
+/** Cómo se combinan los descuentos automáticos, con un ejemplo en números. */
+export function discountExample(mode: DiscountMode) {
+  const base = 100000;
+  const items = [{ l: "Paquete 7 días", p: 5 }, { l: "Convenio", p: 30 }, { l: "Pago en efectivo", p: 10 }];
+  let cur = base;
+  const lines: { l: string; amt: number }[] = [];
+  if (mode === "mayor") {
+    const best = items.reduce((a, b) => (b.p > a.p ? b : a));
+    const amt = Math.floor((base * best.p) / 100);
+    lines.push({ l: `${best.l} ${best.p}%`, amt });
+    cur -= amt;
+  } else {
+    for (const it of items) {
+      const amt = Math.floor(((mode === "sumados" ? base : cur) * it.p) / 100);
+      lines.push({ l: `${it.l} ${it.p}%`, amt });
+      cur -= amt;
+    }
+  }
+  return { base, lines, total: cur };
+}
+
+const MODES: { key: DiscountMode; title: string; text: string }[] = [
+  { key: "cascada", title: "En cascada", text: "Se suman todos, pero cada uno se calcula sobre lo que queda después del anterior. Es el más común." },
+  { key: "sumados", title: "Sumados sobre el precio", text: "Se suman todos y cada uno se calcula sobre el precio base. Es el que más descuenta." },
+  { key: "mayor", title: "No acumulables", text: "Se aplica solo el de mayor porcentaje; los demás no." },
+];
+
+export function DiscountModeCard({ mode, wsVersion, editable, onChanged }: { mode: DiscountMode | null; wsVersion: number; editable: boolean; onChanged: () => void }) {
+  const { ws } = useWorkspace();
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [preview, setPreview] = useState<DiscountMode>(mode ?? "cascada");
+  if (mode === null) {
+    return <Card title="Cómo se combinan los descuentos"><p className="text-sm text-muted">Para elegirlo hay que aplicar la actualización 0032 de la base de datos.</p></Card>;
+  }
+  async function choose(m: DiscountMode) {
+    setPreview(m);
+    if (!editable || m === mode) return;
+    setBusy(true);
+    setErr(null);
+    const { error } = await getSupabase().from("workspaces").update({ discount_mode: m, version: wsVersion + 1 }).eq("id", ws.id).select("id").single();
+    setBusy(false);
+    if (error) { setErr(friendlyError(error)); setPreview(mode!); return; }
+    onChanged();
+  }
+  const ex = discountExample(preview);
+  return (
+    <Card title="Cómo se combinan los descuentos">
+      <p className="mb-3 text-sm text-muted">Cuando a una reserva le corresponden varios descuentos a la vez (paquete por días, convenio y pago en efectivo).</p>
+      <div className="flex flex-col gap-2" role="radiogroup" aria-label="Cómo se combinan los descuentos">
+        {MODES.map((m) => (
+          <label key={m.key} className={cx("flex cursor-pointer gap-3 rounded-xl border p-3 text-sm", mode === m.key ? "border-accent bg-accent-soft" : "border-line hover:bg-surface-2", !editable && "cursor-default")}
+            onMouseEnter={() => setPreview(m.key)} onMouseLeave={() => setPreview(mode)}>
+            <input type="radio" name="discount-mode" className="mt-1" checked={mode === m.key} disabled={!editable || busy} onChange={() => choose(m.key)} />
+            <span><strong>{m.title}</strong><span className="block text-muted">{m.text}</span></span>
+          </label>
+        ))}
+      </div>
+      <div className="mt-3 rounded-xl bg-surface-2 p-3 text-sm">
+        <div className="mb-1 text-xs font-semibold text-muted">Ejemplo «{MODES.find((m) => m.key === preview)?.title}»: carpa de {formatMoney(ex.base)} con paquete 5%, convenio 30% y efectivo 10%</div>
+        {ex.lines.map((l) => <div key={l.l} className="flex justify-between"><span>{l.l}</span><span className="tabular text-ok">− {formatMoney(l.amt)}</span></div>)}
+        {preview === "mayor" && <div className="text-xs text-muted">Paquete y efectivo no se aplican (son menores).</div>}
+        <div className="mt-1 flex justify-between border-t border-line pt-1 font-semibold"><span>Total</span><span className="tabular">{formatMoney(ex.total)}</span></div>
+      </div>
+      <p className="mt-2 text-xs text-muted">
+        El descuento manual (con motivo, de un administrador) se aplica siempre, al final. Cada descuento se redondea hacia abajo al peso.
+        Cambiar esto no modifica las reservas ya hechas.
+      </p>
+      {err && <Alert tone="danger" className="mt-2">{err}</Alert>}
+    </Card>
+  );
+}

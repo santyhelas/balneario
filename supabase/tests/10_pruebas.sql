@@ -313,6 +313,20 @@ select t.ok((t.get('q2')::jsonb ->> 'total')::numeric = 31319,
   'Cascada: 54.000 → paquete 51.300 → convenio 30% 35.910 → efectivo 10% 32.319 → manual −1.000 = 31.319');
 select t.ok((select string_agg(d ->> 'kind', '>') from jsonb_array_elements(t.get('q2')::jsonb -> 'discounts') d) = 'paquete>convenio>efectivo>manual',
   'Cascada: orden paquete → convenio → efectivo → manual');
+update public.workspaces set discount_mode = 'sumados', version = version + 1 where id = t.uid('ws');
+select t.set('q2s', public.quote_reservation(t.uid('ws'), '2027-01-13', '2027-01-17', t.get('seg70')::jsonb,
+  jsonb_build_object('agreement_id', t.get('hotel'), 'cash', true, 'manual', jsonb_build_object('type','monto','value',1000,'reason','Cliente de años')))::text);
+select t.ok((t.get('q2s')::jsonb ->> 'total')::numeric = 28700 and t.get('q2s')::jsonb ->> 'modo_descuentos' = 'sumados',
+  'Sumados: 54.000 − (5% + 30% + 10% del base = 24.300) − 1.000 = 28.700');
+update public.workspaces set discount_mode = 'mayor', version = version + 1 where id = t.uid('ws');
+select t.set('q2m', public.quote_reservation(t.uid('ws'), '2027-01-13', '2027-01-17', t.get('seg70')::jsonb,
+  jsonb_build_object('agreement_id', t.get('hotel'), 'cash', true, 'manual', jsonb_build_object('type','monto','value',1000,'reason','Cliente de años')))::text);
+select t.ok((t.get('q2m')::jsonb ->> 'total')::numeric = 36800
+        and (select string_agg(d ->> 'kind', '>') from jsonb_array_elements(t.get('q2m')::jsonb -> 'discounts') d) = 'convenio>manual'
+        and jsonb_array_length(t.get('q2m')::jsonb -> 'no_aplicados') = 2,
+  'No acumulables: solo el mayor (convenio 30%) + el manual = 36.800; paquete y efectivo quedan sin aplicar');
+update public.workspaces set discount_mode = 'cascada', version = version + 1 where id = t.uid('ws');
+select t.throws(format($$update public.workspaces set discount_mode = 'otro', version = version + 1 where id = %L$$, t.get('ws')), 'check', 'Descuentos: solo cascada, sumados o mayor');
 select t.throws(format($$select public.quote_reservation(%L, '2027-03-02', '2027-03-03', %L::jsonb, jsonb_build_object('agreement_id', %L))$$,
   t.get('ws'), jsonb_build_array(jsonb_build_object('space_id', t.space('70'), 'start_date', '2027-03-02', 'end_date', '2027-03-03')), t.get('hotel')),
   'no está vigente', 'Convenio: fuera de sus fechas de vigencia no se aplica');
@@ -1022,6 +1036,22 @@ select set_config('request.jwt.claims', '{"sub":"11111111-1111-1111-1111-1111111
 select t.ok(private.ars(18000) = '$ 18.000' and private.ars(1234.5) = '$ 1.234,50', 'Formato: $ 18.000 y $ 1.234,50');
 select t.ok(exists (select 1 from public.reservation_charges where description like '%× $ %')
         and not exists (select 1 from public.reservation_charges where description ~ '\$ ?[0-9]{1,3},[0-9]{3}'), 'Formato: los tramos de precio muestran $ 18.000');
+
+-- 38. Eliminar convenios
+insert into public.agreements (workspace_id, name, percent) values (t.uid('ws'), 'Club Borrable', 15);
+select t.set('agB', (select id::text from public.agreements where name = 'Club Borrable'));
+select set_config('request.jwt.claims', '{"sub":"33333333-3333-3333-3333-333333333333","email":"operador@test.com"}', false);
+select t.throws(format($$select public.delete_agreement(%L, 1)$$, t.get('agB')), 'No tenés permiso', 'Convenios: el operador no los elimina');
+select set_config('request.jwt.claims', '{"sub":"11111111-1111-1111-1111-111111111111","email":"duenio@test.com"}', false);
+select public.delete_agreement(t.uid('agB'), 1);
+select t.ok((select deleted_at is not null and not active from public.agreements where id = t.uid('agB')), 'Convenios: eliminado queda oculto y desactivado (no se borra la historia)');
+select t.throws(format($$select public.quote_reservation(%L, '2027-03-02', '2027-03-03', %L::jsonb, jsonb_build_object('agreement_id', %L))$$,
+  t.get('ws'), jsonb_build_array(jsonb_build_object('space_id', t.space('70'), 'start_date', '2027-03-02', 'end_date', '2027-03-03')), t.get('agB')),
+  'no está vigente', 'Convenios: uno eliminado no se puede usar');
+select t.throws(format($$update public.agreements set active = true, version = version + 1 where id = %L$$, t.get('agB')), 'fue eliminado', 'Convenios: uno eliminado no se reactiva');
+insert into public.agreements (workspace_id, name, percent) values (t.uid('ws'), 'Club Borrable', 20);
+select t.ok((select count(*) from public.agreements where lower(name) = 'club borrable') = 2, 'Convenios: se puede crear otro con el mismo nombre');
+select t.ok(exists (select 1 from public.reservation_discounts where kind = 'convenio'), 'Convenios: las reservas viejas conservan su descuento');
 
 reset role;
 \o

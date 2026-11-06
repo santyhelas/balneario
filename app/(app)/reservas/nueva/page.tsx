@@ -25,6 +25,8 @@ type Quote = {
   precio_base: number;
   discounts: { kind: string; percent: number | null; amount: number; label?: string; agreement_id?: string; reason?: string }[];
   total: number;
+  /** Descuentos que correspondían pero no se aplicaron (balneario con descuentos no acumulables). */
+  no_aplicados?: { kind: string; percent: number; label?: string }[];
 };
 type PayMode = "pagada" | "despues" | "sena";
 
@@ -649,6 +651,11 @@ export default function NuevaReservaPage() {
                     <span>{discountLabel(d, agreements)}</span><span className="tabular">− {formatMoney(d.amount)}</span>
                   </div>
                 ))}
+                {!courtesy && (quote.no_aplicados?.length ?? 0) > 0 && (
+                  <div className="text-xs text-muted">
+                    No acumulables: se aplicó solo el mayor. Quedaron afuera: {quote.no_aplicados!.map((d) => `${d.label ?? d.kind} ${Number(d.percent)}%`).join(", ")}.
+                  </div>
+                )}
                 {courtesy && <div className="flex justify-between gap-3 text-ok"><span>Cortesía familiar</span><span className="tabular">− {formatMoney(quote.precio_base)}</span></div>}
                 <div className="mt-1 flex justify-between gap-3 border-t border-line pt-2 text-base font-semibold"><span>Total</span><span className="tabular">{formatMoney(quote.total)}</span></div>
                 {cashTotal !== null && cashTotal < Number(quote.total) && (

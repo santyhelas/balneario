@@ -6,6 +6,7 @@ import { unwrap, useLoader } from "@/lib/data";
 import { friendlyError } from "@/lib/errors";
 import { addDays, formatDate, formatMoney, parseMoney, todayISO } from "@/lib/format";
 import { HistoryFeed } from "@/components/history-feed";
+import { loadAgreements } from "@/components/pricing";
 import { MONTHS } from "@/lib/methods";
 import { useWorkspace } from "@/components/workspace";
 import { PageHeader, SyncNotice } from "@/components/shell";
@@ -46,7 +47,7 @@ export default function TarifasPage() {
   const q = useLoader(async () => {
     const rates = unwrap(await sb.from("rates").select("id, space_kind, year, month, half, season, daily_price, version").eq("workspace_id", ws.id)) as Rate[];
     const pkgs = unwrap(await sb.from("package_discounts").select("id, min_days, percent, active, version").eq("workspace_id", ws.id).order("min_days")) as Pkg[];
-    const agreements = unwrap(await sb.from("agreements").select("id, name, percent, active, valid_from, valid_to, conditions, version").eq("workspace_id", ws.id).order("active", { ascending: false }).order("name")) as Agreement[];
+    const agreements = await loadAgreements(sb, ws.id);
     const wsRow = unwrap(await sb.from("workspaces").select("cash_discount_percent, version").eq("id", ws.id).single()) as { cash_discount_percent: number; version: number };
     return { rates, pkgs, agreements, wsRow };
   }, [ws.id], 0);
@@ -129,13 +130,11 @@ export default function TarifasPage() {
           <Card title="Descuentos y convenios">
             <p className="text-sm text-muted">Los descuentos por paquete, el porcentaje por efectivo y los convenios se editan en <Link className="text-accent underline" href="/convenios">Convenios y descuentos</Link>.</p>
           </Card>
-          <Card title="Orden de aplicación">
+          <Card title="Cómo se calcula el precio">
             <ol className="list-decimal space-y-1 pl-5 text-sm text-muted">
               <li>Precio base: cada día al precio de su quincena.</li>
-              <li>Descuento por paquete (el escalón más alto que alcance la estadía).</li>
-              <li>Convenio, sobre lo que queda.</li>
-              <li>Pago en efectivo, sobre lo que queda.</li>
-              <li>Descuento manual (solo administradores, con motivo).</li>
+              <li>Descuentos que correspondan (paquete por días, convenio, pago en efectivo), combinados como elegiste en <Link className="text-accent underline" href="/convenios">Convenios y descuentos</Link>: en cascada, sumados o no acumulables.</li>
+              <li>Descuento manual (solo administradores, con motivo), al final.</li>
             </ol>
             <p className="mt-2 text-xs text-muted">Cada descuento se redondea hacia abajo al peso entero. Las reservas ya hechas conservan el precio con el que se contrataron.</p>
           </Card>

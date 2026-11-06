@@ -82,6 +82,7 @@ const FIELDS: Record<string, Record<string, [string, (v: unknown) => string]>> =
   rates: { daily_price: ["Precio por día", money] },
   package_discounts: { min_days: ["Desde días", str], percent: ["Descuento %", (v) => `${str(v)}%`], active: ["Activo", (v) => (v ? "sí" : "no")] },
   agreements: {
+    deleted_at: ["Eliminado", (v) => (v ? "sí" : "no")],
     name: ["Nombre", str], percent: ["Descuento", (v) => `${str(v)}%`], active: ["Activo", (v) => (v ? "sí" : "no")],
     valid_from: ["Vigente desde", date], valid_to: ["Vigente hasta", date], conditions: ["Condiciones", str],
   },
@@ -96,6 +97,7 @@ const FIELDS: Record<string, Record<string, [string, (v: unknown) => string]>> =
     cash_discount_percent: ["Descuento por efectivo", (v) => `${str(v)}%`], timezone: ["Zona horaria", str],
     logo_data: ["Logo", () => "(imagen)"], tent_style: ["Diseño de carpas", () => "(diseño)"],
     paused_at: ["En pausa", (v) => (v ? "sí" : "no")], paused_reason: ["Motivo de la pausa", str],
+    discount_mode: ["Cómo se combinan los descuentos", (v) => ({ cascada: "en cascada", sumados: "sumados sobre el precio", mayor: "no acumulables (solo el mayor)" } as Record<string, string>)[String(v)] ?? str(v)],
   },
 };
 
