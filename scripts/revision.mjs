@@ -128,7 +128,7 @@ for (const [view, opts] of Object.entries(VIEWS)) {
     }
     // Ingreso con datos incorrectos: tiene que mostrar un error claro
     try {
-      await page.goto(BASE + "/login", { waitUntil: "networkidle" });
+      await page.goto(DEMO + "/login", { waitUntil: "networkidle" });
       await page.locator('input[type="email"], input[name="email"], input[autocomplete="username"]').first().fill("no-existe@ejemplo.com");
       await page.locator('input[type="password"]').first().fill("clave-equivocada-123");
       await page.getByRole("button", { name: /^Ingresar$/ }).first().click();
