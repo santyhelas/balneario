@@ -154,7 +154,7 @@ export function ReservationExtras({ reservationId, stayDays, editable, onChanged
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <span className="font-mono font-semibold">{formatMoney(l.amount)}</span>
+                <span className="tabular font-semibold">{formatMoney(l.amount)}</span>
                 {editable && <Button variant="ghost" onClick={() => setVoiding(l)}>Anular</Button>}
               </div>
             </li>

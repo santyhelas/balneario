@@ -1018,6 +1018,11 @@ select set_config('request.jwt.claims', '{"sub":"22222222-2222-2222-2222-2222222
 select t.throws(format($$select public.my_plan(%L)$$, t.get('wsC')), 'No tenés permiso', 'Planes: otro balneario no ve el plan');
 select set_config('request.jwt.claims', '{"sub":"11111111-1111-1111-1111-111111111111","email":"duenio@test.com"}', false);
 
+-- 37. Importes con formato argentino en los textos de la base
+select t.ok(private.ars(18000) = '$ 18.000' and private.ars(1234.5) = '$ 1.234,50', 'Formato: $ 18.000 y $ 1.234,50');
+select t.ok(exists (select 1 from public.reservation_charges where description like '%× $ %')
+        and not exists (select 1 from public.reservation_charges where description ~ '\$ ?[0-9]{1,3},[0-9]{3}'), 'Formato: los tramos de precio muestran $ 18.000');
+
 reset role;
 \o
 -- Resultado ----------------------------------------------------------
