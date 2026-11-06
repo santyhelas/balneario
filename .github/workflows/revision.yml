@@ -29,7 +29,11 @@ jobs:
           echo "NEXT_PUBLIC_SUPABASE_URL=$API" >> $GITHUB_ENV
           echo "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=$KEY" >> $GITHUB_ENV
           PGPASSWORD=postgres psql -h 127.0.0.1 -p 54322 -U postgres -d postgres -q -v ON_ERROR_STOP=1 -f $GITHUB_WORKSPACE/supabase/instalar.sql
-          echo "Base lista en $API"
+          # Un balneario "real" de prueba (la demo copia su plano), creado como lo haría un cliente habilitado.
+          PGPASSWORD=postgres psql -h 127.0.0.1 -p 54322 -U postgres -d postgres -qc "select private.permitir_alta('e2e@prueba.com', 'Revisión automática')"
+          TOKEN=$(curl -s "$API/auth/v1/signup" -H "apikey: $KEY" -H "Content-Type: application/json" -d '{"email":"e2e@prueba.com","password":"Prueba-e2e-123456"}' | python3 -c "import sys,json; print(json.load(sys.stdin).get('access_token',''))")
+          curl -s -f "$API/rest/v1/rpc/create_workspace" -H "apikey: $KEY" -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{"p_name":"Balneario de Prueba","p_tents":30,"p_umbrellas":6}'
+          echo; echo "Base lista en $API"
       - run: npm install --no-audit --no-fund && npm install --no-save playwright@1.49.1
       - run: npx playwright install --with-deps chromium
       - run: npm run build
