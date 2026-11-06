@@ -7,7 +7,7 @@ export function LegalPage({ title, updated, children }: { title: string; updated
     <div className="min-h-dvh bg-bg text-fg">
       <header className="border-b border-line bg-surface">
         <div className="mx-auto flex max-w-3xl items-center justify-between px-4 py-3">
-          <a href="/" className="flex items-center gap-2 font-bold"><img src="/logo.png" alt="" className="h-9 w-9" />Tu Balneario</a>
+          <a href="/" className="flex items-center gap-2 font-bold"><img src="/logo.png" alt="" className="h-9 w-9" />Mi Balneario</a>
           <a href="/" className="text-sm text-accent hover:underline">Volver al inicio</a>
         </div>
       </header>

@@ -7,7 +7,7 @@ export const runtime = "nodejs";
 // Buscar un lugar por nombre (?q=) o ponerle nombre a una ubicación (?lat=&lon=).
 // Solo para usuarios con sesión (lo controla el middleware). Se guarda en memoria un día.
 const cache = new Map<string, { at: number; body: unknown }>();
-const UA = `TuBalneario/1.0 (${SITE_EMAIL})`;
+const UA = `MiBalneario/1.0 (${SITE_EMAIL})`;
 
 async function nominatim(path: string): Promise<unknown> {
   const hit = cache.get(path);

@@ -119,7 +119,7 @@ export default function LoginPage() {
       <div className="rounded-2xl border border-line bg-surface p-6 shadow-sm">
         <div className="mb-6 flex flex-col items-center gap-2 text-center">
           <img src="/logo.png" alt="" className="h-20 w-20" />
-          <h1 className="text-xl font-bold">Tu Balneario</h1>
+          <h1 className="text-xl font-bold">Mi Balneario</h1>
           <p className="text-sm text-muted">
             {mode === "ingresar" ? "Gestión de balnearios · Ingresá con tu usuario" : mode === "crear" ? "Creá tu cuenta y tu balneario" : "Recuperar acceso"}
           </p>
@@ -214,7 +214,7 @@ export default function LoginPage() {
                 <button className="text-muted hover:underline" onClick={() => go("crear")}>¿No tenés cuenta? Registrate y creá tu balneario</button>
               ) : (
                 <p className="text-center text-xs text-muted">
-                  ¿Todavía no usás Tu Balneario? <a href="/#planes" className="font-medium text-accent hover:underline">Pedí tu presupuesto</a>.
+                  ¿Todavía no usás Mi Balneario? <a href="/#planes" className="font-medium text-accent hover:underline">Pedí tu presupuesto</a>.
                   <br />Si trabajás en un balneario, pedile tu usuario al propietario.
                 </p>
               )}

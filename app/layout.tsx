@@ -2,15 +2,15 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Tu Balneario",
-  description: "Tu Balneario: gestión integral de balnearios — reservas, mapa, caja y clientes.",
-  applicationName: "Tu Balneario",
+  title: "Mi Balneario",
+  description: "Mi Balneario: gestión integral de balnearios — reservas, mapa, caja y clientes.",
+  applicationName: "Mi Balneario",
   icons: {
     icon: [{ url: "/favicon.ico", sizes: "any" }, { url: "/icon-192.png", sizes: "192x192", type: "image/png" }],
     apple: [{ url: "/apple-touch-icon.png", sizes: "180x180" }],
   },
   // iPhone: al agregarla a la pantalla de inicio se abre a pantalla completa, como una app.
-  appleWebApp: { capable: true, title: "Tu Balneario", statusBarStyle: "default" },
+  appleWebApp: { capable: true, title: "Mi Balneario", statusBarStyle: "default" },
   formatDetection: { telephone: false },
 };
 

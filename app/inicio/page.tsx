@@ -14,17 +14,17 @@ const DESCRIPTION =
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
-  title: "Tu Balneario · Sistema de gestión de balnearios y alquiler de carpas",
+  title: "Mi Balneario · Sistema de gestión de balnearios y alquiler de carpas",
   description: DESCRIPTION,
   keywords: ["gestión de balnearios", "sistema para balnearios", "alquiler de carpas", "reservas de carpas", "sombrillas", "software balneario", "Argentina"],
   alternates: { canonical: "/" },
   openGraph: {
-    type: "website", locale: "es_AR", url: "/", siteName: "Tu Balneario",
-    title: "Tu Balneario · Sistema de gestión de balnearios",
+    type: "website", locale: "es_AR", url: "/", siteName: "Mi Balneario",
+    title: "Mi Balneario · Sistema de gestión de balnearios",
     description: DESCRIPTION,
-    images: [{ url: "/icon-512.png", width: 512, height: 512, alt: "Tu Balneario" }],
+    images: [{ url: "/icon-512.png", width: 512, height: 512, alt: "Mi Balneario" }],
   },
-  twitter: { card: "summary", title: "Tu Balneario · Sistema de gestión de balnearios", description: DESCRIPTION, images: ["/icon-512.png"] },
+  twitter: { card: "summary", title: "Mi Balneario · Sistema de gestión de balnearios", description: DESCRIPTION, images: ["/icon-512.png"] },
   // Código de verificación de Google Search Console (se carga en Vercel; ver README).
   verification: process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION ? { google: process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION } : undefined,
 };
@@ -33,7 +33,7 @@ export const metadata: Metadata = {
 const JSON_LD = {
   "@context": "https://schema.org",
   "@type": "SoftwareApplication",
-  name: "Tu Balneario",
+  name: "Mi Balneario",
   applicationCategory: "BusinessApplication",
   operatingSystem: "Web",
   inLanguage: "es-AR",
@@ -265,7 +265,7 @@ export default function InicioPage() {
         <div className="relative mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3">
           <a href="#arriba" className="flex items-center gap-2.5">
             <img src="/logo.png" alt="" className="h-12 w-12" />
-            <span className="display text-xl font-extrabold">Tu Balneario</span>
+            <span className="display text-xl font-extrabold">Mi Balneario</span>
           </a>
           <nav className="hidden items-center gap-7 text-[15px] font-semibold md:flex">
             {NAV.map((l) => <a key={l.href} href={l.href} className="text-[var(--gris)] hover:text-[var(--atl)]">{l.label}</a>)}
@@ -287,7 +287,7 @@ export default function InicioPage() {
                 Tu balneario entero, en un mapa que sabe quién está en cada carpa.
               </h1>
               <p className="mt-5 max-w-lg text-lg leading-relaxed text-[var(--gris)]">
-                Tu Balneario es un sistema de gestión de balnearios para el alquiler de carpas y sombrillas.
+                Mi Balneario es un sistema de gestión de balnearios para el alquiler de carpas y sombrillas.
                 Elegí un día y mirá qué está libre; tocá una carpa y ves quién la tiene, hasta cuándo y si pagó.
                 Reservas, cobros, deudas y caja, desde la compu o el celular.
               </p>
@@ -314,7 +314,7 @@ export default function InicioPage() {
         <section id="un-dia" className="scroll-mt-16 bg-[var(--atl)] text-white">
           <div className="mx-auto max-w-6xl px-4 py-20">
             <h2 className="max-w-2xl text-4xl font-extrabold leading-tight sm:text-5xl">Un día de enero, de la apertura al cierre.</h2>
-            <p className="mt-3 max-w-xl text-white/75">Así se usa Tu Balneario en una jornada normal de temporada.</p>
+            <p className="mt-3 max-w-xl text-white/75">Así se usa Mi Balneario en una jornada normal de temporada.</p>
             <div className="mt-12">
               <DayTimeline steps={STEPS} />
             </div>
@@ -368,7 +368,7 @@ export default function InicioPage() {
                     <WhatsAppIcon className="h-5 w-5" />Escribinos por WhatsApp
                   </a>
                 )}
-                <a href={`mailto:${SITE_EMAIL}?subject=${encodeURIComponent("Presupuesto Tu Balneario")}`}
+                <a href={`mailto:${SITE_EMAIL}?subject=${encodeURIComponent("Presupuesto Mi Balneario")}`}
                   className="inline-flex items-center gap-2 rounded-full bg-white px-7 py-3 text-base font-bold text-[var(--atl)] hover:bg-[var(--foam)]">
                   <Icon d="M4 6h16v12H4zM4 7l8 6 8-6" />Escribinos por mail
                 </a>
@@ -419,7 +419,7 @@ export default function InicioPage() {
 
       <footer className="bg-[var(--tinta)] text-white/70">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-6 text-sm">
-          <span className="flex items-center gap-2"><img src="/logo.png" alt="" className="h-6 w-6" /> Tu Balneario, hecho en Argentina</span>
+          <span className="flex items-center gap-2"><img src="/logo.png" alt="" className="h-6 w-6" /> Mi Balneario, hecho en Argentina</span>
           <span className="flex flex-wrap gap-x-5 gap-y-2">
             <LoginLink className="hover:text-white" />
             <a href="/terminos" className="hover:text-white">Términos</a>

@@ -1,4 +1,4 @@
-# Tu Balneario — sistema de gestión de balnearios
+# Mi Balneario — sistema de gestión de balnearios
 
 Aplicación web para administrar carpas, sombrillas, reservas, pagos, caja y gastos.
 

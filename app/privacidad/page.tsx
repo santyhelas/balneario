@@ -2,23 +2,23 @@ import type { Metadata } from "next";
 import { LegalPage } from "@/components/legal-page";
 import { SITE_EMAIL } from "@/lib/site";
 
-export const metadata: Metadata = { title: "Política de privacidad · Tu Balneario" };
+export const metadata: Metadata = { title: "Política de privacidad · Mi Balneario" };
 
 export default function PrivacidadPage() {
   return (
     <LegalPage title="Política de privacidad" updated="06/11/2026">
       <p>
-        Esta política explica qué datos trata Tu Balneario (el &quot;Servicio&quot;), para qué y cómo podés ejercer tus derechos,
+        Esta política explica qué datos trata Mi Balneario (el &quot;Servicio&quot;), para qué y cómo podés ejercer tus derechos,
         conforme a la Ley 25.326 de Protección de los Datos Personales de la República Argentina y sus normas complementarias.
       </p>
 
       <h2>1. Quién es quién</h2>
       <p>
         Cada balneario que usa el Servicio es el <strong>responsable</strong> de los datos de sus propios clientes (nombre, teléfono,
-        correo, reservas, pagos). Tu Balneario actúa como <strong>prestador del servicio</strong>: guarda y procesa esos datos solo para
+        correo, reservas, pagos). Mi Balneario actúa como <strong>prestador del servicio</strong>: guarda y procesa esos datos solo para
         que el balneario pueda usar el sistema, y no los usa para otros fines ni los vende.
       </p>
-      <p>Para los datos de las cuentas de usuario (dueños y empleados de los balnearios), Tu Balneario es el responsable.</p>
+      <p>Para los datos de las cuentas de usuario (dueños y empleados de los balnearios), Mi Balneario es el responsable.</p>
 
       <h2>2. Qué datos tratamos</h2>
       <ul>

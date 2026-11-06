@@ -1,19 +1,19 @@
 import type { Metadata } from "next";
 import { LegalPage } from "@/components/legal-page";
 
-export const metadata: Metadata = { title: "Términos de uso · Tu Balneario" };
+export const metadata: Metadata = { title: "Términos de uso · Mi Balneario" };
 
 export default function TerminosPage() {
   return (
     <LegalPage title="Términos de uso" updated="06/11/2026">
       <p>
-        Estos términos regulan el uso de Tu Balneario (el &quot;Servicio&quot;), un sistema web de gestión para balnearios.
+        Estos términos regulan el uso de Mi Balneario (el &quot;Servicio&quot;), un sistema web de gestión para balnearios.
         Al crear una cuenta o usar el Servicio aceptás estos términos.
       </p>
 
       <h2>1. El Servicio</h2>
       <p>
-        Tu Balneario permite administrar reservas de carpas y sombrillas, clientes, cobros, deudas, caja diaria, tarifas, informes y
+        Mi Balneario permite administrar reservas de carpas y sombrillas, clientes, cobros, deudas, caja diaria, tarifas, informes y
         copias de seguridad. Funciona por internet desde el navegador. Podemos mejorar, cambiar o agregar funciones con el tiempo.
       </p>
 

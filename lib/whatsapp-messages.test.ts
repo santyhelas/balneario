@@ -23,7 +23,7 @@ test("comprobante con pagos y saldo", () => {
 });
 
 test("presupuesto con precio en efectivo", () => {
-  const m = quoteMessage({ firstName: "Ana", balneario: "Tu Balneario", places: "Carpa 17", start: "2027-01-05", end: "2027-01-20", total: 300000, cashTotal: 270000, discounts: [] });
+  const m = quoteMessage({ firstName: "Ana", balneario: "Mi Balneario", places: "Carpa 17", start: "2027-01-05", end: "2027-01-20", total: 300000, cashTotal: 270000, discounts: [] });
   assert.match(m, /Hola Ana!/);
   assert.match(m, /16 días/);
   assert.match(m, /Total: \$\s?300\.000/);
@@ -36,7 +36,7 @@ test("presupuesto con precio en efectivo", () => {
 });
 
 test("renovación de temporada", () => {
-  const m = renewalMessage({ firstName: "Juan", balneario: "Tu Balneario", places: "Carpa 17", lastSeason: "2025/2026", newSeason: "2026/2027" });
+  const m = renewalMessage({ firstName: "Juan", balneario: "Mi Balneario", places: "Carpa 17", lastSeason: "2025/2026", newSeason: "2026/2027" });
   assert.match(m, /temporada 2026\/2027/);
   assert.match(m, /Carpa 17/);
 });
