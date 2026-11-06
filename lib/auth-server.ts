@@ -9,16 +9,17 @@ export function json(body: unknown, status = 200) {
 }
 
 /** Inicia sesión en el servidor y deja las cookies de sesión en la respuesta. */
-export async function signIn(email: string, password: string, remember: boolean) {
+export async function signIn(email: string, password: string, remember: boolean, captchaToken?: string) {
   const store = await cookies();
   const base = { path: "/", sameSite: "lax" as const, secure: process.env.NODE_ENV === "production", httpOnly: false };
   store.set(REMEMBER_COOKIE, remember ? "1" : "0", remember ? { ...base, maxAge: REMEMBER_MAX_AGE } : base);
   const sb = await getServerSupabase(remember);
-  const { error } = await sb.auth.signInWithPassword({ email, password });
+  const { error } = await sb.auth.signInWithPassword({ email, password, options: captchaToken ? { captchaToken } : undefined });
   if (!error) return null;
   if (/invalid login credentials/i.test(error.message)) return { status: 401, error: "Usuario o contraseña incorrectos." };
   if (/email not confirmed/i.test(error.message)) return { status: 401, error: "La cuenta todavía no confirmó el correo. Revisá tu bandeja de entrada." };
   if (/rate limit|too many/i.test(error.message)) return { status: 429, error: "Demasiados intentos seguidos. Esperá unos minutos." };
+  if (/captcha/i.test(error.message)) return { status: 400, error: "No se pudo verificar que no sos un robot. Probá de nuevo." };
   return { status: 500, error: "No se pudo iniciar sesión. Probá de nuevo." };
 }
 

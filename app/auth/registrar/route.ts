@@ -7,5 +7,5 @@ export async function GET() {
 }
 
 export async function POST() {
-  return json({ error: "Por ahora no se pueden crear cuentas desde acá. Mirá los planes en la página principal o escribinos.", planes: "/#planes" }, 403);
+  return json({ error: "Por ahora no se pueden crear cuentas desde acá. Pedí tu presupuesto en la página principal o escribinos.", planes: "/#planes" }, 403);
 }

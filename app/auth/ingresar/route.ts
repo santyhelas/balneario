@@ -5,7 +5,7 @@ import { normalizeUsername } from "@/lib/remember";
 // Ingreso con usuario (o correo) y contraseña.
 // El correo asociado a un usuario se busca acá, en el servidor: nunca llega al navegador.
 export async function POST(req: Request) {
-  let body: { usuario?: string; password?: string; recordar?: boolean };
+  let body: { usuario?: string; password?: string; recordar?: boolean; captchaToken?: string };
   try {
     body = await req.json();
   } catch {
@@ -40,7 +40,8 @@ export async function POST(req: Request) {
     email = data as string;
   }
 
-  const problem = await signIn(email, password, body.recordar !== false);
+  const captcha = typeof body.captchaToken === "string" && body.captchaToken.length < 4096 ? body.captchaToken : undefined;
+  const problem = await signIn(email, password, body.recordar !== false, captcha);
   if (admin && (!problem || problem.status === 401)) {
     await admin.rpc("login_record", { p_user_key: userKey, p_ip_key: ipKey, p_ok: !problem }).then(() => undefined, () => undefined);
   }

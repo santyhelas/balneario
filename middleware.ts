@@ -6,7 +6,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 // Rutas que se pueden ver sin haber iniciado sesión.
 // /api/cron: tareas automáticas de Vercel (no tienen sesión; cada una se protege sola).
-const PUBLIC_PATHS = ["/inicio", "/robots.txt", "/sitemap.xml", "/google", "/login", "/auth/callback", "/auth/restablecer", "/auth/ingresar", "/auth/registrar", "/api/cron"];
+const PUBLIC_PATHS = ["/inicio", "/terminos", "/privacidad", "/robots.txt", "/sitemap.xml", "/login", "/auth/callback", "/auth/restablecer", "/auth/ingresar", "/auth/registrar", "/api/cron"];
 
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({ request });

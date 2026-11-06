@@ -80,8 +80,8 @@ export function DemoEndedNotice() {
   return (
     <div role="status" className={show === "plan" ? "border-b border-amber-300 bg-amber-50 px-4 py-2 text-center text-sm text-amber-950" : "border-b border-ok/40 bg-ok-soft px-4 py-2 text-center text-sm"}>
       {show === "plan"
-        ? <>Esa cuenta todavía no tiene un balneario. Para crear el tuyo hace falta un plan: <a href="#planes" className="font-semibold underline">mirá los planes</a> o escribinos.</>
-        : <>Saliste de la demo y se borró todo lo que cargaste. ¿Te gustó? <a href="#planes" className="font-semibold text-accent underline">Mirá los planes</a>.</>}
+        ? <>Esa cuenta todavía no tiene un balneario habilitado. Para crear el tuyo, <a href="#planes" className="font-semibold underline">pedí tu presupuesto</a>.</>
+        : <>Saliste de la demo y se borró todo lo que cargaste. ¿Te gustó? <a href="#planes" className="font-semibold text-accent underline">Pedí tu presupuesto</a>.</>}
       <button type="button" onClick={() => setShow(null)} className="ml-3 text-muted hover:text-fg" aria-label="Cerrar aviso">×</button>
     </div>
   );

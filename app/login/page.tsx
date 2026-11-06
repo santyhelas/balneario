@@ -5,6 +5,7 @@ import { friendlyError } from "@/lib/errors";
 import { Alert, Button, Field, Input, TextField } from "@/components/ui";
 import { GoogleG } from "@/components/google";
 import { SITE_EMAIL } from "@/lib/site";
+import { captchaToken } from "@/components/captcha";
 
 type Mode = "ingresar" | "crear" | "recuperar";
 
@@ -75,7 +76,9 @@ export default function LoginPage() {
     setInfo(null);
     if (mode === "ingresar") {
       setBusy(true);
-      const r = await post("/auth/ingresar", { usuario, password, recordar: remember });
+      let captcha: string | undefined;
+      try { captcha = await captchaToken(); } catch (err) { setBusy(false); return setError((err as Error).message); }
+      const r = await post("/auth/ingresar", { usuario, password, recordar: remember, captchaToken: captcha });
       if (!r.ok) {
         setBusy(false);
         return setError(r.error!);
@@ -96,8 +99,11 @@ export default function LoginPage() {
       return;
     }
     setBusy(true);
+    let captcha: string | undefined;
+    try { captcha = await captchaToken(); } catch (err) { setBusy(false); return setError((err as Error).message); }
     const { error } = await getSupabase().auth.resetPasswordForEmail(email.trim(), {
       redirectTo: `${window.location.origin}/auth/callback?next=/auth/restablecer`,
+      captchaToken: captcha,
     });
     setBusy(false);
     if (error) return setError(friendlyError(error));
@@ -208,7 +214,7 @@ export default function LoginPage() {
                 <button className="text-muted hover:underline" onClick={() => go("crear")}>¿No tenés cuenta? Registrate y creá tu balneario</button>
               ) : (
                 <p className="text-center text-xs text-muted">
-                  ¿Todavía no usás Tu Balneario? <a href="/#planes" className="font-medium text-accent hover:underline">Mirá los planes</a>.
+                  ¿Todavía no usás Tu Balneario? <a href="/#planes" className="font-medium text-accent hover:underline">Pedí tu presupuesto</a>.
                   <br />Si trabajás en un balneario, pedile tu usuario al propietario.
                 </p>
               )}
@@ -218,7 +224,8 @@ export default function LoginPage() {
           )}
         </div>
         <p className="mt-5 border-t border-line pt-3 text-center text-xs text-muted">
-          Consultas: <a href={`mailto:${SITE_EMAIL}`} className="text-accent hover:underline">{SITE_EMAIL}</a>
+          <a href="/terminos" className="hover:underline">Términos</a> · <a href="/privacidad" className="hover:underline">Privacidad</a>
+          <br />Consultas: <a href={`mailto:${SITE_EMAIL}`} className="text-accent hover:underline">{SITE_EMAIL}</a>
         </p>
       </div>
       </div>

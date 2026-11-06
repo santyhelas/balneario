@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import "@fontsource-variable/bricolage-grotesque";
 import "@fontsource-variable/figtree";
-import { SITE_EMAIL, SITE_INSTAGRAM, SITE_INSTAGRAM_URL, SITE_URL } from "@/lib/site";
+import { SITE_EMAIL, SITE_INSTAGRAM, SITE_INSTAGRAM_URL, SITE_URL, SITE_WHATSAPP_URL } from "@/lib/site";
+import { Analytics } from "@vercel/analytics/next";
 import { DemoButton, DemoEndedNotice, LoginLink, MobileMenu } from "@/components/landing";
 import { DayTimeline, HeroBeach, PhotoStrip, Slider, type DayStep } from "@/components/landing-interactive";
 import "./landing.css";
@@ -45,7 +46,7 @@ const JSON_LD = {
 const NAV = [
   { href: "#un-dia", label: "Cómo se usa" },
   { href: "#funciones", label: "Funciones" },
-  { href: "#planes", label: "Planes" },
+  { href: "#planes", label: "Presupuesto" },
   { href: "#preguntas", label: "Preguntas" },
 ];
 
@@ -55,14 +56,6 @@ const NAV = [
  */
 const PHOTOS: { src: string; caption: string }[] = [];
 
-/**
- * Planes: todavía sin definir. Cuando estén, completar nombre, precio y lo que incluye cada uno
- * (si "items" queda vacío se muestra "Próximamente").
- */
-const PLANS: { name: string; price: string | null; note: string; items: string[]; highlight?: boolean }[] = [
-  { name: "Plan 1", price: null, note: "Próximamente", items: [] },
-  { name: "Plan 2", price: null, note: "Próximamente", items: [], highlight: true },
-];
 
 const FAQ = [
   { q: "¿Tengo que instalar algo?", a: "No. Funciona desde el navegador (Chrome, Edge, Safari) en la computadora o en el celular. En el celular lo podés agregar a la pantalla de inicio y se abre como una app." },
@@ -70,7 +63,7 @@ const FAQ = [
   { q: "¿Mis datos y los de mis clientes están seguros?", a: "Cada balneario ve solo sus datos. Todo se guarda en una base de datos protegida, no en tu computadora, y podés tener una copia diaria en tu propio Google Drive." },
   { q: "¿Lo pueden usar mis empleados?", a: "Sí. Cada uno con su usuario, desde su celular o la compu del balneario, y todos ven lo mismo al instante." },
   { q: "¿Y si se corta internet?", a: "Para guardar hace falta internet. Si se corta, el sistema te avisa y no te muestra datos viejos como si fueran los de ahora, así no reservás algo que ya está ocupado." },
-  { q: "¿Cuánto cuesta?", a: `Mirá la sección Planes o escribinos a ${SITE_EMAIL}.` },
+  { q: "¿Cuánto cuesta?", a: "Depende del tamaño de tu balneario. Pedinos un presupuesto sin compromiso por WhatsApp o por mail y te respondemos." },
 ];
 
 /** Ícono de Instagram (dibujo simple de cámara). */
@@ -78,6 +71,14 @@ function InstagramIcon({ className = "h-5 w-5" }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.9} className={className} aria-hidden>
       <rect x="3" y="3" width="18" height="18" rx="5" /><circle cx="12" cy="12" r="4" /><circle cx="17.5" cy="6.5" r="1" fill="currentColor" />
+    </svg>
+  );
+}
+
+function WhatsAppIcon({ className = "h-5 w-5" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden>
+      <path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm0 18.2c-1.5 0-3-.4-4.3-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8-.2-.1-.4-.1-.6.1l-.8 1c-.1.2-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.3-.4.2-.4.7-1.3.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3 3 3 0 0 0-.9 2.2 5.2 5.2 0 0 0 1.1 2.7 11.9 11.9 0 0 0 4.6 4c1.7.7 2.3.8 3.2.7.5-.1 1.5-.6 1.7-1.2.2-.6.2-1.1.2-1.2-.1-.1-.2-.2-.5-.3z" />
     </svg>
   );
 }
@@ -293,7 +294,7 @@ export default function InicioPage() {
               <div className="mt-8 flex flex-wrap items-start gap-3">
                 <DemoButton className="rounded-full bg-[var(--lona)] px-7 text-white shadow-[0_10px_25px_-10px_rgba(214,51,47,0.8)] hover:brightness-110" />
                 <a href="#planes" className="inline-flex items-center justify-center rounded-full border-2 border-[var(--atl)] px-7 py-3 text-base font-bold text-[var(--atl)] hover:bg-[var(--atl)] hover:text-white">
-                  Crear mi balneario
+                  Pedí tu presupuesto
                 </a>
               </div>
               <p className="mt-3 text-sm text-[var(--gris)]">La demo abre un balneario de prueba con datos inventados. No hace falta registrarse.</p>
@@ -351,32 +352,28 @@ export default function InicioPage() {
           </div>
         </section>
 
-        {/* Planes */}
+        {/* Presupuesto (el ancla #planes se mantiene porque la usan los avisos del sistema) */}
         <section id="planes" className="scroll-mt-16">
           <div className="mx-auto max-w-4xl px-4 py-20">
-            <h2 className="text-center text-4xl font-extrabold sm:text-5xl">Planes</h2>
-            <p className="mx-auto mt-3 max-w-md text-center text-[var(--gris)]">Elegí el plan para crear tu balneario. Mientras tanto, probá todo en la demo.</p>
-            <div className="mt-10 grid gap-6 md:grid-cols-2">
-              {PLANS.map((p) => (
-                <article key={p.name} className={`flex flex-col rounded-[28px] p-7 ${p.highlight ? "bg-[var(--atl)] text-white shadow-xl" : "bg-white ring-1 ring-[var(--sand-2)]"}`}>
-                  <h3 className="text-2xl font-extrabold">{p.name}</h3>
-                  <div className="display mt-3 text-4xl font-extrabold">{p.price ?? "—"}</div>
-                  <p className={`mt-1 font-semibold ${p.highlight ? "text-[var(--sol)]" : "text-[var(--atl-2)]"}`}>{p.note}</p>
-                  {p.items.length > 0 ? (
-                    <ul className="mt-5 flex flex-col gap-2 text-sm">
-                      {p.items.map((it) => <li key={it} className="flex gap-2"><Icon d="M20 6L9 17l-5-5" className="h-4 w-4 shrink-0" />{it}</li>)}
-                    </ul>
-                  ) : (
-                    <p className={`mt-5 flex-1 rounded-2xl border-2 border-dashed p-4 text-center text-sm ${p.highlight ? "border-white/30 text-white/80" : "border-[var(--sand-2)] text-[var(--gris)]"}`}>
-                      Pronto vas a ver acá qué incluye este plan y su precio.
-                    </p>
-                  )}
-                  <a href={`mailto:${SITE_EMAIL}?subject=${encodeURIComponent(`Consulta por el ${p.name} de Tu Balneario`)}`}
-                    className={`mt-6 inline-flex items-center justify-center rounded-full px-5 py-3 font-bold ${p.highlight ? "bg-white text-[var(--atl)] hover:bg-[var(--foam)]" : "bg-[var(--atl)] text-white hover:bg-[var(--atl-2)]"}`}>
-                    Consultar
+            <div className="overflow-hidden rounded-[32px] bg-[var(--atl)] px-6 py-12 text-center text-white shadow-xl sm:px-12">
+              <h2 className="text-4xl font-extrabold sm:text-5xl">Pedí tu presupuesto</h2>
+              <p className="mx-auto mt-3 max-w-lg text-lg text-white/85">
+                Contanos cuántas carpas y sombrillas tenés y te armamos una propuesta para tu balneario.
+                Te ayudamos a cargar el mapa y las tarifas.
+              </p>
+              <div className="mt-8 flex flex-wrap justify-center gap-3">
+                {SITE_WHATSAPP_URL && (
+                  <a href={SITE_WHATSAPP_URL} target="_blank" rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 rounded-full bg-[#25d366] px-7 py-3 text-base font-bold text-[#06210f] hover:brightness-105">
+                    <WhatsAppIcon className="h-5 w-5" />Escribinos por WhatsApp
                   </a>
-                </article>
-              ))}
+                )}
+                <a href={`mailto:${SITE_EMAIL}?subject=${encodeURIComponent("Presupuesto Tu Balneario")}`}
+                  className="inline-flex items-center gap-2 rounded-full bg-white px-7 py-3 text-base font-bold text-[var(--atl)] hover:bg-[var(--foam)]">
+                  <Icon d="M4 6h16v12H4zM4 7l8 6 8-6" />Escribinos por mail
+                </a>
+              </div>
+              <p className="mt-6 text-sm text-white/70">Mientras tanto, probá todo en la demo, sin registrarte.</p>
             </div>
           </div>
         </section>
@@ -423,13 +420,24 @@ export default function InicioPage() {
       <footer className="bg-[var(--tinta)] text-white/70">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-6 text-sm">
           <span className="flex items-center gap-2"><img src="/logo.png" alt="" className="h-6 w-6" /> Tu Balneario, hecho en Argentina</span>
-          <span className="flex gap-5">
+          <span className="flex flex-wrap gap-x-5 gap-y-2">
             <LoginLink className="hover:text-white" />
+            <a href="/terminos" className="hover:text-white">Términos</a>
+            <a href="/privacidad" className="hover:text-white">Privacidad</a>
             <a href={`mailto:${SITE_EMAIL}`} className="hover:text-white">Contacto</a>
             <a href={SITE_INSTAGRAM_URL} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 hover:text-white"><InstagramIcon className="h-4 w-4" />Instagram</a>
           </span>
         </div>
       </footer>
+
+      {/* Botón flotante de WhatsApp (aparece cuando está cargado el número) */}
+      {SITE_WHATSAPP_URL && (
+        <a href={SITE_WHATSAPP_URL} target="_blank" rel="noopener noreferrer" aria-label="Escribinos por WhatsApp"
+          className="fixed bottom-5 right-5 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-[#25d366] text-white shadow-[0_10px_30px_-8px_rgba(0,0,0,.45)] transition hover:scale-105">
+          <WhatsAppIcon className="h-8 w-8" />
+        </a>
+      )}
+      <Analytics />
     </div>
   );
 }
