@@ -213,7 +213,7 @@ for (const [view, opts] of Object.entries(VIEWS)) {
       if (await again.isVisible().catch(() => false)) await again.click();
       await page.getByText("Prueba Automática").first().waitFor({ timeout: 15000 });
       flow.pasos.push("cliente creado y elegido");
-      await page.getByRole("button", { name: "5 días" }).click();
+      await page.getByRole("button", { name: "5 días", exact: true }).first().click();
       await page.waitForTimeout(2500);
       await page.locator('button[title="Libre toda la estadía"]').first().click();
       flow.pasos.push("carpa elegida");
