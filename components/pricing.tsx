@@ -224,7 +224,7 @@ export type DiscountMode = "cascada" | "sumados" | "mayor";
 /** Cómo se combinan los descuentos automáticos, con un ejemplo en números. */
 export function discountExample(mode: DiscountMode) {
   const base = 100000;
-  const items = [{ l: "Paquete 7 días", p: 5 }, { l: "Convenio", p: 30 }, { l: "Pago en efectivo", p: 10 }];
+  const items = [{ l: "Paquete por días", p: 5 }, { l: "Convenio", p: 30 }, { l: "Pago en efectivo", p: 10 }];
   let cur = base;
   const lines: { l: string; amt: number }[] = [];
   if (mode === "mayor") {
