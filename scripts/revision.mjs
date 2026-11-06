@@ -219,6 +219,9 @@ for (const [view, opts] of Object.entries(VIEWS)) {
       flow.pasos.push("carpa elegida");
       await page.waitForTimeout(1500);
       await page.screenshot({ path: `${OUT}/capturas/flujo-reserva-antes.png`, fullPage: true });
+      await page.getByRole("button", { name: "Revisar y confirmar" }).click();
+      await page.waitForTimeout(1200);
+      flow.pasos.push("revisó");
       await page.getByRole("button", { name: "Guardar reserva" }).click();
       await page.waitForTimeout(2000);
       const confirm = page.getByRole("dialog").getByRole("button", { name: /Confirmar|Guardar|Sí/ });
@@ -228,7 +231,33 @@ for (const [view, opts] of Object.entries(VIEWS)) {
       await page.getByRole("button", { name: "Ver la reserva" }).click();
       await page.waitForTimeout(3000);
       await page.screenshot({ path: `${OUT}/capturas/flujo-reserva-detalle.png`, fullPage: true });
+      const resUrl = page.url();
       flow.resultado = "OK";
+      // c) Extras: cargar uno en Configuración y sumarlo a la reserva recién creada
+      const f3 = { flujo: "Extras: crear «Reposera» y agregarla a la reserva", pasos: [] };
+      try {
+        await page.goto(DEMO + "/configuracion", { waitUntil: "networkidle" });
+        await page.getByRole("button", { name: "Agregar extra" }).first().click();
+        const d = page.getByRole("dialog");
+        await d.getByLabel("Nombre").fill("Reposera");
+        await d.getByLabel("Precio").fill("2000");
+        await d.getByRole("button", { name: "Guardar" }).click();
+        await page.getByText("Reposera").first().waitFor({ timeout: 10000 });
+        f3.pasos.push("extra creado");
+        await page.goto(resUrl, { waitUntil: "networkidle" });
+        await page.waitForTimeout(1500);
+        await page.getByRole("button", { name: "Agregar extra" }).first().click();
+        await page.getByRole("dialog").getByRole("button", { name: /^Agregar/ }).click();
+        await page.waitForTimeout(2500);
+        await page.screenshot({ path: `${OUT}/capturas/flujo-extra.png`, fullPage: true });
+        const txt = await page.locator("body").innerText();
+        f3.resultado = /Reposera/.test(txt) ? "OK" : "No apareció el extra en la reserva";
+        f3.avisos = await page.locator('[role="alert"]').allTextContents().catch(() => []);
+      } catch (e) {
+        await page.screenshot({ path: `${OUT}/capturas/flujo-extra-error.png`, fullPage: true }).catch(() => {});
+        f3.resultado = `Se cortó: ${String(e).slice(0, 200)}`;
+      }
+      report.flujos.push(f3);
     } catch (e) {
       await page.screenshot({ path: `${OUT}/capturas/flujo-reserva-error.png`, fullPage: true }).catch(() => {});
       flow.resultado = `Se cortó: ${String(e).slice(0, 200)}`;
