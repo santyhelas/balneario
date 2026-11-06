@@ -85,7 +85,8 @@ export function SeasonCompare() {
       .filter((r) => [r.ma, r.mb].some((m) => num(m.dias_ocupados) || num(m.reservas) || num(m.cobrado) || num(m.gastos)));
     const ta = totals(rows.map((r) => r.ma));
     const tb = totals(rows.map((r) => r.mb));
-    const max = Math.max(1, ...rows.flatMap((r) => [value(r.ma, metric), value(r.mb, metric)]));
+    // La ocupación se dibuja sobre 100%; el resto, contra el mayor valor.
+    const max = metric === "ocupacion" ? 100 : Math.max(1, ...rows.flatMap((r) => [value(r.ma, metric), value(r.mb, metric)]));
     return { rows, ta, tb, max, cut };
   }, [q.data, metric, inProgress, toDate, today]);
 

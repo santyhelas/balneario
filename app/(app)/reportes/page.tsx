@@ -130,7 +130,7 @@ export default function ReportesPage() {
               <>
                 <div className="flex h-40 items-end gap-px overflow-x-auto rounded-lg bg-surface-2 p-2" role="img" aria-label="Gráfico de ocupación diaria">
                   {calc.occDays.map((d) => (
-                    <div key={d.dia} className="group relative flex min-w-[6px] flex-1 flex-col justify-end" title={`${formatDate(d.dia)}: ${d.total} ocupados (${d.pct.toFixed(0)}%)`}>
+                    <div key={d.dia} className="group relative flex h-full min-w-[6px] flex-1 flex-col justify-end" title={`${formatDate(d.dia)}: ${d.total} ocupados (${d.pct.toFixed(0)}%)`}>
                       <div className="rounded-t-sm bg-accent" style={{ height: `${Math.max(d.pct, d.total ? 2 : 0)}%` }} />
                     </div>
                   ))}
