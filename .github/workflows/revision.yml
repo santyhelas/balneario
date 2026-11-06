@@ -16,23 +16,26 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Datos públicos de conexión (los mismos que ve cualquier navegador en la web)
+      # La demo se prueba contra una base Supabase propia, armada acá con el instalador.
+      # (La base real exige la casilla de Cloudflare también del lado del servidor, así que un robot no puede entrar.)
+      - name: Base Supabase de prueba
         run: |
-          html=$(curl -s https://balneario-beta.vercel.app/inicio)
-          for js in $(echo "$html" | grep -o '/_next/static/chunks/[^"]*\.js' | sort -u); do curl -s "https://balneario-beta.vercel.app$js"; done > bundle.txt
-          pair=$(grep -oE '"https://[a-z0-9]+\.supabase\.co","[^"]+"' bundle.txt | head -1)
-          url=$(echo "$pair" | cut -d'"' -f2); key=$(echo "$pair" | cut -d'"' -f4)
-          if [ -z "$key" ]; then url=$(grep -oE 'https://[a-z0-9]+\.supabase\.co' bundle.txt | head -1); key=$(grep -oE 'sb_publishable_[A-Za-z0-9_-]+' bundle.txt | sort | uniq -c | sort -rn | head -1 | awk '{print $2}'); fi
-          echo "::add-mask::$key"
-          echo "NEXT_PUBLIC_SUPABASE_URL=$url" >> $GITHUB_ENV
-          echo "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=$key" >> $GITHUB_ENV
-          echo "Supabase: $url (clave: ${#key} caracteres)"
+          mkdir -p /tmp/sb && cd /tmp/sb
+          npx -y supabase@2 init --force >/dev/null
+          sed -i 's/^enable_anonymous_sign_ins = false/enable_anonymous_sign_ins = true/' supabase/config.toml
+          npx -y supabase@2 start -x studio,imgproxy,edge-runtime,logflare,vector,supavisor,realtime,storage-api,postgres-meta,mailpit
+          npx -y supabase@2 status -o env > /tmp/sb/env.txt
+          API=$(grep '^API_URL=' env.txt | cut -d'"' -f2); KEY=$(grep -E '^(PUBLISHABLE_KEY|ANON_KEY)=' env.txt | head -1 | cut -d'"' -f2)
+          echo "NEXT_PUBLIC_SUPABASE_URL=$API" >> $GITHUB_ENV
+          echo "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=$KEY" >> $GITHUB_ENV
+          PGPASSWORD=postgres psql -h 127.0.0.1 -p 54322 -U postgres -d postgres -q -v ON_ERROR_STOP=1 -f $GITHUB_WORKSPACE/supabase/instalar.sql
+          echo "Base lista en $API"
       - run: npm install --no-audit --no-fund && npm install --no-save playwright@1.49.1
       - run: npx playwright install --with-deps chromium
       - run: npm run build
       - name: Recorrer el sitio
         run: |
-          npm start &
+          NEXT_PUBLIC_SITE_URL=http://localhost:3000 npm start &
           npx -y wait-on@8 http://localhost:3000/inicio --timeout 60000
           DEMO_URL=http://localhost:3000 HEADLESS=1 node scripts/revision.mjs
       - name: Guardar el informe en la rama "revision"
