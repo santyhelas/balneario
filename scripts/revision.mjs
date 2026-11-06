@@ -170,7 +170,7 @@ async function enterDemo(page) {
   await page.evaluate(() => { try { sessionStorage.setItem("bal_tour_visto", "1"); } catch {} });
   await page.getByRole("button", { name: /Probar la demo/i }).first().click();
   report.flujos.push({ flujo: "Casilla de Cloudflare en la demo", resultado: await passCaptcha(page, 30000) });
-  await page.getByText("Inicio / Panel").first().waitFor({ timeout: 90000 });
+  await page.getByText("Inicio / Panel").first().waitFor({ state: "attached", timeout: 90000 });
   await page.waitForTimeout(1500);
   const skip = page.getByRole("button", { name: /Saltar tutorial/ });
   if (await skip.isVisible().catch(() => false)) await skip.click();
