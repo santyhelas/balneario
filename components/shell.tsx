@@ -224,7 +224,7 @@ export function Shell({ children }: { children: ReactNode }) {
         {/* ---------------- Barra superior (computadora) ---------------- */}
         <header className="sticky top-0 z-30 hidden items-center gap-2 border-b border-line bg-surface/95 px-4 py-2 backdrop-blur print:hidden md:flex">
           {menuButton}
-          <div className="min-w-0 flex-1">
+          <div className="min-w-[8rem] flex-1">
             <div className="truncate text-[11px] font-semibold uppercase tracking-wider text-muted">{ws.name}</div>
             <div className="truncate text-sm font-bold">{status.summary ? longDate(status.summary.fecha, ws.timezone) : "…"}</div>
           </div>
@@ -238,7 +238,7 @@ export function Shell({ children }: { children: ReactNode }) {
             Registrar cobro
           </Link>
           <Link href="/gastos?nuevo=1" className="flex items-center gap-1.5 rounded-lg border border-line bg-surface-2 px-3 py-2 text-sm font-semibold hover:opacity-90" title="Nuevo gasto">
-            <Icon d="M5 12h14" className="h-4 w-4" /><span className="hidden xl:inline">Nuevo gasto</span>
+            <Icon d="M5 12h14" className="h-4 w-4" /><span className="hidden 2xl:inline">Nuevo gasto</span>
           </Link>
           <button data-tour="deshacer" onClick={undo.start} className="flex items-center gap-1.5 rounded-lg border border-line bg-surface-2 px-3 py-2 text-sm font-semibold hover:opacity-90" title="Deshacer último cambio">
             <Icon d="M9 14L4 9l5-5M4 9h11a5 5 0 0 1 0 10h-3" className="h-4 w-4" /><span className="hidden 2xl:inline">Deshacer cambio</span>
@@ -481,7 +481,8 @@ function SyncChip() {
         : `${s.error ?? "No hay internet"}. Lo que ves en pantalla puede estar desactualizado y no se puede guardar nada nuevo. Tocá para reintentar.`}
       className={cx("hidden items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold lg:flex", ok ? "border-ok/40 bg-ok-soft text-ok" : "border-danger/40 bg-danger-soft text-danger")}>
       <span className={cx("h-2 w-2 rounded-full", ok ? "bg-ok" : "bg-danger", s.loading && "animate-pulse")} />
-      {label}
+      {/* En pantallas medianas solo el puntito (el detalle está al pasar el mouse); si hay problema, siempre el texto. */}
+      <span className={ok ? "hidden 2xl:inline" : undefined}>{label}</span>
     </button>
   );
 }
