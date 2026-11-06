@@ -176,6 +176,8 @@ label {
   main section > h2 { border-bottom: 1px solid #000 !important; padding-bottom: 2px; }
   main tr, main li { border-bottom: 1px solid #ccc !important; }
   main thead tr { border-bottom: 1px solid #000 !important; }
+  /* Botones y controles no se imprimen */
+  main button, main select, main [role="tablist"], main .print-hide { display: none !important; }
   /* Barras de gráficos: gris (sin color) para que se sigan viendo */
   main .print-bar { background: #666 !important; }
   main .print-bar-light { background: #bbb !important; }
