@@ -27,6 +27,15 @@ export type Workspace = {
   version: number;
 };
 
+/** Plan de Mi Balneario de este balneario (null: sin plan, no vence). */
+export type MyPlan = {
+  plan: "mensual" | "temporada"; precio: number; estado: "pendiente" | "activa" | "cancelada" | "manual" | "exenta";
+  pago_hasta: string | null; bloquea_desde: string | null; vencido: boolean; dias_gracia: number; proximo_debito: string | null;
+  debito_automatico: boolean; pagador: string | null; ultimo_pago: string | null; ultimo_estado: "aprobado" | "rechazado" | null;
+  temporada_hasta: string; hoy: string;
+  movimientos: { tipo: string; importe: number | null; detalle: string | null; fecha: string }[];
+};
+
 export type Profile = { displayName: string | null; avatar: string | null };
 
 type Ctx = {
@@ -49,6 +58,10 @@ type Ctx = {
   setGuideDone: (v: boolean) => Promise<void>;
   /** Es el dueño de Mi Balneario (ve el panel de todos los balnearios). */
   isPlatformAdmin: boolean;
+  /** Avisos sin ver del panel del dueño (cancelaciones, débitos rechazados, vencidos). */
+  adminAlerts: number;
+  plan: MyPlan | null;
+  reloadPlan: () => Promise<void>;
 };
 
 const WorkspaceContext = createContext<Ctx | null>(null);
@@ -89,6 +102,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<Profile>({ displayName: null, avatar: null });
   const [guideDone, setGuideDoneState] = useState(true);
   const [isPlatformAdmin, setPlatformAdmin] = useState(false);
+  const [adminAlerts, setAdminAlerts] = useState(0);
+  const [plan, setPlan] = useState<MyPlan | null>(null);
 
   const load = useCallback(async () => {
     const sb = getSupabase();
@@ -128,7 +143,10 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         setProfile({ displayName: prefs.data.display_name ?? null, avatar: prefs.data.avatar_data ?? null });
         setGuideDoneState((prefs.data as { guide_done?: boolean }).guide_done !== false);
       }
-      sb.rpc("is_platform_admin").then(({ data }) => setPlatformAdmin(data === true), () => undefined);
+      sb.rpc("is_platform_admin").then(({ data }) => {
+        setPlatformAdmin(data === true);
+        if (data === true) sb.rpc("admin_alert_count").then(({ data: n }) => setAdminAlerts(typeof n === "number" ? n : 0), () => undefined);
+      }, () => undefined);
 
       type MemberRow = { role: string; workspaces: unknown };
       const memberQuery = async (cols: string) =>
@@ -157,6 +175,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         return;
       }
       const ws = mem.data.workspaces as unknown as Workspace;
+      // Plan (si falta la actualización 0030 o no tiene plan, queda en null).
+      if (!isGuest) sb.rpc("my_plan", { p_workspace_id: ws.id }).then(({ data }) => setPlan((data as MyPlan | null) ?? null), () => undefined);
       setState({ kind: "ready", ws, role: mem.data.role as Role, userId: user.id, email: user.email ?? null, isGuest });
     } catch (err) {
       setState({ kind: "error", message: friendlyError(err) });
@@ -195,6 +215,12 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     setGuideDoneState(v);
     await savePrefs({ guide_done: v });
   }, [savePrefs]);
+
+  const reloadPlan = useCallback(async () => {
+    if (state.kind !== "ready" || state.isGuest) return;
+    const { data, error } = await getSupabase().rpc("my_plan", { p_workspace_id: state.ws.id });
+    if (!error) setPlan((data as MyPlan | null) ?? null);
+  }, [state]);
 
   const setTempUnit = useCallback(async (u: "C" | "F") => {
     setTempUnitState(u);
@@ -246,6 +272,9 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     guideDone,
     setGuideDone,
     isPlatformAdmin,
+    adminAlerts,
+    plan,
+    reloadPlan,
   };
   return <WorkspaceContext.Provider value={value}>{children}</WorkspaceContext.Provider>;
 }

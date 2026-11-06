@@ -958,6 +958,66 @@ select set_config('request.jwt.claims', '{"sub":"22222222-2222-2222-2222-2222222
 select t.throws(format($$select public.season_stats(%L, 2026)$$, t.get('ws')), 'No tenés permiso', 'Temporadas: otro balneario no las ve');
 select set_config('request.jwt.claims', '{"sub":"11111111-1111-1111-1111-111111111111","email":"duenio@test.com"}', false);
 
+-- 36. Planes y débito automático
+select t.ok(private.extend_until('temporada', null, '2026-11-20') = '2027-03-31' and private.extend_until('temporada', '2027-03-31', '2027-02-10') = '2028-03-31'
+        and private.extend_until('temporada', '2026-12-01', '2026-12-01') = '2027-03-31', 'Planes: la temporada paga hasta el 31/3 que corresponde');
+select t.ok(private.extend_until('mensual', '2027-01-10', '2027-01-08') = '2027-02-10' and private.extend_until('mensual', '2026-12-01', '2027-01-05') = '2027-02-05', 'Planes: el mensual suma un mes desde el vencimiento (o desde el pago si estaba vencido)');
+select public.admin_set_prices(15000, 120000);
+select public.admin_allow_signup('cliente@test.com', 'La Ola', 'mensual', null);
+reset role;
+insert into auth.users (id, email) values ('99999999-9999-9999-9999-999999999999', 'cliente@test.com');
+set role authenticated;
+select set_config('request.jwt.claims', '{"sub":"99999999-9999-9999-9999-999999999999","email":"cliente@test.com"}', false);
+select t.set('wsC', public.create_workspace('La Ola', 3, 0)::text);
+select t.ok((select plan = 'mensual' and price = 15000 and status = 'pendiente' and paid_until = private.today_ar() from public.subscriptions where workspace_id = t.uid('wsC')),
+        'Planes: al crear el balneario nace su plan con el precio general');
+insert into public.customers (workspace_id, first_name) values (t.uid('wsC'), 'Primer');
+select t.ok(true, 'Planes: durante los días de gracia se puede cargar');
+reset role;
+update public.subscriptions set paid_until = private.today_ar() - 4 where workspace_id = t.uid('wsC');
+set role authenticated;
+select t.throws(format($$insert into public.customers (workspace_id, first_name) values (%L, 'Tarde')$$, t.get('wsC')), 'plan de Mi Balneario venció', 'Planes: vencido + 3 días queda en solo lectura');
+select t.ok((public.my_plan(t.uid('wsC')) ->> 'vencido')::boolean and (select count(*) from public.customers where workspace_id = t.uid('wsC')) = 1, 'Planes: vencido igual ve sus datos');
+select t.throws($$select public.plan_mp_payment('pre-1', 'pay-1', 'approved', 15000, current_date)$$, 'permission denied', 'Planes: un usuario no puede marcar pagos');
+reset role;
+set role service_role;
+select public.plan_mp_link(t.uid('wsC'), 'pre-1', 'cliente@test.com');
+select public.plan_mp_status('pre-1', 'authorized', private.today_ar());
+select public.plan_mp_payment('pre-1', 'pay-1', 'approved', 15000, private.today_ar());
+select public.plan_mp_payment('pre-1', 'pay-1', 'approved', 15000, private.today_ar());
+reset role;
+select t.ok((select status = 'activa' and paid_until = (private.today_ar() + interval '1 month')::date from public.subscriptions where workspace_id = t.uid('wsC')),
+        'Planes: el débito aprobado extiende un mes (y el mismo aviso repetido no suma dos veces)');
+set role authenticated;
+insert into public.customers (workspace_id, first_name) values (t.uid('wsC'), 'Pagó');
+select t.ok(not (public.my_plan(t.uid('wsC')) ->> 'vencido')::boolean, 'Planes: al pagar vuelve a poder cargar');
+reset role;
+set role service_role;
+select public.plan_mp_payment('pre-1', 'pay-2', 'rejected', 15000, private.today_ar());
+select public.plan_mp_status('pre-1', 'cancelled', null);
+reset role;
+select t.ok((select status = 'cancelada' and last_payment_status = 'rechazado' from public.subscriptions where workspace_id = t.uid('wsC')), 'Planes: débito rechazado y cancelación quedan registrados');
+set role authenticated;
+select set_config('request.jwt.claims', '{"sub":"11111111-1111-1111-1111-111111111111","email":"duenio@test.com"}', false);
+select t.ok(public.admin_alert_count() >= 2 and jsonb_array_length(public.admin_overview() -> 'avisos') >= 2, 'Planes: al dueño le aparecen los avisos (rechazo y cancelación)');
+select public.admin_mark_seen((select (a ->> 'id')::uuid from jsonb_array_elements(public.admin_overview() -> 'avisos') a where a ->> 'tipo' = 'pago_rechazado' limit 1));
+select t.ok(not exists (select 1 from jsonb_array_elements(public.admin_overview() -> 'avisos') a where a ->> 'tipo' = 'pago_rechazado'), 'Planes: marcar el aviso como visto lo saca de la lista');
+select t.set('hasta', public.admin_register_payment(t.uid('wsC'), 15000, '2030-01-31', 'Transferencia')::text);
+reset role;
+select t.ok(t.get('hasta') = '2030-01-31'
+        and (select status = 'manual' from public.subscriptions where workspace_id = t.uid('wsC')), 'Planes: el dueño registra un pago a mano y elige hasta cuándo');
+set role authenticated;
+select public.admin_set_plan(t.uid('ws'), 'temporada', 0, true);
+select t.ok((select status = 'exenta' from public.subscriptions where workspace_id = t.uid('ws')) and not private.plan_expired(t.uid('ws')), 'Planes: un balneario exento no vence');
+select set_config('request.jwt.claims', '{"sub":"99999999-9999-9999-9999-999999999999","email":"cliente@test.com"}', false);
+select t.throws(format($$select public.admin_register_payment(%L, 1, null, null)$$, t.get('wsC')), 'No tenés permiso', 'Planes: el cliente no se registra pagos solo');
+select t.throws(format($$update public.subscriptions set paid_until = '2099-01-01' where workspace_id = %L$$, t.get('wsC')), 'permission denied', 'Planes: el cliente no cambia su vencimiento');
+select public.cancel_my_plan(t.uid('wsC'));
+select t.ok((select status = 'cancelada' and paid_until = '2030-01-31' from public.subscriptions where workspace_id = t.uid('wsC')), 'Planes: «No renovar» sin débito: sigue hasta el día pago');
+select set_config('request.jwt.claims', '{"sub":"22222222-2222-2222-2222-222222222222","email":"extranio@test.com"}', false);
+select t.throws(format($$select public.my_plan(%L)$$, t.get('wsC')), 'No tenés permiso', 'Planes: otro balneario no ve el plan');
+select set_config('request.jwt.claims', '{"sub":"11111111-1111-1111-1111-111111111111","email":"duenio@test.com"}', false);
+
 reset role;
 \o
 -- Resultado ----------------------------------------------------------

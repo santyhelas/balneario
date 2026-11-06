@@ -13,6 +13,7 @@ import { LinkedAccountsCard } from "@/components/linked-accounts";
 import { MyUsernameField, UsersCard } from "@/components/users";
 import { LocationPicker } from "@/components/location-picker";
 import { ExtrasCard } from "@/components/extras";
+import { PlanCard } from "@/components/plan-card";
 import { startTour } from "@/components/demo-tour";
 import { DEBT_CASES, DEFAULT_TEMPLATES, PLACEHOLDERS, debtVars, fillTemplate, type DebtCase, type Templates } from "@/lib/whatsapp-messages";
 
@@ -40,6 +41,7 @@ export default function ConfiguracionPage() {
           <ExtrasCard />
           </div>
           <div className="flex flex-col gap-4">
+            {!isGuest && <PlanCard />}
             <ProfileCard />
             {!isGuest && <LinkedAccountsCard />}
             {!isGuest && <div data-tour="config-usuarios"><UsersCard /></div>}

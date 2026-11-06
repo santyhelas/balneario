@@ -77,7 +77,7 @@ function longDate(iso: string, timeZone: string) {
 }
 
 export function Shell({ children }: { children: ReactNode }) {
-  const { ws, email, theme, setTheme, role, profile, isGuest, guideDone, setGuideDone, isPlatformAdmin } = useWorkspace();
+  const { ws, email, theme, setTheme, role, profile, isGuest, guideDone, setGuideDone, isPlatformAdmin, adminAlerts } = useWorkspace();
   const status = useStatus();
   const pathname = usePathname();
   const [confirmLogout, setConfirmLogout] = useState(false);
@@ -196,6 +196,7 @@ export function Shell({ children }: { children: ReactNode }) {
                 isActive("/admin") ? "bg-accent text-accent-fg" : "text-fg hover:bg-surface-2")}>
               <Icon d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z" className="h-[18px] w-[18px]" />
               <span className="flex-1 truncate">Panel del dueño</span>
+              {adminAlerts > 0 && <span className="rounded-full bg-danger px-1.5 text-xs font-bold text-white">{adminAlerts}</span>}
             </Link>
           )}
         </nav>
@@ -287,6 +288,7 @@ export function Shell({ children }: { children: ReactNode }) {
             {ws.paused_reason ? ` (${ws.paused_reason})` : ""}. Escribinos para reactivarlo.
           </div>
         )}
+        <PlanBanner />
         <InstallBanner />
         {undo.message && <div className="px-safe pt-3">{undo.message}</div>}
         <main className="px-safe pb-tabbar w-full flex-1 pt-4 md:pt-6 print:p-0">{children}</main>
@@ -351,6 +353,14 @@ export function Shell({ children }: { children: ReactNode }) {
                   {m.label}
                 </Link>
               ))}
+              {isPlatformAdmin && (
+                <Link href="/admin"
+                  className={cx("relative flex flex-col items-center gap-1 rounded-xl border border-dashed p-2.5 text-center text-xs font-medium", isActive("/admin") ? "border-accent bg-accent-soft text-accent" : "border-line")}>
+                  <Icon d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z" className="h-6 w-6" />
+                  Panel del dueño
+                  {adminAlerts > 0 && <span className="absolute right-1.5 top-1.5 rounded-full bg-danger px-1.5 text-[10px] font-bold text-white">{adminAlerts}</span>}
+                </Link>
+              )}
             </nav>
             <div className="mt-3 flex flex-col gap-1 border-t border-line pt-3 text-sm">
               <button onClick={() => { setMenuOpen(false); undo.start(); }} className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-left hover:bg-surface-2">
@@ -716,6 +726,41 @@ function InstallButton({ onDone }: { onDone: () => void }) {
         Instalar como app
       </button>
       {showIos && <div className="px-3 pb-2"><IosSteps /></div>}
+    </div>
+  );
+}
+
+/** Avisos del plan de Mi Balneario: vencido (solo lectura), débito rechazado o por vencer. */
+function PlanBanner() {
+  const { plan, role } = useWorkspace();
+  if (!plan || plan.estado === "exenta") return null;
+  const fmt = (d: string | null) => (d ? `${d.slice(8, 10)}/${d.slice(5, 7)}/${d.slice(0, 4)}` : "—");
+  const lastDay = plan.bloquea_desde ? new Date(new Date(plan.bloquea_desde + "T12:00:00Z").getTime() - 86_400_000).toISOString().slice(0, 10) : null;
+  const daysLeft = lastDay ? Math.round((new Date(lastDay + "T12:00:00Z").getTime() - new Date(plan.hoy + "T12:00:00Z").getTime()) / 86_400_000) : null;
+  const action = role === "propietario"
+    ? <Link href="/configuracion#plan" className="ml-2 font-semibold underline">Ver mi plan</Link>
+    : <span className="ml-1">Avisale al propietario del balneario.</span>;
+  let tone: "danger" | "warn" | null = null;
+  let text = "";
+  if (plan.vencido) {
+    tone = "danger";
+    text = `Tu plan de Mi Balneario venció el ${fmt(plan.pago_hasta)}: podés ver y descargar todo, pero no cargar cambios.`;
+  } else if (plan.ultimo_estado === "rechazado" && !plan.debito_automatico) {
+    tone = "warn";
+    text = `Mercado Pago no pudo cobrar tu plan. Si no se regulariza, desde el ${fmt(plan.bloquea_desde)} el sistema queda en solo lectura.`;
+  } else if (plan.ultimo_estado === "rechazado" && daysLeft !== null && daysLeft <= plan.dias_gracia) {
+    tone = "warn";
+    text = `Mercado Pago no pudo cobrar tu plan (lo va a reintentar). Revisá tu tarjeta: desde el ${fmt(plan.bloquea_desde)} el sistema queda en solo lectura.`;
+  } else if (!plan.debito_automatico && daysLeft !== null && daysLeft <= 7) {
+    tone = "warn";
+    text = plan.estado === "pendiente"
+      ? `Activá tu plan antes del ${fmt(plan.bloquea_desde)} para seguir cargando reservas.`
+      : `Tu plan vence el ${fmt(plan.pago_hasta)}. Desde el ${fmt(plan.bloquea_desde)} el sistema queda en solo lectura si no lo renovás.`;
+  }
+  if (!tone) return null;
+  return (
+    <div role="alert" className={cx("px-safe border-b py-2 text-sm print:hidden", tone === "danger" ? "border-danger/40 bg-danger/10" : "border-warn/40 bg-warn-soft")}>
+      {text}{action}
     </div>
   );
 }
