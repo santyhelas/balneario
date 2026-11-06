@@ -199,13 +199,20 @@ for (const [view, opts] of Object.entries(VIEWS)) {
   // ---------- 4. Flujos en la demo (solo en PC) ----------
   if (view === "pc") {
     // a) Nueva reserva de punta a punta
-    const flow = { flujo: "Crear una reserva (cliente existente, 5 días, carpa libre, pagada en efectivo)", pasos: [] };
+    const flow = { flujo: "Crear una reserva (cliente nuevo, 5 días, carpa libre, pagada)", pasos: [] };
     try {
       await page.goto(DEMO + "/reservas/nueva", { waitUntil: "networkidle" });
-      await page.getByLabel("Buscar cliente").fill("a");
-      await page.waitForTimeout(1500);
-      await page.locator("ul li button").first().click();
-      flow.pasos.push("cliente elegido");
+      // Cliente nuevo desde la misma pantalla
+      await page.getByRole("button", { name: "+ Nuevo cliente" }).click();
+      const dlg = page.getByRole("dialog");
+      await dlg.getByLabel("Nombre").fill("Prueba");
+      await dlg.getByLabel("Apellido").fill("Automática");
+      await dlg.getByRole("button", { name: /^Guardar/ }).click();
+      await page.waitForTimeout(2500);
+      const again = page.getByRole("dialog").getByRole("button", { name: "Guardar igual" });
+      if (await again.isVisible().catch(() => false)) await again.click();
+      await page.getByText("Prueba Automática").first().waitFor({ timeout: 15000 });
+      flow.pasos.push("cliente creado y elegido");
       await page.getByRole("button", { name: "5 días" }).click();
       await page.waitForTimeout(2500);
       await page.locator('button[title="Libre toda la estadía"]').first().click();
