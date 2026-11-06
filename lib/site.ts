@@ -9,3 +9,14 @@ export const SITE_WHATSAPP = (process.env.NEXT_PUBLIC_WHATSAPP || "5492645857461
 export const SITE_WHATSAPP_URL = SITE_WHATSAPP
   ? `https://wa.me/${SITE_WHATSAPP}?text=${encodeURIComponent("¡Hola! Quiero un presupuesto del sistema Mi Balneario.")}`
   : "";
+
+/**
+ * Enlace para escribir un mail que funciona aunque la compu no tenga un programa de correo:
+ * abre la ventana de "Redactar" de Gmail en el navegador, con destinatario, asunto y texto.
+ */
+export function gmailCompose(to: string, subject = "", body = ""): string {
+  const p = new URLSearchParams({ view: "cm", fs: "1", to });
+  if (subject) p.set("su", subject);
+  if (body) p.set("body", body);
+  return `https://mail.google.com/mail/?${p.toString()}`;
+}

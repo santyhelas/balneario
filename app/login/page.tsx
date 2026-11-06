@@ -4,7 +4,7 @@ import { getSupabase, setRememberPreference } from "@/lib/supabase/client";
 import { friendlyError } from "@/lib/errors";
 import { Alert, Button, Field, Input, TextField } from "@/components/ui";
 import { GoogleG } from "@/components/google";
-import { SITE_EMAIL } from "@/lib/site";
+import { SITE_EMAIL, gmailCompose } from "@/lib/site";
 import { captchaToken } from "@/components/captcha";
 
 type Mode = "ingresar" | "crear" | "recuperar";
@@ -225,7 +225,7 @@ export default function LoginPage() {
         </div>
         <p className="mt-5 border-t border-line pt-3 text-center text-xs text-muted">
           <a href="/terminos" className="hover:underline">Términos</a> · <a href="/privacidad" className="hover:underline">Privacidad</a>
-          <br />Consultas: <a href={`mailto:${SITE_EMAIL}`} className="text-accent hover:underline">{SITE_EMAIL}</a>
+          <br />Consultas: <a href={gmailCompose(SITE_EMAIL)} target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">{SITE_EMAIL}</a>
         </p>
       </div>
       </div>

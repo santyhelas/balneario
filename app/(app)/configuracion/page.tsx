@@ -4,7 +4,7 @@ import { getSupabase } from "@/lib/supabase/client";
 import { unwrap, useLoader } from "@/lib/data";
 import { friendlyError, isVersionConflict } from "@/lib/errors";
 import { resizeImage } from "@/lib/image";
-import { SITE_EMAIL } from "@/lib/site";
+import { SITE_EMAIL, gmailCompose } from "@/lib/site";
 import { useWorkspace, type ThemePref } from "@/components/workspace";
 import { useStatus } from "@/components/status";
 import { BrandLogo, PageHeader, SyncNotice } from "@/components/shell";
@@ -50,7 +50,7 @@ export default function ConfiguracionPage() {
             <Card title="Ayuda y consultas">
               <p className="text-sm text-muted">
                 ¿Dudas, problemas o sugerencias? Escribinos a{" "}
-                <a href={`mailto:${SITE_EMAIL}`} className="font-medium text-accent hover:underline">{SITE_EMAIL}</a>.
+                <a href={gmailCompose(SITE_EMAIL)} target="_blank" rel="noopener noreferrer" className="font-medium text-accent hover:underline">{SITE_EMAIL}</a>.
               </p>
               {!isGuest && role === "propietario" && (
                 <Button variant="secondary" className="mt-3" onClick={() => startTour("guia")}>Ver la guía de nuevo</Button>

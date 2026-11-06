@@ -87,16 +87,3 @@ export function DemoEndedNotice() {
   );
 }
 
-/** El correo de contacto a la vista, con botón para copiarlo (por si la compu no tiene programa de correo). */
-export function CopyEmail({ email, className }: { email: string; className?: string }) {
-  const [copied, setCopied] = useState(false);
-  return (
-    <span className={cx("inline-flex flex-wrap items-center justify-center gap-2", className)}>
-      <a href={`mailto:${email}`} className="font-semibold underline underline-offset-4">{email}</a>
-      <button type="button" className="rounded-full border border-current px-3 py-0.5 text-xs font-semibold opacity-90 hover:opacity-100"
-        onClick={() => { navigator.clipboard?.writeText(email).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); }, () => undefined); }}>
-        {copied ? "¡Copiado!" : "Copiar"}
-      </button>
-    </span>
-  );
-}

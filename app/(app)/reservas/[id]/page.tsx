@@ -80,7 +80,7 @@ export default function ReservaPage() {
             <Link href={`/reservas/${r.id}/recibo`}><Button variant="secondary">Comprobante</Button></Link>
             {whatsappLink(r.customers.phone, waText) && <WhatsAppSend phone={r.customers.phone} text={waText} label={due > 0 && confirmed && !r.is_courtesy ? "Recordar deuda por WhatsApp" : "WhatsApp"} className="py-2" />}
             {mail && r.customers.email && (
-              <a href={mailtoLink(r.customers.email, mail.subject, mail.body)} title={`Escribir a ${r.customers.email} (el texto se cambia en Configuración → Mensajes)`}
+              <a href={mailtoLink(r.customers.email, mail.subject, mail.body)} target="_blank" rel="noopener noreferrer" title={`Escribir a ${r.customers.email} (el texto se cambia en Configuración → Mensajes)`}
                 className="rounded-lg border border-accent/40 bg-accent-soft px-2.5 py-2 text-sm font-semibold text-accent hover:opacity-90">
                 Enviar correo
               </a>

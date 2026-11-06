@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import "@fontsource-variable/bricolage-grotesque";
 import "@fontsource-variable/figtree";
-import { SITE_EMAIL, SITE_INSTAGRAM, SITE_INSTAGRAM_URL, SITE_URL, SITE_WHATSAPP_URL } from "@/lib/site";
+import { SITE_EMAIL, SITE_INSTAGRAM, SITE_INSTAGRAM_URL, SITE_URL, SITE_WHATSAPP_URL, gmailCompose } from "@/lib/site";
 import { Analytics } from "@vercel/analytics/next";
-import { DemoButton, DemoEndedNotice, LoginLink, MobileMenu, CopyEmail } from "@/components/landing";
+import { DemoButton, DemoEndedNotice, LoginLink, MobileMenu } from "@/components/landing";
 import { DayTimeline, HeroBeach, PhotoStrip, Slider, type DayStep } from "@/components/landing-interactive";
 import "./landing.css";
 
@@ -368,12 +368,11 @@ export default function InicioPage() {
                     <WhatsAppIcon className="h-5 w-5" />Escribinos por WhatsApp
                   </a>
                 )}
-                <a href={`mailto:${SITE_EMAIL}?subject=${encodeURIComponent("Presupuesto Mi Balneario")}`}
+                <a href={gmailCompose(SITE_EMAIL, "Presupuesto Mi Balneario", "¡Hola! Quiero un presupuesto del sistema Mi Balneario.\n\nNombre del balneario:\nCarpas y sombrillas:\nLocalidad:\n")} target="_blank" rel="noopener noreferrer"
                   className="inline-flex items-center gap-2 rounded-full bg-white px-7 py-3 text-base font-bold text-[var(--atl)] hover:bg-[var(--foam)]">
                   <Icon d="M4 6h16v12H4zM4 7l8 6 8-6" />Escribinos por mail
                 </a>
               </div>
-              <p className="mt-5 text-base text-white/90">Nuestro mail: <CopyEmail email={SITE_EMAIL} /></p>
               <p className="mt-6 text-sm text-white/70">Mientras tanto, probá todo en la demo, sin registrarte.</p>
             </div>
           </div>
@@ -406,7 +405,7 @@ export default function InicioPage() {
             <div>
               <h2 className="max-w-xl text-4xl font-extrabold leading-tight sm:text-5xl">¿Lo querés para tu balneario?</h2>
               <p className="mt-3 max-w-md text-white/80">Escribinos y te ayudamos a cargar tus carpas y tus tarifas.</p>
-              <a href={`mailto:${SITE_EMAIL}`} className="mt-5 inline-flex items-center gap-2 text-lg font-bold underline decoration-[var(--sol)] decoration-2 underline-offset-4">
+              <a href={gmailCompose(SITE_EMAIL)} target="_blank" rel="noopener noreferrer" className="mt-5 inline-flex items-center gap-2 text-lg font-bold underline decoration-[var(--sol)] decoration-2 underline-offset-4">
                 <Icon d="M4 6h16v12H4zM4 7l8 6 8-6" />{SITE_EMAIL}
               </a>
               <a href={SITE_INSTAGRAM_URL} target="_blank" rel="noopener noreferrer" className="mt-3 flex w-fit items-center gap-2 text-lg font-bold underline decoration-[var(--sol)] decoration-2 underline-offset-4">
@@ -425,7 +424,7 @@ export default function InicioPage() {
             <LoginLink className="hover:text-white" />
             <a href="/terminos" className="hover:text-white">Términos</a>
             <a href="/privacidad" className="hover:text-white">Privacidad</a>
-            <a href={`mailto:${SITE_EMAIL}`} className="hover:text-white">Contacto</a>
+            <a href={gmailCompose(SITE_EMAIL)} target="_blank" rel="noopener noreferrer" className="hover:text-white">Contacto</a>
             <a href={SITE_INSTAGRAM_URL} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 hover:text-white"><InstagramIcon className="h-4 w-4" />Instagram</a>
           </span>
         </div>

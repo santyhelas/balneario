@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { SITE_EMAIL } from "@/lib/site";
+import { SITE_EMAIL, gmailCompose } from "@/lib/site";
 
 /** Página de texto legal (términos, privacidad). */
 export function LegalPage({ title, updated, children }: { title: string; updated: string; children: ReactNode }) {
@@ -17,7 +17,7 @@ export function LegalPage({ title, updated, children }: { title: string; updated
         <div className="legal mt-8 space-y-4 leading-relaxed [&_h2]:mt-8 [&_h2]:text-xl [&_h2]:font-bold [&_li]:ml-5 [&_li]:list-disc [&_p]:text-[15px]">
           {children}
         </div>
-        <p className="mt-10 border-t border-line pt-4 text-sm text-muted">Consultas: <a className="text-accent hover:underline" href={`mailto:${SITE_EMAIL}`}>{SITE_EMAIL}</a></p>
+        <p className="mt-10 border-t border-line pt-4 text-sm text-muted">Consultas: <a className="text-accent hover:underline" href={gmailCompose(SITE_EMAIL)} target="_blank" rel="noopener noreferrer">{SITE_EMAIL}</a></p>
       </main>
     </div>
   );

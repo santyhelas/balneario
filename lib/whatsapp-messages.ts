@@ -89,8 +89,10 @@ export function mailMessage(d: DebtInfo, templates?: Templates | null): { subjec
   return { subject: fillTemplate(pick("mail_asunto"), vars).replace(/\n/g, " ").trim(), body: fillTemplate(pick("mail_cuerpo"), vars) };
 }
 
+/** Abre "Redactar" de Gmail en el navegador (funciona aunque la compu no tenga programa de correo). */
 export function mailtoLink(email: string, subject: string, body: string): string {
-  return `mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  const p = new URLSearchParams({ view: "cm", fs: "1", to: email, su: subject, body });
+  return `https://mail.google.com/mail/?${p.toString()}`;
 }
 
 /** Recordatorio de saldo, según cuánto falta para que termine la estadía (con el mensaje propio si hay). */

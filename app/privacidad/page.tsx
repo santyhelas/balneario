@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { LegalPage } from "@/components/legal-page";
-import { SITE_EMAIL } from "@/lib/site";
+import { SITE_EMAIL, gmailCompose } from "@/lib/site";
 
 export const metadata: Metadata = { title: "Política de privacidad · Mi Balneario" };
 
@@ -60,7 +60,7 @@ export default function PrivacidadPage() {
       <h2>7. Tus derechos</h2>
       <p>
         Podés pedir acceso, rectificación, actualización o supresión de tus datos escribiendo a{" "}
-        <a className="text-accent hover:underline" href={`mailto:${SITE_EMAIL}`}>{SITE_EMAIL}</a>. Si sos cliente de un balneario,
+        <a className="text-accent hover:underline" href={gmailCompose(SITE_EMAIL)} target="_blank" rel="noopener noreferrer">{SITE_EMAIL}</a>. Si sos cliente de un balneario,
         también podés pedírselo directamente al balneario. El derecho de acceso se puede ejercer en forma gratuita a intervalos no
         inferiores a seis meses, salvo que se acredite un interés legítimo (art. 14, inc. 3, Ley 25.326).
       </p>
