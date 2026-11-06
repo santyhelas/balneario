@@ -7,6 +7,7 @@ import { addDays, formatDate, formatMoney, todayISO } from "@/lib/format";
 import { METHOD_LABEL } from "@/lib/methods";
 import { downloadCsv } from "@/lib/csv";
 import { useWorkspace } from "@/components/workspace";
+import { SeasonCompare } from "@/components/season-compare";
 import { PageHeader, SyncNotice } from "@/components/shell";
 import { Button, Card, EmptyState, Field, Input, Spinner, cx } from "@/components/ui";
 
@@ -238,6 +239,7 @@ export default function ReportesPage() {
           </div>
         </div>
       )}
+      <div className="mt-4"><SeasonCompare /></div>
     </>
   );
 }

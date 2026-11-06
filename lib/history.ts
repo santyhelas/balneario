@@ -32,9 +32,9 @@ export const CATEGORY_LABEL: Record<Category | "cobros", string> = {
 
 /** Tablas del historial de cada categoría. */
 export const CATEGORY_TABLES: Record<Category, string[]> = {
-  reservas: ["reservations", "reservation_segments"],
+  reservas: ["reservations", "reservation_segments", "reservation_extras"],
   clientes: ["customers", "renewal_marks"],
-  tarifas: ["rates", "package_discounts"],
+  tarifas: ["rates", "package_discounts", "extras"],
   convenios: ["agreements"],
   caja: ["cash_sessions"],
   gastos: ["expenses"],
@@ -87,6 +87,7 @@ const FIELDS: Record<string, Record<string, [string, (v: unknown) => string]>> =
   },
   spaces: { code: ["Número", str], active: ["Activa", (v) => (v ? "sí" : "no")], kind: ["Tipo", str] },
   maintenance_blocks: { start_date: ["Desde", date], end_date: ["Hasta", date], reason: ["Motivo", str], active: ["Vigente", (v) => (v ? "sí" : "no")] },
+  extras: { name: ["Nombre", str], price: ["Precio", money], per_day: ["Por día", (v) => (v ? "sí" : "no")], active: ["Se ofrece", (v) => (v ? "sí" : "no")] },
   map_features: { label: ["Texto", str], color: ["Color", str], layer: ["Capa", str] },
   expenses: { amount: ["Importe", money], concept: ["Concepto", str], void_reason: ["Motivo de anulación", str] },
   cash_sessions: { counted_cash: ["Efectivo contado", money], expected_cash: ["Esperado", money], difference: ["Diferencia", money], close_notes: ["Notas", str] },
@@ -94,6 +95,7 @@ const FIELDS: Record<string, Record<string, [string, (v: unknown) => string]>> =
     name: ["Nombre del balneario", str], subtitle: ["Subtítulo", str], latitude: ["Latitud", str], longitude: ["Longitud", str],
     cash_discount_percent: ["Descuento por efectivo", (v) => `${str(v)}%`], timezone: ["Zona horaria", str],
     logo_data: ["Logo", () => "(imagen)"], tent_style: ["Diseño de carpas", () => "(diseño)"],
+    paused_at: ["En pausa", (v) => (v ? "sí" : "no")], paused_reason: ["Motivo de la pausa", str],
   },
 };
 
@@ -156,6 +158,18 @@ export function describeAudit(row: AuditRow, l: Lookups): Described {
         return { category: "reservas", title: `${resName(l, d.reservation_id)}: cambio de ubicación`, href, details: withReason([`Antes: ${what}`]) };
       }
       return null;
+    }
+    case "reservation_extras": {
+      const href = `/reservas/${d.reservation_id}`;
+      const what = `${str(d.description)}${Number(d.quantity) > 1 ? ` × ${str(d.quantity)}` : ""} (${money(d.amount)})`;
+      if (row.action === "alta") return { category: "reservas", title: `${resName(l, d.reservation_id)}: extra agregado`, href, details: [what] };
+      if (!o.voided_at && n.voided_at) return { category: "reservas", title: `${resName(l, d.reservation_id)}: extra anulado`, href, details: [what, n.void_reason ? `Motivo: ${str(n.void_reason)}` : ""].filter(Boolean) };
+      return null;
+    }
+    case "extras": {
+      if (row.action === "alta") return { category: "tarifas", title: `Extra nuevo: ${str(n.name)}`, details: [`${money(n.price)}${n.per_day ? " por día" : " por única vez"}`] };
+      if (changes.length === 0) return null;
+      return { category: "tarifas", title: `Extra modificado: ${str(n.name)}`, details: changes };
     }
     case "customers": {
       const name = `${str(d.first_name)} ${d.last_name ? String(d.last_name) : ""}`.trim();

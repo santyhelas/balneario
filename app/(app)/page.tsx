@@ -25,11 +25,13 @@ const TONE: Record<Tone, { box: string; label: string; value: string }> = {
 const icon = (href: string) => NAV.find((n) => n.href === href)!.icon;
 
 export default function DashboardPage() {
-  const { ws, isGuest } = useWorkspace();
+  const { ws, isGuest, role, guideDone } = useWorkspace();
   const st = useStatus();
   const data = st.summary;
   // En la demo, el pedido de abrir la caja espera a que termine el tutorial.
-  const touring = useTourActive(isGuest);
+  const demoTour = useTourActive(isGuest);
+  const guideTour = useTourActive(!isGuest && role === "propietario", "guia", !guideDone);
+  const touring = demoTour || guideTour;
   const [cash, setCash] = useState<CashSummary | null>(null);
   const [openCash, setOpenCash] = useState(false);
   const [askedToday, setAskedToday] = useState(false);

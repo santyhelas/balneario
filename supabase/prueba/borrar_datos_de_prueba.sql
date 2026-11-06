@@ -46,6 +46,7 @@ begin
   alter table public.reservation_segments disable trigger reservation_segments_guard;
   alter table public.reservation_changes disable trigger reservation_changes_guard;
   alter table public.reservations disable trigger reservations_no_delete;
+  alter table public.reservation_extras disable trigger reservation_extras_guard;
   alter table public.maintenance_blocks disable trigger maintenance_no_delete;
   alter table public.customers disable trigger customers_no_delete;
   alter table public.rates disable trigger rates_no_delete;
@@ -62,6 +63,7 @@ begin
   update public.payments set voids_payment_id = null where id = any(v_pay);
   delete from public.payments where id = any(v_pay);
   delete from public.expenses where id = any(v_exp);
+  delete from public.reservation_extras where reservation_id = any(v_res);
   delete from public.reservation_discounts where reservation_id = any(v_res);
   delete from public.reservation_charges where reservation_id = any(v_res);
   delete from public.reservation_segments where reservation_id = any(v_res);
@@ -93,6 +95,7 @@ begin
   alter table public.reservation_segments enable trigger reservation_segments_guard;
   alter table public.reservation_changes enable trigger reservation_changes_guard;
   alter table public.reservations enable trigger reservations_no_delete;
+  alter table public.reservation_extras enable trigger reservation_extras_guard;
   alter table public.maintenance_blocks enable trigger maintenance_no_delete;
   alter table public.customers enable trigger customers_no_delete;
   alter table public.rates enable trigger rates_no_delete;

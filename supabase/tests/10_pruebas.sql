@@ -887,6 +887,77 @@ select t.ok((select message_templates ->> 'deuda_hoy' from public.workspaces whe
 select t.throws(format($q$update public.workspaces set message_templates = '{"cualquiera": "x"}'::jsonb, version = version + 1 where id = %L$q$, t.get('ws')), 'check', 'Mensajes: solo los mensajes conocidos');
 select t.throws(format($q$update public.workspaces set message_templates = jsonb_build_object('deuda_hoy', repeat('a', 1001)), version = version + 1 where id = %L$q$, t.get('ws')), 'check', 'Mensajes: máximo 1000 letras');
 
+-- 32. Panel del dueño del sistema
+select t.ok(not public.is_platform_admin(), 'Dueño: por defecto nadie es dueño de la plataforma');
+select t.throws($$select public.admin_overview()$$, 'No tenés permiso', 'Dueño: un balneario común no ve el panel');
+select t.throws($$select private.hacer_admin_plataforma('duenio@test.com')$$, 'permission denied', 'Dueño: nadie se hace dueño desde la web');
+reset role;
+select private.hacer_admin_plataforma('DUENIO@test.com');
+set role authenticated;
+select t.ok(public.is_platform_admin(), 'Dueño: se habilita por correo desde el SQL Editor');
+select t.ok((select count(*) from jsonb_array_elements(public.admin_overview() -> 'balnearios') b where (b ->> 'id')::uuid = t.uid('ws') and b ->> 'propietario' = 'duenio@test.com') = 1,
+        'Dueño: ve los balnearios con su propietario');
+select public.admin_allow_signup('Nuevo@Cliente.com', 'Balneario La Ola');
+select t.ok(exists (select 1 from jsonb_array_elements(public.admin_overview() -> 'habilitaciones') h where h ->> 'correo' = 'nuevo@cliente.com' and h ->> 'usado' is null), 'Dueño: habilita un correo nuevo');
+select t.throws($$select public.admin_allow_signup('no-es-correo', null)$$, 'Correo inválido', 'Dueño: valida el correo');
+select public.admin_revoke_signup('nuevo@cliente.com');
+select t.ok(not exists (select 1 from jsonb_array_elements(public.admin_overview() -> 'habilitaciones') h where h ->> 'correo' = 'nuevo@cliente.com'), 'Dueño: quita una habilitación sin usar');
+select t.throws($$select public.admin_revoke_signup('duenio@test.com')$$, 'ya se usó', 'Dueño: no quita una habilitación ya usada');
+
+-- 33. Balneario en pausa
+select t.throws(format($$select public.admin_set_paused(%L, true, '')$$, t.get('ws')), 'motivo', 'Pausa: pide motivo');
+select public.admin_set_paused(t.uid('ws'), true, 'Falta de pago');
+select t.throws(format($$insert into public.customers (workspace_id, first_name) values (%L, 'Pausado')$$, t.get('ws')), 'en pausa', 'Pausa: no se cargan clientes');
+select t.throws(format($$update public.spaces set notes = 'x', version = version + 1 where id = %L$$, t.space('60')), 'en pausa', 'Pausa: no se cambian las carpas');
+select t.ok((select count(*) from public.reservations where workspace_id = t.uid('ws')) > 0, 'Pausa: los datos se siguen viendo');
+select t.ok((public.create_backup(t.uid('ws'), 'manual', 'En pausa') ->> 'backup_id') is not null, 'Pausa: se puede descargar una copia');
+select t.throws(format($$update public.workspaces set paused_at = null where id = %L$$, t.get('ws')), 'permission denied', 'Pausa: el balneario no se saca la pausa solo');
+select public.admin_set_paused(t.uid('ws'), false, null);
+select t.ok((select paused_at is null from public.workspaces where id = t.uid('ws')), 'Pausa: el dueño la saca');
+select set_config('request.jwt.claims', '{"sub":"22222222-2222-2222-2222-222222222222","email":"extranio@test.com"}', false);
+select t.throws(format($$select public.admin_set_paused(%L, true, 'x x x')$$, t.get('ws')), 'No tenés permiso', 'Pausa: otro balneario no puede pausar');
+select set_config('request.jwt.claims', '{"sub":"11111111-1111-1111-1111-111111111111","email":"duenio@test.com"}', false);
+
+-- 34. Extras en reservas
+insert into public.extras (workspace_id, name, price, per_day) values (t.uid('ws'), 'Reposera', 2000, true), (t.uid('ws'), 'Estacionamiento', 5000, false);
+select t.set('xRep', (select id::text from public.extras where workspace_id = t.uid('ws') and name = 'Reposera'));
+select t.set('xEst', (select id::text from public.extras where workspace_id = t.uid('ws') and name = 'Estacionamiento'));
+select t.set('rX', (public.create_reservation_v2(t.uid('ws'), gen_random_uuid(), t.uid('juan'), '2027-03-10', '2027-03-12',
+  jsonb_build_array(jsonb_build_object('space_id', t.space('60'), 'start_date', '2027-03-10', 'end_date', '2027-03-12')),
+  '{"manual_base": 30000}'::jsonb, null, null) ->> 'reservation_id'));
+select t.ok((public.add_reservation_extra(t.uid('rX'), t.uid('xRep'), 2) ->> 'importe')::numeric = 12000, 'Extras: por día = precio × cantidad × días de la estadía (2.000 × 2 × 3)');
+select t.ok((public.add_reservation_extra(t.uid('rX'), t.uid('xEst'), 1, 3) ->> 'importe')::numeric = 5000, 'Extras: un extra por única vez no multiplica días');
+select t.ok((select r.total_amount = 47000 and b.due_amount = 47000 from public.reservations r join public.reservation_balances b on b.reservation_id = r.id where r.id = t.uid('rX')),
+        'Extras: suman al total y a la deuda');
+select t.throws(format($$select public.add_reservation_extra(%L, %L, 1, 9)$$, t.get('rX'), t.get('xRep')), 'de la estadía', 'Extras: no más días que la estadía');
+select t.throws(format($$update public.reservation_extras set amount = 1 where reservation_id = %L$$, t.get('rX')), 'permission denied', 'Extras: no se editan a mano');
+select t.set('lnX', (select id::text from public.reservation_extras where reservation_id = t.uid('rX') and description = 'Estacionamiento'));
+select t.throws(format($$select public.void_reservation_extra(%L, '')$$, t.get('lnX')), 'motivo', 'Extras: anular pide motivo');
+select public.void_reservation_extra(t.uid('lnX'), 'No trajo auto');
+select t.ok((select total_amount = 42000 from public.reservations where id = t.uid('rX'))
+        and exists (select 1 from public.reservation_extras where id = t.uid('lnX') and voided_at is not null), 'Extras: al anular baja el total y el extra queda registrado');
+select t.throws(format($$select public.void_reservation_extra(%L, 'otra vez')$$, t.get('lnX')), 'ya está anulado', 'Extras: no se anula dos veces');
+update public.extras set active = false, version = version + 1 where id = t.uid('xEst');
+select t.throws(format($$select public.add_reservation_extra(%L, %L, 1)$$, t.get('rX'), t.get('xEst')), 'desactivado', 'Extras: uno desactivado no se ofrece');
+select t.set('bkX', (public.create_backup(t.uid('ws'), 'manual', 'Con extras') ->> 'backup_id'));
+select t.ok((select jsonb_array_length(data -> 'reservation_extras') = 2 and jsonb_array_length(data -> 'extras') = 2
+             from public.backups where id = t.uid('bkX')), 'Extras: van en la copia de seguridad', (select (data -> 'extras')::text from public.backups where id = t.uid('bkX')));
+select set_config('request.jwt.claims', '{"sub":"33333333-3333-3333-3333-333333333333","email":"operador@test.com"}', false);
+select t.throws(format($$insert into public.extras (workspace_id, name, price) values (%L, 'Sombrilla extra', 100)$$, t.get('ws')), 'row-level security', 'Extras: el operador no arma el catálogo');
+select t.ok((public.add_reservation_extra(t.uid('rX'), t.uid('xRep'), 1, 1) ->> 'importe')::numeric = 2000, 'Extras: el operador sí carga un extra en una reserva');
+select set_config('request.jwt.claims', '{"sub":"22222222-2222-2222-2222-222222222222","email":"extranio@test.com"}', false);
+select t.ok((select count(*) from public.reservation_extras where workspace_id = t.uid('ws')) = 0, 'Extras: otro balneario no los ve');
+select set_config('request.jwt.claims', '{"sub":"11111111-1111-1111-1111-111111111111","email":"duenio@test.com"}', false);
+
+-- 35. Comparar temporadas
+select t.set('st', public.season_stats(t.uid('ws'), 2026)::text);
+select t.ok(jsonb_array_length(t.get('st')::jsonb -> 'meses') = 12 and t.get('st')::jsonb -> 'meses' -> 0 ->> 'mes' = '2026-07', 'Temporadas: 12 meses de julio a junio');
+select t.ok((select (m ->> 'dias_ocupados')::int >= 3 and (m ->> 'contratado')::numeric >= 44000 from jsonb_array_elements(t.get('st')::jsonb -> 'meses') m where m ->> 'mes' = '2027-03'),
+        'Temporadas: cuenta días ocupados y lo contratado del mes');
+select set_config('request.jwt.claims', '{"sub":"22222222-2222-2222-2222-222222222222","email":"extranio@test.com"}', false);
+select t.throws(format($$select public.season_stats(%L, 2026)$$, t.get('ws')), 'No tenés permiso', 'Temporadas: otro balneario no las ve');
+select set_config('request.jwt.claims', '{"sub":"11111111-1111-1111-1111-111111111111","email":"duenio@test.com"}', false);
+
 reset role;
 \o
 -- Resultado ----------------------------------------------------------

@@ -21,6 +21,9 @@ export type Workspace = {
   logo_data: string | null;
   subtitle: string | null;
   sea_bearing?: number | null;
+  /** En pausa (lo decide el dueño del sistema): se ve todo pero no se cargan cambios. */
+  paused_at?: string | null;
+  paused_reason?: string | null;
   version: number;
 };
 
@@ -41,6 +44,11 @@ type Ctx = {
   setTempUnit: (u: "C" | "F") => Promise<void>;
   reloadWorkspace: () => Promise<void>;
   saveProfile: (p: Partial<{ display_name: string | null; avatar_data: string | null }>) => Promise<void>;
+  /** Ya vio (o salteó) la guía de bienvenida. */
+  guideDone: boolean;
+  setGuideDone: (v: boolean) => Promise<void>;
+  /** Es el dueño de Mi Balneario (ve el panel de todos los balnearios). */
+  isPlatformAdmin: boolean;
 };
 
 const WorkspaceContext = createContext<Ctx | null>(null);
@@ -79,6 +87,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const [theme, setThemeState] = useState<ThemePref>("sistema");
   const [tempUnit, setTempUnitState] = useState<"C" | "F">("C");
   const [profile, setProfile] = useState<Profile>({ displayName: null, avatar: null });
+  const [guideDone, setGuideDoneState] = useState(true);
+  const [isPlatformAdmin, setPlatformAdmin] = useState(false);
 
   const load = useCallback(async () => {
     const sb = getSupabase();
@@ -103,7 +113,10 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       }
 
       // Si la base todavía no tiene la actualización 0010, se piden solo las columnas anteriores.
-      let prefs = await sb.from("user_preferences").select("theme, temperature_unit, display_name, avatar_data").eq("user_id", user.id).maybeSingle();
+      let prefs = await sb.from("user_preferences").select("theme, temperature_unit, display_name, avatar_data, guide_done").eq("user_id", user.id).maybeSingle();
+      if (prefs.error?.code === "42703") {
+        prefs = (await sb.from("user_preferences").select("theme, temperature_unit, display_name, avatar_data").eq("user_id", user.id).maybeSingle()) as typeof prefs;
+      }
       if (prefs.error?.code === "42703") {
         prefs = (await sb.from("user_preferences").select("theme, temperature_unit").eq("user_id", user.id).maybeSingle()) as typeof prefs;
       }
@@ -113,7 +126,9 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         setTempUnitState(prefs.data.temperature_unit as "C" | "F");
         applyTheme(prefs.data.theme as ThemePref);
         setProfile({ displayName: prefs.data.display_name ?? null, avatar: prefs.data.avatar_data ?? null });
+        setGuideDoneState((prefs.data as { guide_done?: boolean }).guide_done !== false);
       }
+      sb.rpc("is_platform_admin").then(({ data }) => setPlatformAdmin(data === true), () => undefined);
 
       type MemberRow = { role: string; workspaces: unknown };
       const memberQuery = async (cols: string) =>
@@ -121,7 +136,10 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
           data: MemberRow | null;
           error: { code?: string; message: string } | null;
         };
-      let mem = await memberQuery("id, name, timezone, latitude, longitude, map_width, map_height, sea_side, logo_data, subtitle, sea_bearing, version");
+      let mem = await memberQuery("id, name, timezone, latitude, longitude, map_width, map_height, sea_side, logo_data, subtitle, sea_bearing, paused_at, paused_reason, version");
+      if (mem.error?.code === "42703") {
+        mem = await memberQuery("id, name, timezone, latitude, longitude, map_width, map_height, sea_side, logo_data, subtitle, sea_bearing, version");
+      }
       if (mem.error?.code === "42703") {
         mem = await memberQuery("id, name, timezone, latitude, longitude, map_width, map_height, sea_side, version");
       }
@@ -149,7 +167,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     load();
   }, [load]);
 
-  const savePrefs = useCallback(async (patch: { theme?: ThemePref; temperature_unit?: "C" | "F"; display_name?: string | null; avatar_data?: string | null }) => {
+  const savePrefs = useCallback(async (patch: { theme?: ThemePref; temperature_unit?: "C" | "F"; display_name?: string | null; avatar_data?: string | null; guide_done?: boolean }) => {
     const sb = getSupabase();
     const { data: auth } = await sb.auth.getUser();
     if (!auth.user) return;
@@ -171,6 +189,11 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       displayName: p.display_name !== undefined ? p.display_name : prev.displayName,
       avatar: p.avatar_data !== undefined ? p.avatar_data : prev.avatar,
     }));
+  }, [savePrefs]);
+
+  const setGuideDone = useCallback(async (v: boolean) => {
+    setGuideDoneState(v);
+    await savePrefs({ guide_done: v });
   }, [savePrefs]);
 
   const setTempUnit = useCallback(async (u: "C" | "F") => {
@@ -220,6 +243,9 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     setTempUnit,
     reloadWorkspace: load,
     saveProfile,
+    guideDone,
+    setGuideDone,
+    isPlatformAdmin,
   };
   return <WorkspaceContext.Provider value={value}>{children}</WorkspaceContext.Provider>;
 }

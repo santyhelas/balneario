@@ -8,6 +8,7 @@ import { friendlyError } from "@/lib/errors";
 import { addDays, formatDate, formatDateTime, formatMoney, inclusiveDays, parseMoney, todayISO } from "@/lib/format";
 import { METHOD_LABEL } from "@/lib/methods";
 import { VoucherList } from "@/components/vouchers";
+import { ReservationExtras } from "@/components/extras";
 import { ArrivalButtons, NoShowPanel } from "@/components/arrival";
 import { debtReminder, receiptMessage } from "@/lib/whatsapp-messages";
 import { WhatsAppSend, useMessageTemplates } from "@/components/whatsapp";
@@ -134,6 +135,10 @@ export default function ReservaPage() {
         <Card title="Precio">
           <div className="flex flex-col gap-1 text-sm">
             {charges.map((c) => <div key={c.id} className="flex justify-between gap-3"><span className="text-muted">{c.description}</span><span className="tabular">{formatMoney(c.amount)}</span></div>)}
+            {(() => {
+              const extras = Math.round((Number(r.list_amount) - charges.reduce((a, c) => a + Number(c.amount), 0)) * 100) / 100;
+              return extras > 0 ? <div className="flex justify-between gap-3"><span className="text-muted">Extras</span><span className="tabular">{formatMoney(extras)}</span></div> : null;
+            })()}
             <div className="flex justify-between border-t border-line pt-1"><span>Precio base</span><span className="tabular">{formatMoney(r.list_amount)}</span></div>
             {discounts.map((d) => (
               <div key={d.id} className="flex justify-between gap-3 text-ok">
@@ -148,6 +153,9 @@ export default function ReservaPage() {
             )}
           </div>
         </Card>
+
+        <ReservationExtras reservationId={r.id} stayDays={inclusiveDays(r.start_date, r.end_date)}
+          editable={confirmed && !r.is_courtesy} onChanged={() => { q.reload(); status.reload(); }} />
 
         <Card title="Pagos" actions={isAdmin && Number(balance.paid_amount) > 0 ? <Button variant="secondary" onClick={() => setModal("devolucion")}>Registrar devolución</Button> : undefined}>
           {payments.length === 0 ? <EmptyState>Sin pagos registrados.</EmptyState> : (

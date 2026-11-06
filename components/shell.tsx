@@ -10,7 +10,7 @@ import { useUndo } from "@/components/undo";
 import { ConfirmDialog, cx } from "@/components/ui";
 import { DayNotes, usePendingNotes } from "@/components/day-notes";
 import { CloseCashModal, OpenCashModal, type CashSummary } from "@/components/cash";
-import { DemoTour, startTour } from "@/components/demo-tour";
+import { DemoTour, Tour, startTour } from "@/components/demo-tour";
 
 type NavItem = { href: string; label: string; icon: string };
 
@@ -77,7 +77,7 @@ function longDate(iso: string, timeZone: string) {
 }
 
 export function Shell({ children }: { children: ReactNode }) {
-  const { ws, email, theme, setTheme, role, profile, isGuest } = useWorkspace();
+  const { ws, email, theme, setTheme, role, profile, isGuest, guideDone, setGuideDone, isPlatformAdmin } = useWorkspace();
   const status = useStatus();
   const pathname = usePathname();
   const [confirmLogout, setConfirmLogout] = useState(false);
@@ -190,6 +190,14 @@ export function Shell({ children }: { children: ReactNode }) {
               </Link>
             );
           })}
+          {isPlatformAdmin && (
+            <Link href="/admin" aria-current={isActive("/admin") ? "page" : undefined}
+              className={cx("mt-2 flex items-center gap-3 rounded-lg border border-dashed border-line px-3 py-2 text-sm font-medium",
+                isActive("/admin") ? "bg-accent text-accent-fg" : "text-fg hover:bg-surface-2")}>
+              <Icon d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z" className="h-[18px] w-[18px]" />
+              <span className="flex-1 truncate">Panel del dueño</span>
+            </Link>
+          )}
         </nav>
         <div className="flex items-center gap-2 border-t border-line px-3 py-2">
           <Link href="/configuracion" className="flex min-w-0 flex-1 items-center gap-2 rounded-lg p-1 hover:bg-surface-2" title={email ?? ""}>
@@ -268,15 +276,23 @@ export function Shell({ children }: { children: ReactNode }) {
           <div data-tour="demo" className="px-safe flex flex-wrap items-center justify-between gap-2 border-b border-amber-300 bg-amber-100 py-2 text-sm text-amber-950 print:hidden dark:border-amber-700/60 dark:bg-amber-900/40 dark:text-amber-100">
             <span><strong>Demo:</strong> es un balneario de prueba con datos inventados. Podés probar todo, pero <strong>nada se guarda</strong>: al salir o cerrar la pestaña se borra.</span>
             <span className="flex gap-2">
-              <button onClick={startTour} className="rounded-lg border border-amber-400 bg-white/60 px-3 py-1 font-semibold hover:bg-white dark:bg-transparent">Ver tutorial</button>
+              <button onClick={() => startTour("demo")} className="rounded-lg border border-amber-400 bg-white/60 px-3 py-1 font-semibold hover:bg-white dark:bg-transparent">Ver tutorial</button>
               <button onClick={() => setConfirmLogout(true)} className="rounded-lg border border-amber-400 bg-white/60 px-3 py-1 font-semibold hover:bg-white dark:bg-transparent">Salir de la demo</button>
             </span>
+          </div>
+        )}
+        {ws.paused_at && (
+          <div role="alert" className="px-safe border-b border-danger/40 bg-danger/10 py-2 text-sm print:hidden">
+            <strong>Balneario en pausa:</strong> podés ver y descargar todo, pero no cargar cambios
+            {ws.paused_reason ? ` (${ws.paused_reason})` : ""}. Escribinos para reactivarlo.
           </div>
         )}
         <InstallBanner />
         {undo.message && <div className="px-safe pt-3">{undo.message}</div>}
         <main className="px-safe pb-tabbar w-full flex-1 pt-4 md:pt-6 print:p-0">{children}</main>
         <DemoTour enabled={isGuest} />
+        <Tour id="guia" enabled={!isGuest && role === "propietario"} unseen={!guideDone} finalLabel="Empezar"
+          onFinish={() => { if (!guideDone) setGuideDone(true).catch(() => undefined); }} />
       </div>
 
       {/* ---------------- Barra inferior (celular) ---------------- */}

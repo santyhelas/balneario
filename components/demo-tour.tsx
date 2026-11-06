@@ -4,13 +4,15 @@ import { usePathname, useRouter } from "next/navigation";
 import { cx } from "@/components/ui";
 
 /**
- * Tutorial de la demo: recorre el sistema paso a paso. En cada paso difumina la pantalla
- * y deja a la vista solo la parte que explica. Solo se muestra en la demo (modo invitado).
+ * Recorridos guiados: difuminan la pantalla y dejan a la vista solo la parte que explican.
+ * - "demo": el tutorial de la demo (modo invitado).
+ * - "guia": la guía de bienvenida para el propietario de un balneario nuevo.
  */
 
-type Step = { path: string; sel: string | null; title: string; text: string };
+export type Step = { path: string; sel: string | null; title: string; text: string };
+export type TourId = "demo" | "guia";
 
-const STEPS: Step[] = [
+const DEMO_STEPS: Step[] = [
   { path: "/", sel: null, title: "Bienvenido a la demo", text: "Es un balneario de prueba con clientes y reservas inventados. Te mostramos para qué sirve cada parte; después podés tocar todo lo que quieras." },
   { path: "/", sel: "panel-stats", title: "Panel del día", text: "Lo primero que ves al entrar: carpas libres y ocupadas hoy, quién llega, quién se va, lo cobrado y lo gastado. Cada recuadro te lleva a su pantalla." },
   { path: "/", sel: "semana", title: "Mañana y la semana", text: "Quién llega, quién se va o cambia de carpa mañana, y la ocupación de los próximos 7 días con el pronóstico. Desde acá le mandás el WhatsApp a quien se va debiendo." },
@@ -31,8 +33,25 @@ const STEPS: Step[] = [
   { path: "/", sel: "demo", title: "¡Listo! Ahora probalo vos", text: "Hacé reservas, cobrá, abrí la caja, mové carpas. Todo se borra al salir de la demo. Podés volver a ver este tutorial con «Ver tutorial»." },
 ];
 
-const KEY_STEP = "bal_tour_paso";
-const KEY_DONE = "bal_tour_visto";
+/** Guía de bienvenida: lo que hay que dejar listo antes de la primera reserva. */
+export const GUIDE_STEPS: Step[] = [
+  { path: "/", sel: null, title: "¡Bienvenido a Mi Balneario!", text: "En un par de minutos te mostramos qué dejar listo para empezar a trabajar. Podés saltearla y volver a verla cuando quieras desde Configuración." },
+  { path: "/mapa", sel: "mapa", title: "1. Armá tu playa", text: "Tocá «Editar» y arrastrá las carpas y sombrillas hasta que el plano quede igual a tu balneario. Desde ahí también agregás, renombrás o desactivás espacios." },
+  { path: "/tarifas", sel: "tarifas", title: "2. Cargá tus precios", text: "El precio por día de cada quincena, para carpas y sombrillas. Con eso el sistema calcula solo el total de cada reserva. Se copian de un mes a otro." },
+  { path: "/configuracion", sel: "config-balneario", title: "3. Tus datos y ubicación", text: "Nombre, logo y la ubicación de tu playa: con ella te mostramos el clima, el viento y el sol en el mapa." },
+  { path: "/configuracion", sel: "config-extras", title: "4. Extras (opcional)", text: "Si cobrás reposeras, estacionamiento, heladera u otra cosa aparte, cargalos acá con su precio. Después los sumás a cada reserva con un toque." },
+  { path: "/configuracion", sel: "config-usuarios", title: "5. Sumá a tu equipo", text: "Invitá a quienes trabajan con vos. Un operador reserva y cobra; un administrador además cambia precios y descuentos." },
+  { path: "/configuracion", sel: "config-mensajes", title: "6. Tus mensajes de WhatsApp", text: "Los recordatorios de deuda salen con este texto. Escribilo como le hablás a tus clientes." },
+  { path: "/caja", sel: "caja", title: "7. La caja de cada día", text: "Cada mañana abrís la caja con el efectivo inicial y a la noche la cerrás contando la plata. El sistema te dice si sobra o falta." },
+  { path: "/", sel: "nueva-reserva", title: "8. Tu primera reserva", text: "Cuando tengas el plano y los precios, tocá acá: elegís cliente, fechas y carpa, y registrás el cobro o la seña." },
+  { path: "/", sel: null, title: "¡Listo para arrancar!", text: "Si te trabás con algo, escribinos por WhatsApp. Para ver esta guía otra vez: Configuración → «Ver la guía de nuevo»." },
+];
+
+const STEPS_BY_ID: Record<TourId, Step[]> = { demo: DEMO_STEPS, guia: GUIDE_STEPS };
+const KEYS: Record<TourId, { step: string; done: string }> = {
+  demo: { step: "bal_tour_paso", done: "bal_tour_visto" },
+  guia: { step: "bal_guia_paso", done: "bal_guia_visto" },
+};
 const EVT = "tutorial-cambio";
 
 const ss = {
@@ -41,23 +60,26 @@ const ss = {
   del: (k: string) => { try { sessionStorage.removeItem(k); } catch { /* sin almacenamiento */ } },
 };
 
-/** Vuelve a empezar el tutorial desde el primer paso. */
-export function startTour() {
-  ss.set(KEY_STEP, "0");
+/** Vuelve a empezar un recorrido desde el primer paso. */
+export function startTour(id: TourId = "demo") {
+  ss.set(KEYS[id].step, "0");
   window.dispatchEvent(new Event(EVT));
 }
 
-/** ¿Está el tutorial en curso (o todavía no se vio)? Para no tapar con otras ventanas. */
-export function useTourActive(enabled: boolean): boolean {
+/** ¿Está el recorrido en curso (o todavía sin ver)? Para no tapar con otras ventanas. */
+export function useTourActive(enabled: boolean, id: TourId = "demo", unseen = true): boolean {
+  const k = KEYS[id];
+  const calc = () => ss.get(k.step) !== null || (unseen && ss.get(k.done) === null);
   // Se calcula desde el primer momento, para que nada se abra encima antes de que empiece.
-  const [active, setActive] = useState(() => enabled && (ss.get(KEY_STEP) !== null || ss.get(KEY_DONE) === null));
+  const [active, setActive] = useState(() => enabled && calc());
   useEffect(() => {
     if (!enabled) { setActive(false); return; }
-    const read = () => setActive(ss.get(KEY_STEP) !== null || ss.get(KEY_DONE) === null);
+    const read = () => setActive(calc());
     read();
     window.addEventListener(EVT, read);
     return () => window.removeEventListener(EVT, read);
-  }, [enabled]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enabled, id, unseen]);
   return active;
 }
 
@@ -73,6 +95,19 @@ function findVisible(tag: string): HTMLElement | null {
 }
 
 export function DemoTour({ enabled }: { enabled: boolean }) {
+  return <Tour id="demo" enabled={enabled} finalLabel="Empezar a probar" />;
+}
+
+/**
+ * @param unseen  si todavía no se vio (arranca solo la primera vez)
+ * @param onFinish al terminar o saltear (por ejemplo, para recordarlo en la cuenta)
+ */
+export function Tour({ id, enabled, unseen = true, onFinish, finalLabel = "Terminar" }: {
+  id: TourId; enabled: boolean; unseen?: boolean; onFinish?: () => void; finalLabel?: string;
+}) {
+  const STEPS = STEPS_BY_ID[id];
+  const KEY_STEP = KEYS[id].step;
+  const KEY_DONE = KEYS[id].done;
   const router = useRouter();
   const pathname = usePathname();
   const [step, setStep] = useState<number | null>(null);
@@ -87,13 +122,13 @@ export function DemoTour({ enabled }: { enabled: boolean }) {
     const read = () => {
       const saved = ss.get(KEY_STEP);
       if (saved !== null) setStep(Math.min(Number(saved) || 0, STEPS.length - 1));
-      else if (ss.get(KEY_DONE) === null) { ss.set(KEY_STEP, "0"); setStep(0); }
+      else if (unseen && ss.get(KEY_DONE) === null) { ss.set(KEY_STEP, "0"); setStep(0); }
       else setStep(null);
     };
     const t = setTimeout(read, 600);
     window.addEventListener(EVT, read);
     return () => { clearTimeout(t); window.removeEventListener(EVT, read); };
-  }, [enabled]);
+  }, [enabled, unseen, KEY_STEP, KEY_DONE, STEPS.length]);
 
   const finish = useCallback(() => {
     ss.del(KEY_STEP);
@@ -101,14 +136,15 @@ export function DemoTour({ enabled }: { enabled: boolean }) {
     setStep(null);
     setRect(null);
     window.dispatchEvent(new Event(EVT));
-  }, []);
+    onFinish?.();
+  }, [KEY_STEP, KEY_DONE, onFinish]);
 
   const go = useCallback((n: number) => {
     if (n < 0) return;
     if (n >= STEPS.length) return finish();
     ss.set(KEY_STEP, String(n));
     setStep(n);
-  }, [finish]);
+  }, [finish, STEPS.length, KEY_STEP]);
 
   // Lleva a la pantalla del paso y busca la parte a mostrar.
   useEffect(() => {
@@ -135,7 +171,7 @@ export function DemoTour({ enabled }: { enabled: boolean }) {
       }
     }, 150);
     return () => clearInterval(id);
-  }, [step, pathname, router]);
+  }, [step, pathname, router, STEPS]);
 
   // Sigue a la parte resaltada si la pantalla se mueve o cambia de tamaño.
   useEffect(() => {
@@ -213,7 +249,7 @@ export function DemoTour({ enabled }: { enabled: boolean }) {
         style={cardPos ?? undefined}>
         <div className="mb-2 flex items-center justify-between gap-3">
           <span className="text-xs font-semibold text-muted">Paso {step + 1} de {STEPS.length}</span>
-          <button onClick={finish} className="text-xs font-medium text-muted hover:text-fg">Saltar tutorial</button>
+          <button onClick={finish} className="text-xs font-medium text-muted hover:text-fg">{id === "demo" ? "Saltar tutorial" : "Saltear guía"}</button>
         </div>
         <div className="mb-3 h-1.5 overflow-hidden rounded-full bg-surface-2" aria-hidden>
           <div className="h-full rounded-full bg-accent transition-all" style={{ width: `${((step + 1) / STEPS.length) * 100}%` }} />
@@ -225,7 +261,7 @@ export function DemoTour({ enabled }: { enabled: boolean }) {
             className="rounded-lg border border-line px-3 py-2 text-sm font-semibold hover:bg-surface-2 disabled:opacity-40">Anterior</button>
           <button onClick={() => go(step + 1)} autoFocus
             className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-accent-fg hover:opacity-90">
-            {step === STEPS.length - 1 ? "Empezar a probar" : "Siguiente"}
+            {step === STEPS.length - 1 ? finalLabel : "Siguiente"}
           </button>
         </div>
       </div>

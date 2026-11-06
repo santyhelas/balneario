@@ -12,13 +12,15 @@ import { Alert, Badge, Button, Card, Field, Select, Spinner, TextField } from "@
 import { LinkedAccountsCard } from "@/components/linked-accounts";
 import { MyUsernameField, UsersCard } from "@/components/users";
 import { LocationPicker } from "@/components/location-picker";
+import { ExtrasCard } from "@/components/extras";
+import { startTour } from "@/components/demo-tour";
 import { DEBT_CASES, DEFAULT_TEMPLATES, PLACEHOLDERS, debtVars, fillTemplate, type DebtCase, type Templates } from "@/lib/whatsapp-messages";
 
 type WsRow = { name: string; subtitle: string | null; logo_data: string | null; legal_id: string | null; phone: string | null; address: string | null; latitude: number | null; longitude: number | null; version: number };
 type Member = { user_id: string; role: string; email: string | null; created_at: string };
 
 export default function ConfiguracionPage() {
-  const { ws, isAdmin, reloadWorkspace, isGuest } = useWorkspace();
+  const { ws, isAdmin, reloadWorkspace, isGuest, role } = useWorkspace();
   const sb = getSupabase();
   const q = useLoader(async () => {
     const row = unwrap(await sb.from("workspaces").select("name, subtitle, logo_data, legal_id, phone, address, latitude, longitude, version").eq("id", ws.id).single()) as WsRow;
@@ -35,16 +37,20 @@ export default function ConfiguracionPage() {
           <div className="flex flex-col gap-4">
           <BalnearioCard key={q.data.row.version} row={q.data.row} editable={isAdmin} onSaved={async () => { await reloadWorkspace(); q.reload(); }} onConflict={q.reload} />
           <MessagesCard key={`m${q.data.row.version}`} editable={isAdmin} onSaved={q.reload} />
+          <ExtrasCard />
           </div>
           <div className="flex flex-col gap-4">
             <ProfileCard />
             {!isGuest && <LinkedAccountsCard />}
-            {!isGuest && <UsersCard />}
+            {!isGuest && <div data-tour="config-usuarios"><UsersCard /></div>}
             <Card title="Ayuda y consultas">
               <p className="text-sm text-muted">
                 ¿Dudas, problemas o sugerencias? Escribinos a{" "}
                 <a href={`mailto:${SITE_EMAIL}`} className="font-medium text-accent hover:underline">{SITE_EMAIL}</a>.
               </p>
+              {!isGuest && role === "propietario" && (
+                <Button variant="secondary" className="mt-3" onClick={() => startTour("guia")}>Ver la guía de nuevo</Button>
+              )}
             </Card>
           </div>
         </div>
@@ -131,7 +137,7 @@ function BalnearioCard({ row, editable, onSaved, onConflict }: { row: WsRow; edi
   }
 
   return (
-    <Card title="Balneario">
+    <Card title="Balneario" tour="config-balneario">
       <form onSubmit={submit} className="flex flex-col gap-3">
         <div className="flex items-center gap-3 rounded-xl bg-surface-2 p-3">
           <BrandLogo ws={{ ...ws, logo_data: logo, name }} className="h-12 w-12" />
@@ -306,7 +312,7 @@ function MessagesCard({ editable, onSaved }: { editable: boolean; onSaved: () =>
   const info = DEBT_CASES.find((c) => c.key === tab)!;
   return (
     <section id="mensajes" className="scroll-mt-20">
-      <Card title="Mensajes de WhatsApp: recordatorio de deuda">
+      <Card title="Mensajes de WhatsApp: recordatorio de deuda" tour="config-mensajes">
         <div className="mb-2 flex flex-wrap gap-1">
           {DEBT_CASES.map((c) => (
             <button key={c.key} type="button" onClick={() => setTab(c.key)}
