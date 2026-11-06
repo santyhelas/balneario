@@ -64,3 +64,10 @@ test("mensajes: datos nuevos (total, seña, apellido) y correo", async () => {
   assert.equal(m.body, "Hola Ana");
   assert.match(mailMessage(d).subject, /#7 en La Ola/);
 });
+
+test("correo: abre el correo que usa el balneario", async () => {
+  const { mailtoLink } = await import("./whatsapp-messages.ts");
+  assert.match(mailtoLink("a@b.com", "Hola", "Texto"), /^https:\/\/mail\.google\.com\/mail\/\?view=cm&fs=1&to=a%40b\.com&su=Hola&body=Texto$/);
+  assert.match(mailtoLink("a@b.com", "Hola", "Texto", "outlook"), /^https:\/\/outlook\.live\.com\/mail\/0\/deeplink\/compose\?to=a%40b\.com&subject=Hola&body=Texto$/);
+  assert.match(mailtoLink("a@b.com", "Hola", "Texto", "app"), /^mailto:a%40b\.com\?subject=Hola&body=Texto$/);
+});

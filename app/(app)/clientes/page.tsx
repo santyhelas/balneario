@@ -7,7 +7,7 @@ import { exportCustomersXlsx } from "@/lib/customers-export";
 import { METHOD_LABEL } from "@/lib/methods";
 import { seasonOf } from "@/lib/history";
 import { whatsappLink } from "@/lib/reservations";
-import { mailtoLink } from "@/lib/whatsapp-messages";
+import { MailButton } from "@/components/whatsapp";
 import { useWorkspace } from "@/components/workspace";
 import { PageHeader, SyncNotice } from "@/components/shell";
 import { Alert, Badge, Button, Card, EmptyState, Input, Spinner, cx } from "@/components/ui";
@@ -161,7 +161,7 @@ function CustomerDetail({ customer, onEdit }: { customer: Customer; onEdit: () =
     >
       <dl className="mb-4 grid grid-cols-2 gap-2 text-sm">
         <div><dt className="text-xs text-muted">Teléfono</dt><dd>{customer.phone ? <a className="text-accent underline" href={`tel:${customer.phone.replace(/[^\d+]/g, "")}`}>{customer.phone}</a> : "—"}</dd></div>
-        <div><dt className="text-xs text-muted">Correo</dt><dd className="truncate">{customer.email ? <a className="text-accent underline" href={mailtoLink(customer.email, ws.name, "")} target="_blank" rel="noopener noreferrer">{customer.email}</a> : "—"}</dd></div>
+        <div><dt className="text-xs text-muted">Correo</dt><dd className="truncate">{customer.email ? <span>{customer.email}</span> : "—"}</dd></div>
         {customer.locality && <div><dt className="text-xs text-muted">Localidad</dt><dd>{customer.locality}</dd></div>}
         {customer.other_contact && <div className="col-span-2"><dt className="text-xs text-muted">Otro contacto</dt><dd>{customer.other_contact}</dd></div>}
         {customer.notes && <div className="col-span-2"><dt className="text-xs text-muted">Observaciones</dt><dd className="whitespace-pre-wrap">{customer.notes}</dd></div>}
@@ -180,12 +180,7 @@ function CustomerDetail({ customer, onEdit }: { customer: Customer; onEdit: () =
               Llamar
             </a>
           )}
-          {customer.email && (
-            <a href={mailtoLink(customer.email, ws.name, `¡Hola ${customer.first_name}!\n\n`)} target="_blank" rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 rounded-lg border border-accent/40 bg-accent-soft px-3 py-1.5 text-sm font-semibold text-accent hover:opacity-90">
-              Enviar correo
-            </a>
-          )}
+          {customer.email && <MailButton email={customer.email} subject={ws.name} body={`¡Hola ${customer.first_name}!\n\n`} />}
         </div>
       )}
 

@@ -10,8 +10,8 @@ import { METHOD_LABEL } from "@/lib/methods";
 import { VoucherList } from "@/components/vouchers";
 import { ReservationExtras } from "@/components/extras";
 import { ArrivalButtons, NoShowPanel } from "@/components/arrival";
-import { debtReminder, mailMessage, mailtoLink, receiptMessage } from "@/lib/whatsapp-messages";
-import { WhatsAppSend, useMessageTemplates } from "@/components/whatsapp";
+import { debtReminder, mailMessage, receiptMessage } from "@/lib/whatsapp-messages";
+import { MailButton, WhatsAppSend, useMessageTemplates } from "@/components/whatsapp";
 import { loadReservation, spacesSummary, whatsappLink, type Full, type PaymentRow } from "@/lib/reservations";
 import { daysOf, indexGrid, isFreeFor, type GridRow } from "@/lib/stay";
 import { useWorkspace } from "@/components/workspace";
@@ -79,12 +79,7 @@ export default function ReservaPage() {
             {confirmed && r.end_date >= today && <Button variant="secondary" onClick={() => setModal("reubicar")}>Cambiar de carpa</Button>}
             <Link href={`/reservas/${r.id}/recibo`}><Button variant="secondary">Comprobante</Button></Link>
             {whatsappLink(r.customers.phone, waText) && <WhatsAppSend phone={r.customers.phone} text={waText} label={due > 0 && confirmed && !r.is_courtesy ? "Recordar deuda por WhatsApp" : "WhatsApp"} className="py-2" />}
-            {mail && r.customers.email && (
-              <a href={mailtoLink(r.customers.email, mail.subject, mail.body)} target="_blank" rel="noopener noreferrer" title={`Escribir a ${r.customers.email} (el texto se cambia en Configuración → Mensajes)`}
-                className="rounded-lg border border-accent/40 bg-accent-soft px-2.5 py-2 text-sm font-semibold text-accent hover:opacity-90">
-                Enviar correo
-              </a>
-            )}
+            {mail && r.customers.email && <MailButton email={r.customers.email} subject={mail.subject} body={mail.body} className="py-2" />}
             {whatsappLink(r.customers.phone, receiptText) && <WhatsAppSend phone={r.customers.phone} text={receiptText} label="Comprobante por WhatsApp" title="Mandar el comprobante con el detalle de pagos" className="py-2" />}
             {confirmed && <Button variant="danger" onClick={() => setModal("cancelar")}>Cancelar reserva</Button>}
           </>

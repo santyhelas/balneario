@@ -89,10 +89,25 @@ export function mailMessage(d: DebtInfo, templates?: Templates | null): { subjec
   return { subject: fillTemplate(pick("mail_asunto"), vars).replace(/\n/g, " ").trim(), body: fillTemplate(pick("mail_cuerpo"), vars) };
 }
 
-/** Abre "Redactar" de Gmail en el navegador (funciona aunque la compu no tenga programa de correo). */
-export function mailtoLink(email: string, subject: string, body: string): string {
-  const p = new URLSearchParams({ view: "cm", fs: "1", to: email, su: subject, body });
-  return `https://mail.google.com/mail/?${p.toString()}`;
+export type MailProvider = "gmail" | "outlook" | "office365" | "yahoo" | "app";
+export const MAIL_PROVIDERS: { key: MailProvider; label: string }[] = [
+  { key: "gmail", label: "Gmail" },
+  { key: "outlook", label: "Outlook / Hotmail" },
+  { key: "office365", label: "Outlook de empresa (Microsoft 365)" },
+  { key: "yahoo", label: "Yahoo" },
+  { key: "app", label: "El programa de correo de la compu" },
+];
+
+/** Enlace que abre la ventana de "Redactar" del correo que usa el balneario, con el mail del cliente, asunto y texto. */
+export function mailtoLink(email: string, subject: string, body: string, provider: MailProvider = "gmail"): string {
+  const q = (o: Record<string, string>) => new URLSearchParams(o).toString();
+  switch (provider) {
+    case "outlook": return `https://outlook.live.com/mail/0/deeplink/compose?${q({ to: email, subject, body })}`;
+    case "office365": return `https://outlook.office.com/mail/deeplink/compose?${q({ to: email, subject, body })}`;
+    case "yahoo": return `https://compose.mail.yahoo.com/?${q({ to: email, subject, body })}`;
+    case "app": return `mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    default: return `https://mail.google.com/mail/?${q({ view: "cm", fs: "1", to: email, su: subject, body })}`;
+  }
 }
 
 /** Recordatorio de saldo, según cuánto falta para que termine la estadía (con el mensaje propio si hay). */

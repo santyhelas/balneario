@@ -16,7 +16,7 @@ import { ExtrasCard } from "@/components/extras";
 import { PlanCard } from "@/components/plan-card";
 import { RulesCard } from "@/components/rules-card";
 import { startTour } from "@/components/demo-tour";
-import { DEBT_CASES, DEFAULT_MAIL, DEFAULT_TEMPLATES, PLACEHOLDERS, debtVars, fillTemplate, type DebtCase, type MailKey, type Templates } from "@/lib/whatsapp-messages";
+import { DEBT_CASES, DEFAULT_MAIL, DEFAULT_TEMPLATES, MAIL_PROVIDERS, PLACEHOLDERS, debtVars, fillTemplate, type DebtCase, type MailKey, type MailProvider, type Templates } from "@/lib/whatsapp-messages";
 
 type WsRow = { name: string; subtitle: string | null; logo_data: string | null; legal_id: string | null; phone: string | null; address: string | null; latitude: number | null; longitude: number | null; version: number };
 type Member = { user_id: string; role: string; email: string | null; created_at: string };
@@ -257,10 +257,11 @@ function MessagesCard({ editable, onSaved }: { editable: boolean; onSaved: () =>
   const { ws } = useWorkspace();
   const sb = getSupabase();
   const q = useLoader(async () => {
-    const res = await sb.from("workspaces").select("message_templates, version").eq("id", ws.id).single();
-    if (res.error) return { missing: true, templates: {} as Templates, version: 0 };
-    const row = res.data as { message_templates: Templates | null; version: number };
-    return { missing: false, templates: row.message_templates ?? {}, version: row.version };
+    let res = await sb.from("workspaces").select("message_templates, mail_provider, version").eq("id", ws.id).single();
+    if (res.error?.code === "42703") res = (await sb.from("workspaces").select("message_templates, version").eq("id", ws.id).single()) as typeof res;
+    if (res.error) return { missing: true, templates: {} as Templates, version: 0, provider: null as MailProvider | null };
+    const row = res.data as { message_templates: Templates | null; mail_provider?: MailProvider; version: number };
+    return { missing: false, templates: row.message_templates ?? {}, version: row.version, provider: row.mail_provider ?? null };
   }, [ws.id], 0);
   type Key = DebtCase | MailKey;
   type Tab = DebtCase | "mail";
@@ -343,6 +344,29 @@ function MessagesCard({ editable, onSaved }: { editable: boolean; onSaved: () =>
           </button>
         </div>
         <p className="mb-2 text-xs text-muted">{isMail ? info.help : `WhatsApp · recordatorio de deuda. ${info.help}`}</p>
+        {isMail && (
+          <label className="mb-3 flex flex-col gap-1 text-sm font-medium">¿Con qué correo trabaja el balneario?
+            {q.data.provider === null ? (
+              <span className="text-xs font-normal text-muted">Para elegirlo hay que aplicar la actualización 0035 (mientras tanto se abre Gmail).</span>
+            ) : (
+              <select value={q.data.provider} disabled={!editable || busy}
+                onChange={async (e) => {
+                  setBusy(true);
+                  setMsg(null);
+                  const { error } = await sb.from("workspaces").update({ mail_provider: e.target.value, version: q.data!.version + 1 }).eq("id", ws.id).select("id").single();
+                  setBusy(false);
+                  if (error) { setMsg({ tone: "danger", text: friendlyError(error) }); return; }
+                  setMsg({ tone: "ok", text: "Listo: «Enviar correo» abre ese correo con el mail del cliente ya puesto." });
+                  window.dispatchEvent(new Event("plantillas-cambiaron"));
+                  onSaved();
+                }}
+                className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm font-normal text-fg">
+                {MAIL_PROVIDERS.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}
+              </select>
+            )}
+            <span className="text-xs font-normal text-muted">Al tocar «Enviar correo» se abre la ventana para escribir en ese correo, con el mail del cliente, el asunto y el texto ya puestos.</span>
+          </label>
+        )}
         {isMail && (
           <label className="mb-2 flex flex-col gap-1 text-sm font-medium">Asunto
             <input ref={subjectRef} value={draft.mail_asunto} onFocus={() => { lastField.current = "subject"; }} maxLength={200} disabled={!editable}
