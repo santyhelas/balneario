@@ -8,8 +8,8 @@ import { cx } from "@/components/ui";
 export type Weather = {
   /** Estado de la conexión con OpenWeather. */
   openweather?: "sin_clave" | "clave_no_activa" | "error" | "ok";
-  /** Medición real del SMN (si hay una de las últimas 3 horas cerca del balneario). */
-  medido?: { fuente?: "OpenWeather" | "SMN"; estacion: string; hora: string; distancia_km: number; cielo: string | null } | null;
+  /** Clima actual de OpenWeather (si hay un dato reciente). */
+  medido?: { fuente?: "OpenWeather"; estacion: string; hora: string; distancia_km: number; cielo: string | null } | null;
   fuente: string;
   actualizado: string;
   hora_dato: string;
@@ -19,7 +19,7 @@ export type Weather = {
   rafagas_kmh: number | null;
   viento_desde: number | null;
   /** De dónde sale el viento que se muestra y de qué hora es. */
-  viento_fuente?: { fuente: "SMN" | "OpenWeather" | "Pronóstico"; hora: string; lugar: string | null; distancia_km: number };
+  viento_fuente?: { fuente: "OpenWeather" | "Pronóstico"; hora: string; lugar: string | null; distancia_km: number };
   simbolo: string | null;
   lluvia_1h_mm: number | null;
   lluvia_1h_prob: number | null;
@@ -247,19 +247,15 @@ export function WeatherStrip({ className }: { className?: string }) {
           <span className={cx(stale && "text-danger")}>
             {stale ? "No se pudo actualizar · " : ""}
             {d.medido
-              ? d.medido.fuente === "OpenWeather"
-                ? `Clima actual de las ${hhmm(d.medido.hora, ws.timezone)}`
-                : `Medido a las ${hhmm(d.medido.hora, ws.timezone)} en ${d.medido.estacion}${d.medido.distancia_km > 15 ? ` (a ${d.medido.distancia_km} km)` : ""}`
+              ? `Clima actual de las ${hhmm(d.medido.hora, ws.timezone)}`
               : `Pronóstico para las ${hhmm(d.hora_dato, ws.timezone)} (calculado ${hhmm(d.actualizado, ws.timezone)})`}
             {w.fetchedAt ? ` · revisado ${hhmm(w.fetchedAt.toISOString(), ws.timezone)}` : ""}
           </span>
           {d.openweather === "clave_no_activa" && <span className="text-warn">OpenWeather: la clave todavía no está activa (puede tardar hasta 2 horas)</span>}
           {d.openweather === "sin_clave" && <span>OpenWeather: falta cargar la clave en Vercel</span>}
-          {d.openweather === "error" && <span className="text-warn">OpenWeather no responde; se usa el SMN</span>}
+          {d.openweather === "error" && <span className="text-warn">OpenWeather no responde; se muestra el pronóstico</span>}
           <span>
-            {d.medido?.fuente === "OpenWeather"
-              ? <><a href="https://openweathermap.org/" target="_blank" rel="noopener noreferrer" className="hover:underline">Weather data © OpenWeather</a> · </>
-              : d.medido && <><a href="https://www.smn.gob.ar/" target="_blank" rel="noopener noreferrer" className="hover:underline">Medición: SMN</a> · </>}
+            {d.medido && <><a href="https://openweathermap.org/" target="_blank" rel="noopener noreferrer" className="hover:underline">Weather data © OpenWeather</a> · </>}
             <a href="https://www.met.no/en" target="_blank" rel="noopener noreferrer" className="hover:underline">{d.medido ? "Pronóstico" : "Datos"}: MET Norway (CC BY 4.0)</a>
           </span>
         </div>
@@ -269,7 +265,6 @@ export function WeatherStrip({ className }: { className?: string }) {
 }
 
 function windSourceText(f: NonNullable<Weather["viento_fuente"]>, tz: string) {
-  if (f.fuente === "SMN") return `Viento medido a las ${hhmm(f.hora, tz)} en ${f.lugar}${f.distancia_km > 15 ? ` (a ${f.distancia_km} km)` : ""} · SMN`;
   if (f.fuente === "OpenWeather") return `Viento de las ${hhmm(f.hora, tz)} · OpenWeather`;
   return `Viento pronosticado para las ${hhmm(f.hora, tz)} · MET Norway`;
 }

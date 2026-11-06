@@ -1,5 +1,4 @@
 import { json } from "@/lib/auth-server";
-import { parseTiepre, unzipFirst, type Observacion } from "@/lib/smn";
 import { parseOw, type Ahora, type OwCurrent } from "@/lib/openweather";
 
 // Clima de la ubicación del balneario, desde MET Norway (Instituto Meteorológico de Noruega).
@@ -49,23 +48,6 @@ async function getForecast(url: string): Promise<MetBody> {
   return body;
 }
 
-// Mediciones reales del SMN (se publican cada hora). Se guardan 10 minutos.
-let smnCache: { at: number; text: string } | null = null;
-async function getSmnText(): Promise<string | null> {
-  if (smnCache && Date.now() - smnCache.at < 10 * 60_000) return smnCache.text;
-  try {
-    const res = await fetch("https://ssl.smn.gob.ar/dpd/zipopendata.php?dato=tiepre", {
-      headers: { "User-Agent": "BalnearioGestion/1.0" }, cache: "no-store", signal: AbortSignal.timeout(10_000),
-    });
-    if (!res.ok) return smnCache?.text ?? null;
-    const raw = unzipFirst(Buffer.from(await res.arrayBuffer()));
-    if (!raw) return smnCache?.text ?? null;
-    smnCache = { at: Date.now(), text: new TextDecoder("latin1").decode(raw) };
-    return smnCache.text;
-  } catch {
-    return smnCache?.text ?? null;
-  }
-}
 
 // OpenWeather: clima actual cada ~10 minutos. Se consulta como máximo una vez por minuto.
 const owCache = new Map<string, { at: number; data: Ahora | null }>();
@@ -106,22 +88,6 @@ function owWindStuck(k: string, a: Ahora): boolean {
   return Date.now() - prev.since > 2 * 3600_000;
 }
 
-/** Estado del cielo del SMN → código de ícono (mismo formato que MET Norway). */
-function skyToSymbol(cielo: string | null, hourLocal: number): string | null {
-  if (!cielo) return null;
-  const c = cielo.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-  const dn = hourLocal >= 7 && hourLocal < 20 ? "_day" : "_night";
-  if (c.includes("tormenta")) return "rainandthunder";
-  if (c.includes("chaparr")) return "rainshowers" + dn;
-  if (c.includes("llovizna")) return "lightrain";
-  if (c.includes("lluvia")) return "rain";
-  if (c.includes("niebla") || c.includes("neblina")) return "fog";
-  if (c.includes("despejado")) return "clearsky" + dn;
-  if (c.includes("algo nublado")) return "fair" + dn;
-  if (c.includes("parcialmente")) return "partlycloudy" + dn;
-  if (c.includes("nublado") || c.includes("cubierto")) return "cloudy";
-  return null;
-}
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
@@ -132,17 +98,11 @@ export async function GET(req: Request) {
   }
   const url = `https://api.met.no/weatherapi/locationforecast/2.0/complete?lat=${lat.toFixed(4)}&lon=${lon.toFixed(4)}`;
   let body: MetBody;
-  let medido: Observacion | null = null;
   let ow: Ahora | null = null;
   try {
-    const [forecast, smnText, owData] = await Promise.all([getForecast(url), getSmnText(), getOpenWeather(lat, lon)]);
+    const [forecast, owData] = await Promise.all([getForecast(url), getOpenWeather(lat, lon)]);
     body = forecast;
     ow = owData && Date.now() - Date.parse(owData.hora) < 60 * 60_000 ? owData : null;
-    medido = smnText ? parseTiepre(smnText, lat, lon) : null;
-    // Una medición de hace más de 3 horas ya no sirve como "ahora".
-    if (medido && Date.now() - Date.parse(medido.hora) > 3 * 3600_000) medido = null;
-    // Si la medición del SMN es más nueva que el dato de OpenWeather, manda el SMN.
-    if (ow && medido && Date.parse(medido.hora) > Date.parse(ow.hora) + 5 * 60_000) ow = null;
   } catch (e) {
     return json({ error: e instanceof Error ? e.message : "El servicio del clima no responde en este momento." }, 502);
   }
@@ -195,7 +155,7 @@ export async function GET(req: Request) {
     lluvia_mm: Math.round(v.rain * 10) / 10, prob: v.prob, viento_max: v.wind, simbolo: v.symbol,
   }));
 
-  // Si hay medición real del SMN, manda para "ahora"; el pronóstico queda para lluvia y próximas horas.
+  // "Ahora": OpenWeather si hay dato reciente; si no, el pronóstico. El pronóstico queda para lluvia y próximas horas.
   const fc = {
     temperatura: d.air_temperature ?? null,
     humedad: d.relative_humidity ?? null,
@@ -203,8 +163,6 @@ export async function GET(req: Request) {
     viento_desde: d.wind_from_direction ?? null,
     simbolo: n1?.summary.symbol_code ?? n6?.summary.symbol_code ?? null,
   };
-  const hourLocal = medido ? Number(medido.hora.slice(11, 13)) : 12;
-  // Prioridad para "ahora": OpenWeather (cada ~10 min) → medición del SMN (cada hora) → pronóstico.
   const now_ = ow
     ? {
         temperatura: ow.temperatura,
@@ -213,24 +171,11 @@ export async function GET(req: Request) {
         viento_desde: ow.viento_kmh === 0 ? null : ow.viento_desde ?? fc.viento_desde,
         simbolo: ow.simbolo ?? fc.simbolo,
       }
-    : medido
-    ? {
-        temperatura: medido.temperatura ?? fc.temperatura,
-        humedad: medido.humedad ?? fc.humedad,
-        viento_kmh: medido.viento_kmh ?? fc.viento_kmh,
-        viento_desde: medido.viento_kmh === 0 ? null : medido.viento_desde ?? fc.viento_desde,
-        simbolo: skyToSymbol(medido.cielo, hourLocal) ?? fc.simbolo,
-      }
     : fc;
 
-  // Viento: primero una estación real del SMN cercana y reciente (mide de verdad, cada hora);
-  // si no hay, OpenWeather (salvo que su viento esté congelado); si tampoco, el pronóstico.
-  const smnWindOk = medido && medido.viento_kmh != null && medido.distancia_km <= 60 && Date.now() - Date.parse(medido.hora) < 2 * 3600_000;
+  // Viento: OpenWeather (salvo que su viento esté congelado); si no, el pronóstico.
   const owWindOk = ow && ow.viento_kmh != null && !owWindStuck(`${lat.toFixed(3)},${lon.toFixed(3)}`, ow);
-  const wind = smnWindOk
-    ? { viento_kmh: medido!.viento_kmh, viento_desde: medido!.viento_kmh === 0 ? null : medido!.viento_desde, rafagas_kmh: null as number | null,
-        viento_fuente: { fuente: "SMN", hora: medido!.hora, lugar: medido!.estacion, distancia_km: medido!.distancia_km } }
-    : owWindOk
+  const wind = owWindOk
     ? { viento_kmh: ow!.viento_kmh, viento_desde: ow!.viento_kmh === 0 ? null : ow!.viento_desde, rafagas_kmh: ow!.rafagas_kmh,
         viento_fuente: { fuente: "OpenWeather", hora: ow!.hora, lugar: ow!.lugar, distancia_km: 0 } }
     : { viento_kmh: fc.viento_kmh, viento_desde: fc.viento_desde, rafagas_kmh: kmh(d.wind_speed_of_gust),
@@ -240,12 +185,11 @@ export async function GET(req: Request) {
     openweather: owStatus,
     medido: ow
       ? { fuente: "OpenWeather", estacion: ow.lugar ?? "la zona del balneario", hora: ow.hora, distancia_km: 0, cielo: ow.cielo }
-      : medido && { fuente: "SMN", estacion: medido.estacion, hora: medido.hora, distancia_km: medido.distancia_km, cielo: medido.cielo },
+      : null,
     ...now_,
     fuente: "MET Norway",
     actualizado: body.properties.meta.updated_at,
     hora_dato: cur.time,
-    // El SMN no informa ráfagas: con medición real no se mezclan ráfagas pronosticadas.
     ...wind,
     lluvia_1h_mm: n1?.details.precipitation_amount ?? null,
     lluvia_1h_prob: n1?.details.probability_of_precipitation ?? null,
