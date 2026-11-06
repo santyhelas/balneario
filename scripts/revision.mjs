@@ -6,6 +6,9 @@ import { chromium } from "playwright";
 import { mkdirSync, writeFileSync } from "node:fs";
 
 const BASE = process.env.URL ?? "https://balneario-beta.vercel.app";
+// La demo se recorre en una copia del sitio armada en CI sin la casilla de Cloudflare (que, bien hecha, frena a los robots
+// como este), conectada a la misma base. Si no hay copia, se intenta en producción.
+const DEMO = process.env.DEMO_URL ?? BASE;
 const OUT = "revision";
 mkdirSync(`${OUT}/capturas`, { recursive: true });
 
@@ -55,11 +58,11 @@ async function inspect(page) {
   });
 }
 
-async function check(page, path, name, view, issues, extraWait = 1200) {
+async function check(page, path, name, view, issues, extraWait = 1200, base = BASE) {
   const before = { c: issues.consola.length, e: issues.errores_js.length, p: issues.pedidos.length };
   let status = null;
   try {
-    const res = await page.goto(BASE + path, { waitUntil: "networkidle", timeout: 45000 });
+    const res = await page.goto(base + path, { waitUntil: "networkidle", timeout: 45000 });
     status = res?.status() ?? null;
   } catch (e) { status = `ERROR ${String(e).slice(0, 120)}`; }
   await page.waitForTimeout(extraWait);
@@ -69,7 +72,7 @@ async function check(page, path, name, view, issues, extraWait = 1200) {
   const file = `${name}-${view}.png`.replace(/[^\w.-]+/g, "_");
   await page.screenshot({ path: `${OUT}/capturas/${file}`, fullPage: view === "pc" });
   const row = {
-    pagina: path, vista: view, estado: status, url_final: page.url().replace(BASE, ""), ...info, captura: file,
+    pagina: path, vista: view, estado: status, url_final: page.url().replace(base, ""), ...info, captura: file,
     consola: issues.consola.slice(before.c), errores_js: issues.errores_js.slice(before.e), pedidos: issues.pedidos.slice(before.p),
   };
   log(`${view} ${path} → ${status} ${row.consola.length + row.errores_js.length + row.pedidos.length} problemas`);
@@ -162,7 +165,7 @@ const APP = ["/", "/mapa", "/disponibilidad", "/reservas", "/reservas/nueva", "/
   "/cobros", "/caja", "/caja/tarjetas", "/gastos", "/reportes", "/historial", "/copias", "/configuracion"];
 
 async function enterDemo(page) {
-  await page.goto(BASE + "/", { waitUntil: "networkidle" });
+  await page.goto(DEMO + "/", { waitUntil: "networkidle" });
   // Que no arranque el tutorial ni el aviso de caja encima
   await page.evaluate(() => { try { sessionStorage.setItem("bal_tour_visto", "1"); } catch {} });
   await page.getByRole("button", { name: /Probar la demo/i }).first().click();
@@ -187,7 +190,7 @@ for (const [view, opts] of Object.entries(VIEWS)) {
     continue;
   }
   for (const path of APP) {
-    const row = await check(page, path, `demo${path === "/" ? "-panel" : path}`, view, issues, 2000);
+    const row = await check(page, path, `demo${path === "/" ? "-panel" : path}`, view, issues, 2000, DEMO);
     const skip = page.getByRole("button", { name: /Saltar tutorial/ });
     if (await skip.isVisible().catch(() => false)) await skip.click();
     report.demo.push(row);
@@ -198,7 +201,7 @@ for (const [view, opts] of Object.entries(VIEWS)) {
     // a) Nueva reserva de punta a punta
     const flow = { flujo: "Crear una reserva (cliente existente, 5 días, carpa libre, pagada en efectivo)", pasos: [] };
     try {
-      await page.goto(BASE + "/reservas/nueva", { waitUntil: "networkidle" });
+      await page.goto(DEMO + "/reservas/nueva", { waitUntil: "networkidle" });
       await page.getByLabel("Buscar cliente").fill("a");
       await page.waitForTimeout(1500);
       await page.locator("ul li button").first().click();
@@ -229,7 +232,7 @@ for (const [view, opts] of Object.entries(VIEWS)) {
     // b) Caja: abrir si hace falta y registrar un gasto
     const f2 = { flujo: "Caja: abrir (si está cerrada) y cargar un gasto en efectivo", pasos: [] };
     try {
-      await page.goto(BASE + "/caja", { waitUntil: "networkidle" });
+      await page.goto(DEMO + "/caja", { waitUntil: "networkidle" });
       await page.waitForTimeout(1500);
       const abrir = page.getByRole("button", { name: /Abrir caja/ }).first();
       if (await abrir.isVisible().catch(() => false)) {
@@ -253,7 +256,7 @@ await browser.close();
 
 // ---------- Informe ----------
 writeFileSync(`${OUT}/informe.json`, JSON.stringify(report, null, 2));
-const lines = [`# Revisión de ${BASE}`, `Fecha: ${report.fecha}`, ""];
+const lines = [`# Revisión de ${BASE}`, `Demo recorrida en: ${DEMO}`, `Fecha: ${report.fecha}`, ""];
 const probs = (r) => [...r.errores_js.map((x) => `JS: ${x}`), ...r.consola.map((x) => `consola: ${x}`), ...r.pedidos.map((x) => `pedido: ${x}`),
   ...(r.desborde_px ? [`se sale ${r.desborde_px}px a lo ancho: ${r.culpables.join(", ")}`] : []), ...r.imagenes_rotas.map((x) => `imagen rota: ${x}`),
   ...(r.sigue_cargando ? ["se quedó cargando"] : []), ...r.avisos.map((x) => `aviso: ${x}`)];

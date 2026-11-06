@@ -16,10 +16,23 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: npm install --no-save --no-audit --no-fund playwright@1.49.1
+      - name: Datos públicos de conexión (los mismos que ve cualquier navegador en la web)
+        run: |
+          html=$(curl -s https://balneario-beta.vercel.app/inicio)
+          for js in $(echo "$html" | grep -o '/_next/static/chunks/[^"]*\.js' | sort -u); do curl -s "https://balneario-beta.vercel.app$js"; done > bundle.txt
+          url=$(grep -o 'https://[a-z0-9]*\.supabase\.co' bundle.txt | head -1)
+          key=$(grep -o 'sb_publishable_[A-Za-z0-9_-]*' bundle.txt | head -1)
+          echo "NEXT_PUBLIC_SUPABASE_URL=$url" >> $GITHUB_ENV
+          echo "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=$key" >> $GITHUB_ENV
+          echo "Supabase: $url (clave pública encontrada: $([ -n "$key" ] && echo sí || echo no))"
+      - run: npm install --no-audit --no-fund && npm install --no-save playwright@1.49.1
       - run: npx playwright install --with-deps chromium
+      - run: npm run build
       - name: Recorrer el sitio
-        run: xvfb-run -a node scripts/revision.mjs
+        run: |
+          npm start &
+          npx -y wait-on@8 http://localhost:3000/inicio --timeout 60000
+          DEMO_URL=http://localhost:3000 HEADLESS=1 node scripts/revision.mjs
       - name: Guardar el informe en la rama "revision"
         if: always()
         run: |
