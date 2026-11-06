@@ -285,6 +285,44 @@ for (const [view, opts] of Object.entries(VIEWS)) {
       f2.avisos = await page.locator('[role="alert"]').allTextContents().catch(() => []);
     } catch (e) { f2.resultado = `Se cortó: ${String(e).slice(0, 200)}`; }
     report.flujos.push(f2);
+
+    // d) Límite de efectivo: se configura bajo, aparece el aviso y se registra un depósito
+    const f4 = { flujo: "Límite de efectivo y depósito", pasos: [] };
+    try {
+      await page.goto(DEMO + "/configuracion", { waitUntil: "networkidle" });
+      await page.getByLabel("Límite de efectivo en caja").fill("1000");
+      await page.getByRole("button", { name: "Guardar" }).filter({ hasText: /^Guardar$/ }).last().click();
+      await page.waitForTimeout(2000);
+      f4.pasos.push("límite guardado");
+      await page.goto(DEMO + "/caja", { waitUntil: "networkidle" });
+      await page.waitForTimeout(1500);
+      const alerta = await page.getByText("Hay mucho efectivo en la caja").isVisible().catch(() => false);
+      f4.pasos.push(alerta ? "aviso visible" : "SIN AVISO");
+      await page.getByRole("button", { name: "Depósito de efectivo" }).click();
+      await page.getByRole("dialog").getByRole("button", { name: "Registrar depósito" }).click();
+      await page.waitForTimeout(2500);
+      await page.screenshot({ path: `${OUT}/capturas/flujo-deposito.png`, fullPage: true });
+      const ok = await page.getByText("Depósito de efectivo").first().isVisible().catch(() => false);
+      f4.resultado = alerta && ok ? "OK" : `Revisar (aviso: ${alerta}, depósito en la lista: ${ok})`;
+      f4.avisos = await page.locator('[role="alert"]').allTextContents().catch(() => []);
+    } catch (e) {
+      await page.screenshot({ path: `${OUT}/capturas/flujo-deposito-error.png`, fullPage: true }).catch(() => {});
+      f4.resultado = `Se cortó: ${String(e).slice(0, 200)}`;
+    }
+    report.flujos.push(f4);
+
+    // e) Agrandar el plano
+    const f5 = { flujo: "Agrandar el plano", pasos: [] };
+    try {
+      await page.goto(DEMO + "/mapa", { waitUntil: "networkidle" });
+      await page.getByRole("button", { name: "Editar plano" }).click();
+      await page.getByRole("button", { name: "Agrandar" }).click();
+      await page.waitForTimeout(3000);
+      await page.screenshot({ path: `${OUT}/capturas/flujo-plano.png`, fullPage: true });
+      const txt = await page.locator('[role="alert"]').allTextContents().catch(() => []);
+      f5.resultado = txt.some((t) => t.includes("el plano es más grande")) ? "OK" : `Revisar: ${txt.join(" | ")}`;
+    } catch (e) { f5.resultado = `Se cortó: ${String(e).slice(0, 200)}`; }
+    report.flujos.push(f5);
   }
   await ctx.close();
 }
