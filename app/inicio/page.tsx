@@ -339,7 +339,7 @@ export default function InicioPage() {
             <ol className="mt-10 grid gap-8 md:grid-cols-3">
               {[
                 ["Probá la demo", "Tocá todo en un balneario de prueba. No hace falta registrarse."],
-                ["Creá tu balneario", "Ponés el nombre y cuántas carpas y sombrillas tenés. El mapa se arma solo y lo acomodás arrastrando."],
+                ["Te habilitamos tu balneario", "Pedí tu presupuesto y te damos acceso. Ponés el nombre y cuántas carpas y sombrillas tenés: el mapa se arma solo y lo acomodás arrastrando."],
                 ["Cargá tus precios", "Ponés las tarifas de la temporada y ya podés reservar, cobrar y abrir la caja."],
               ].map(([t, x], k) => (
                 <li key={t} className="relative pl-14">
