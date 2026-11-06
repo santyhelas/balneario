@@ -23,7 +23,7 @@ jobs:
           mkdir -p /tmp/sb && cd /tmp/sb
           npx -y supabase@2 init --force >/dev/null
           sed -i 's/^enable_anonymous_sign_ins = false/enable_anonymous_sign_ins = true/' supabase/config.toml
-          npx -y supabase@2 start -x studio,imgproxy,edge-runtime,logflare,vector,supavisor,realtime,storage-api,postgres-meta,mailpit
+          npx -y supabase@2 start -x studio,imgproxy,edge-runtime,logflare,vector,supavisor,realtime,storage-api,postgres-meta
           npx -y supabase@2 status -o env > /tmp/sb/env.txt
           API=$(grep '^API_URL=' env.txt | cut -d'"' -f2); KEY=$(grep -E '^(PUBLISHABLE_KEY|ANON_KEY)=' env.txt | head -1 | cut -d'"' -f2)
           echo "NEXT_PUBLIC_SUPABASE_URL=$API" >> $GITHUB_ENV
