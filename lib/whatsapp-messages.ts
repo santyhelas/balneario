@@ -8,6 +8,9 @@ const daysBetween = (a: string, b: string) => Math.round((Date.parse(b + "T00:00
 export type DebtInfo = {
   firstName: string; balneario: string; number: number; places: string;
   start: string; end: string; due: number; today: string;
+  /** Datos opcionales (si no vienen, quedan vacíos en el mensaje). */
+  lastName?: string | null; phone?: string | null; email?: string | null;
+  total?: number | null; paid?: number | null;
 };
 
 /** Casos del recordatorio de deuda; cada uno tiene su mensaje (editable en Configuración). */
@@ -23,13 +26,27 @@ export const DEBT_CASES: { key: DebtCase; label: string; help: string }[] = [
 /** Datos que se pueden poner en los mensajes. */
 export const PLACEHOLDERS: { key: string; label: string }[] = [
   { key: "nombre", label: "Nombre" },
+  { key: "apellido", label: "Apellido" },
+  { key: "cliente", label: "Nombre y apellido" },
+  { key: "telefono", label: "Teléfono" },
+  { key: "email", label: "Mail del cliente" },
   { key: "balneario", label: "Balneario" },
   { key: "lugar", label: "Carpa o sombrilla" },
   { key: "reserva", label: "N° de reserva" },
   { key: "desde", label: "Desde" },
   { key: "hasta", label: "Hasta" },
+  { key: "dias", label: "Días" },
+  { key: "total", label: "Monto total" },
+  { key: "sena", label: "Seña / pagado" },
   { key: "saldo", label: "Saldo" },
 ];
+
+/** Correo al cliente (asunto y texto), editable en Configuración. */
+export const DEFAULT_MAIL = {
+  mail_asunto: "Tu reserva #{reserva} en {balneario}",
+  mail_cuerpo: "Hola {nombre}!\n\nTe escribimos de {balneario} por tu reserva #{reserva}: {lugar}, del {desde} al {hasta} ({dias} días).\n\nTotal: {total}\nPagado: {sena}\nSaldo: {saldo}\n\nCualquier consulta, respondé este correo. ¡Gracias!\n{balneario}",
+};
+export type MailKey = keyof typeof DEFAULT_MAIL;
 
 export const DEFAULT_TEMPLATES: Record<DebtCase, string> = {
   deuda_hoy: "Hola {nombre}! Te escribimos de {balneario}.\nHoy es el último día de tu estadía ({lugar}, reserva #{reserva}). Queda un saldo de {saldo} por abonar.\nPodés pagar en efectivo, transferencia o tarjeta. ¡Gracias!",
@@ -38,7 +55,7 @@ export const DEFAULT_TEMPLATES: Record<DebtCase, string> = {
   deuda_otros: "Hola {nombre}! Te escribimos de {balneario}.\nTe recordamos tu reserva del {desde} al {hasta} ({lugar}, reserva #{reserva}). Queda un saldo de {saldo} por abonar.\nPodés pagar en efectivo, transferencia o tarjeta. ¡Gracias!",
 };
 
-export type Templates = Partial<Record<DebtCase, string>>;
+export type Templates = Partial<Record<DebtCase | MailKey, string>>;
 
 export function debtCase(d: { end: string; today: string }): DebtCase {
   const left = daysBetween(d.today, d.end);
@@ -54,10 +71,26 @@ export function fillTemplate(tpl: string, vars: Record<string, string>): string 
 }
 
 export function debtVars(d: DebtInfo): Record<string, string> {
+  const last = (d.lastName ?? "").trim();
   return {
-    nombre: d.firstName.trim(), balneario: d.balneario, lugar: d.places, reserva: String(d.number),
-    desde: dmy(d.start), hasta: dmy(d.end), saldo: money(d.due),
+    nombre: d.firstName.trim(), apellido: last, cliente: `${d.firstName.trim()} ${last}`.trim(),
+    telefono: d.phone ?? "", email: d.email ?? "",
+    balneario: d.balneario, lugar: d.places, reserva: String(d.number),
+    desde: dmy(d.start), hasta: dmy(d.end), dias: String(daysBetween(d.start, d.end) + 1),
+    total: d.total != null ? money(d.total) : "", sena: d.paid != null ? money(d.paid) : "",
+    saldo: money(d.due),
   };
+}
+
+/** Correo para el cliente: asunto y texto con sus datos (con el mensaje propio si hay). */
+export function mailMessage(d: DebtInfo, templates?: Templates | null): { subject: string; body: string } {
+  const pick = (k: MailKey) => (templates?.[k]?.trim() ? templates[k]! : DEFAULT_MAIL[k]);
+  const vars = debtVars(d);
+  return { subject: fillTemplate(pick("mail_asunto"), vars).replace(/\n/g, " ").trim(), body: fillTemplate(pick("mail_cuerpo"), vars) };
+}
+
+export function mailtoLink(email: string, subject: string, body: string): string {
+  return `mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 }
 
 /** Recordatorio de saldo, según cuánto falta para que termine la estadía (con el mensaje propio si hay). */

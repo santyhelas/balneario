@@ -11,6 +11,7 @@ import { ConfirmDialog, cx } from "@/components/ui";
 import { DayNotes, usePendingNotes } from "@/components/day-notes";
 import { CloseCashModal, OpenCashModal, type CashSummary } from "@/components/cash";
 import { DemoTour, Tour, startTour } from "@/components/demo-tour";
+import { PrintHeader } from "@/components/print-header";
 
 type NavItem = { href: string; label: string; icon: string };
 
@@ -291,7 +292,7 @@ export function Shell({ children }: { children: ReactNode }) {
         <PlanBanner />
         <InstallBanner />
         {undo.message && <div className="px-safe pt-3">{undo.message}</div>}
-        <main className="px-safe pb-tabbar w-full flex-1 pt-4 md:pt-6 print:p-0">{children}</main>
+        <main className="px-safe pb-tabbar w-full flex-1 pt-4 md:pt-6 print:p-0"><PrintHeader />{children}</main>
         <DemoTour enabled={isGuest} />
         <Tour id="guia" enabled={!isGuest && role === "propietario"} unseen={!guideDone} finalLabel="Empezar"
           onFinish={() => { if (!guideDone) setGuideDone(true).catch(() => undefined); }} />

@@ -48,14 +48,18 @@ export default function ReciboPage() {
         <Button onClick={() => window.print()}>Imprimir / PDF</Button>
       </div>
       <article className="rounded-xl border border-line bg-white p-5 text-[#111] sm:p-8 print:border-0 print:p-0">
-        <header className="mb-6 flex items-start justify-between gap-4 border-b border-neutral-300 pb-4">
-          <div>
+        <header className="own-print-header mb-6 flex items-start justify-between gap-4 border-b border-neutral-300 pb-4">
+          {ws.logo_data && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={ws.logo_data} alt="" className="h-14 w-14 shrink-0 object-contain" />
+          )}
+          <div className="min-w-0 flex-1">
             <h1 className="text-xl font-bold">{info.name}</h1>
             <p className="text-sm text-neutral-600">{[info.address, info.phone, info.legal_id ? `CUIT ${info.legal_id}` : null].filter(Boolean).join(" · ")}</p>
           </div>
           <div className="text-right text-sm">
             <div className="font-semibold">Comprobante de reserva #{r.number}</div>
-            <div className="text-neutral-600">Emitido {formatDateTime(new Date().toISOString(), ws.timezone)}</div>
+            <div className="text-neutral-600">Emitido el {formatDateTime(new Date().toISOString(), ws.timezone)}</div>
           </div>
         </header>
         <section className="mb-4 grid gap-2 text-sm sm:grid-cols-2">

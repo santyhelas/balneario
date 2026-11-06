@@ -160,4 +160,26 @@ label {
 
 @media print {
   .pb-tabbar { padding-bottom: 0; }
+
+  /* Impresión sobria (reportes, caja, listados): todo en negro, sin colores de fondo, sin recuadros ni sombras.
+     Las tablas conservan una línea fina entre renglones para que se lean bien. */
+  @page { margin: 12mm; }
+  html, body { background: #fff !important; }
+  main *, main *::before, main *::after {
+    color: #000 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    border-color: transparent !important;
+    text-shadow: none !important;
+  }
+  main section, main article { padding-left: 0 !important; padding-right: 0 !important; border-radius: 0 !important; break-inside: avoid; }
+  main section > h2 { border-bottom: 1px solid #000 !important; padding-bottom: 2px; }
+  main tr, main li { border-bottom: 1px solid #ccc !important; }
+  main thead tr { border-bottom: 1px solid #000 !important; }
+  /* Barras de gráficos: gris (sin color) para que se sigan viendo */
+  main .print-bar { background: #666 !important; }
+  main .print-bar-light { background: #bbb !important; }
+  /* Las páginas con encabezado propio (comprobante, ticket) no llevan el general */
+  body:has(.own-print-header) .print-header { display: none !important; }
+  .own-print-header img { display: block; }
 }

@@ -4,7 +4,7 @@ import "@fontsource-variable/bricolage-grotesque";
 import "@fontsource-variable/figtree";
 import { SITE_EMAIL, SITE_INSTAGRAM, SITE_INSTAGRAM_URL, SITE_URL, SITE_WHATSAPP_URL } from "@/lib/site";
 import { Analytics } from "@vercel/analytics/next";
-import { DemoButton, DemoEndedNotice, LoginLink, MobileMenu } from "@/components/landing";
+import { DemoButton, DemoEndedNotice, LoginLink, MobileMenu, CopyEmail } from "@/components/landing";
 import { DayTimeline, HeroBeach, PhotoStrip, Slider, type DayStep } from "@/components/landing-interactive";
 import "./landing.css";
 
@@ -373,6 +373,7 @@ export default function InicioPage() {
                   <Icon d="M4 6h16v12H4zM4 7l8 6 8-6" />Escribinos por mail
                 </a>
               </div>
+              <p className="mt-5 text-base text-white/90">Nuestro mail: <CopyEmail email={SITE_EMAIL} /></p>
               <p className="mt-6 text-sm text-white/70">Mientras tanto, probá todo en la demo, sin registrarte.</p>
             </div>
           </div>

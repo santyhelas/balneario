@@ -311,6 +311,19 @@ for (const [view, opts] of Object.entries(VIEWS)) {
     }
     report.flujos.push(f4);
 
+    // f) Cómo sale impreso un reporte (sin colores ni recuadros, con encabezado)
+    try {
+      await page.goto(DEMO + "/reportes", { waitUntil: "networkidle" });
+      await page.waitForTimeout(2000);
+      await page.emulateMedia({ media: "print" });
+      await page.screenshot({ path: `${OUT}/capturas/impresion-reportes.png`, fullPage: true });
+      await page.goto(DEMO + "/caja", { waitUntil: "networkidle" });
+      await page.waitForTimeout(1500);
+      await page.screenshot({ path: `${OUT}/capturas/impresion-caja.png`, fullPage: true });
+      await page.emulateMedia({ media: "screen" });
+      report.flujos.push({ flujo: "Vista de impresión (reportes y caja)", resultado: "captura tomada" });
+    } catch (e) { report.flujos.push({ flujo: "Vista de impresión", resultado: `Se cortó: ${String(e).slice(0, 160)}` }); }
+
     // e) Agrandar el plano
     const f5 = { flujo: "Agrandar el plano", pasos: [] };
     try {

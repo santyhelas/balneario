@@ -10,7 +10,7 @@ import { METHOD_LABEL } from "@/lib/methods";
 import { VoucherList } from "@/components/vouchers";
 import { ReservationExtras } from "@/components/extras";
 import { ArrivalButtons, NoShowPanel } from "@/components/arrival";
-import { debtReminder, receiptMessage } from "@/lib/whatsapp-messages";
+import { debtReminder, mailMessage, mailtoLink, receiptMessage } from "@/lib/whatsapp-messages";
 import { WhatsAppSend, useMessageTemplates } from "@/components/whatsapp";
 import { loadReservation, spacesSummary, whatsappLink, type Full, type PaymentRow } from "@/lib/reservations";
 import { daysOf, indexGrid, isFreeFor, type GridRow } from "@/lib/stay";
@@ -41,8 +41,14 @@ export default function ReservaPage() {
   const voided = new Set(payments.filter((p) => p.voids_payment_id).map((p) => p.voids_payment_id));
   const daysLeft = confirmed && today <= r.end_date ? inclusiveDays(today < r.start_date ? r.start_date : today, r.end_date) : 0;
   const placesText = spacesSummary(segments).split(" → ").filter(Boolean).map((c) => `${segments.find((s) => s.spaces.code === c)?.spaces.kind === "sombrilla" ? "Sombrilla" : "Carpa"} ${c}`).join(" → ");
+  const info = {
+    firstName: r.customers.first_name, lastName: r.customers.last_name, phone: r.customers.phone, email: r.customers.email,
+    balneario: ws.name, number: r.number, places: placesText, start: r.start_date, end: r.end_date,
+    total: Number(r.total_amount), paid: Number(balance.paid_amount), due, today,
+  };
+  const mail = r.customers.email ? mailMessage(info, templates) : null;
   const waText = confirmed && !r.is_courtesy && due > 0
-    ? debtReminder({ firstName: r.customers.first_name, balneario: ws.name, number: r.number, places: placesText, start: r.start_date, end: r.end_date, due, today }, templates)
+    ? debtReminder(info, templates)
     : `Hola ${r.customers.first_name}, te escribimos de ${ws.name}. Reserva #${r.number}: ${spacesSummary(segments)} del ${formatDate(r.start_date)} al ${formatDate(r.end_date)}.` +
       (due > 0 ? ` Saldo pendiente: ${formatMoney(due)}.` : " Está paga. ¡Te esperamos!");
 
@@ -73,6 +79,12 @@ export default function ReservaPage() {
             {confirmed && r.end_date >= today && <Button variant="secondary" onClick={() => setModal("reubicar")}>Cambiar de carpa</Button>}
             <Link href={`/reservas/${r.id}/recibo`}><Button variant="secondary">Comprobante</Button></Link>
             {whatsappLink(r.customers.phone, waText) && <WhatsAppSend phone={r.customers.phone} text={waText} label={due > 0 && confirmed && !r.is_courtesy ? "Recordar deuda por WhatsApp" : "WhatsApp"} className="py-2" />}
+            {mail && r.customers.email && (
+              <a href={mailtoLink(r.customers.email, mail.subject, mail.body)} title={`Escribir a ${r.customers.email} (el texto se cambia en Configuración → Mensajes)`}
+                className="rounded-lg border border-accent/40 bg-accent-soft px-2.5 py-2 text-sm font-semibold text-accent hover:opacity-90">
+                Enviar correo
+              </a>
+            )}
             {whatsappLink(r.customers.phone, receiptText) && <WhatsAppSend phone={r.customers.phone} text={receiptText} label="Comprobante por WhatsApp" title="Mandar el comprobante con el detalle de pagos" className="py-2" />}
             {confirmed && <Button variant="danger" onClick={() => setModal("cancelar")}>Cancelar reserva</Button>}
           </>

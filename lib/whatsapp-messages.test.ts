@@ -51,3 +51,16 @@ test("mensaje propio de deuda", () => {
   assert.match(debtReminder({ ...base, places: "", today: "2027-01-07" }), /\(reserva #12\)/);
   assert.doesNotMatch(debtReminder({ ...base, places: "", today: "2027-01-07" }), /\(,/);
 });
+
+test("mensajes: datos nuevos (total, seña, apellido) y correo", async () => {
+  const { debtVars, fillTemplate, mailMessage } = await import("./whatsapp-messages.ts");
+  const d = { firstName: "Ana", lastName: "Gómez", email: "ana@x.com", phone: "123", balneario: "La Ola", number: 7, places: "Carpa 3",
+    start: "2027-01-10", end: "2027-01-14", total: 150000, paid: 50000, due: 100000, today: "2027-01-12" };
+  const v = debtVars(d);
+  assert.equal(v.dias, "5");
+  assert.equal(fillTemplate("{cliente}: total {total}, seña {sena}, saldo {saldo}", v).replace(/ /g, " "), "Ana Gómez: total $ 150.000, seña $ 50.000, saldo $ 100.000");
+  const m = mailMessage(d, { mail_asunto: "Reserva {reserva}", mail_cuerpo: "Hola {nombre}" });
+  assert.equal(m.subject, "Reserva 7");
+  assert.equal(m.body, "Hola Ana");
+  assert.match(mailMessage(d).subject, /#7 en La Ola/);
+});

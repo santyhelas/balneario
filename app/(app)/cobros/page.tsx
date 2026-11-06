@@ -110,7 +110,9 @@ export default function CobrosPage() {
                           .map((x) => `${x.spaces?.kind === "sombrilla" ? "Sombrilla" : "Carpa"} ${x.spaces?.code ?? ""}`))].join(" y ");
                         return (
                           <WhatsAppSend phone={d.customers.phone} className="py-2" title="Mandar recordatorio por WhatsApp (podés editar el mensaje)"
-                            text={debtReminder({ firstName: d.customers.first_name, balneario: ws.name, number: d.number, places, start: d.start_date, end: d.end_date, due: d.due, today }, templates)} />
+                            text={debtReminder({ firstName: d.customers.first_name, lastName: d.customers.last_name, phone: d.customers.phone,
+                              balneario: ws.name, number: d.number, places, start: d.start_date, end: d.end_date, due: d.due, today,
+                              total: Number(d.total_amount), paid: d.paid }, templates)} />
                         );
                       })()}
                       <Button onClick={() => { setMsg(null); setPaying(d); }} disabled={!cajaAbierta}>Cobrar</Button>

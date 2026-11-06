@@ -131,7 +131,7 @@ export default function ReportesPage() {
                 <div className="flex h-40 items-end gap-px overflow-x-auto rounded-lg bg-surface-2 p-2" role="img" aria-label="Gráfico de ocupación diaria">
                   {calc.occDays.map((d) => (
                     <div key={d.dia} className="group relative flex h-full min-w-[6px] flex-1 flex-col justify-end" title={`${formatDate(d.dia)}: ${d.total} ocupados (${d.pct.toFixed(0)}%)`}>
-                      <div className="rounded-t-sm bg-accent" style={{ height: `${Math.max(d.pct, d.total ? 2 : 0)}%` }} />
+                      <div className="print-bar rounded-t-sm bg-accent" style={{ height: `${Math.max(d.pct, d.total ? 2 : 0)}%` }} />
                     </div>
                   ))}
                 </div>
@@ -179,7 +179,7 @@ export default function ReportesPage() {
                   {r.gastos.map((g) => (
                     <li key={g.categoria}>
                       <div className="flex justify-between"><span>{g.categoria} <span className="text-muted">({g.cantidad})</span></span><span className="tabular font-medium">{formatMoney(g.importe)}</span></div>
-                      <div className="mt-1 h-2 rounded-full bg-surface-2"><div className="h-2 rounded-full bg-danger/70" style={{ width: `${calc.gastos ? (n(g.importe) / calc.gastos) * 100 : 0}%` }} /></div>
+                      <div className="mt-1 h-2 rounded-full bg-surface-2"><div className="print-bar h-2 rounded-full bg-danger/70" style={{ width: `${calc.gastos ? (n(g.importe) / calc.gastos) * 100 : 0}%` }} /></div>
                     </li>
                   ))}
                 </ul>

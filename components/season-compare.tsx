@@ -167,8 +167,8 @@ export function SeasonCompare() {
                 <li key={r.ma.mes} className="grid grid-cols-[2.5rem_1fr_auto] items-center gap-x-3 text-sm">
                   <span className="font-medium">{MONTHS[Number(r.ma.mes.slice(5, 7)) - 1]}</span>
                   <div className="flex flex-col gap-1" title={`${seasonLabel(a)}: ${fmt(metric, va)} · ${seasonLabel(b)}: ${fmt(metric, vb)}`}>
-                    <div className="h-3 rounded-r bg-accent" style={{ width: `${Math.max(va ? 1 : 0, (va / view.max) * 100)}%` }} />
-                    <div className="h-3 rounded-r bg-muted/40" style={{ width: `${Math.max(vb ? 1 : 0, (vb / view.max) * 100)}%` }} />
+                    <div className="print-bar h-3 rounded-r bg-accent" style={{ width: `${Math.max(va ? 1 : 0, (va / view.max) * 100)}%` }} />
+                    <div className="print-bar-light h-3 rounded-r bg-muted/40" style={{ width: `${Math.max(vb ? 1 : 0, (vb / view.max) * 100)}%` }} />
                   </div>
                   <span className="flex flex-col text-right text-xs leading-[1rem] tabular">
                     <span className="font-semibold">{fmt(metric, va)}</span>

@@ -16,7 +16,7 @@ import { ExtrasCard } from "@/components/extras";
 import { PlanCard } from "@/components/plan-card";
 import { RulesCard } from "@/components/rules-card";
 import { startTour } from "@/components/demo-tour";
-import { DEBT_CASES, DEFAULT_TEMPLATES, PLACEHOLDERS, debtVars, fillTemplate, type DebtCase, type Templates } from "@/lib/whatsapp-messages";
+import { DEBT_CASES, DEFAULT_MAIL, DEFAULT_TEMPLATES, PLACEHOLDERS, debtVars, fillTemplate, type DebtCase, type MailKey, type Templates } from "@/lib/whatsapp-messages";
 
 type WsRow = { name: string; subtitle: string | null; logo_data: string | null; legal_id: string | null; phone: string | null; address: string | null; latitude: number | null; longitude: number | null; version: number };
 type Member = { user_id: string; role: string; email: string | null; created_at: string };
@@ -262,33 +262,43 @@ function MessagesCard({ editable, onSaved }: { editable: boolean; onSaved: () =>
     const row = res.data as { message_templates: Templates | null; version: number };
     return { missing: false, templates: row.message_templates ?? {}, version: row.version };
   }, [ws.id], 0);
-  const [draft, setDraft] = useState<Record<DebtCase, string> | null>(null);
-  const [tab, setTab] = useState<DebtCase>("deuda_hoy");
+  type Key = DebtCase | MailKey;
+  type Tab = DebtCase | "mail";
+  const DEFAULTS: Record<Key, string> = { ...DEFAULT_TEMPLATES, ...DEFAULT_MAIL };
+  const KEYS = [...DEBT_CASES.map((c) => c.key), "mail_asunto", "mail_cuerpo"] as Key[];
+  const [draft, setDraft] = useState<Record<Key, string> | null>(null);
+  const [tab, setTab] = useState<Tab>("deuda_hoy");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ tone: "ok" | "danger"; text: string } | null>(null);
   const area = useRef<HTMLTextAreaElement>(null);
+  const subjectRef = useRef<HTMLInputElement>(null);
+  const lastField = useRef<"subject" | "body">("body");
 
   useEffect(() => {
     if (!q.data) return;
     const t = q.data.templates;
-    setDraft(Object.fromEntries(DEBT_CASES.map((c) => [c.key, t[c.key]?.trim() ? t[c.key]! : DEFAULT_TEMPLATES[c.key]])) as Record<DebtCase, string>);
-  }, [q.data]);
+    setDraft(Object.fromEntries(KEYS.map((k) => [k, t[k]?.trim() ? t[k]! : DEFAULTS[k]])) as Record<Key, string>);
+  }, [q.data]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (window.location.hash === "#mensajes") document.getElementById("mensajes")?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, [draft === null]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (!q.data || !draft) return <Card title="Mensajes de WhatsApp"><div className="flex items-center gap-2 text-sm text-muted"><Spinner small /> Cargando…</div></Card>;
-  if (q.data.missing) return <Card title="Mensajes de WhatsApp"><p className="text-sm text-muted">Para cambiar los mensajes hay que aplicar la actualización 0027 de la base de datos.</p></Card>;
+  if (!q.data || !draft) return <Card title="Mensajes a clientes"><div className="flex items-center gap-2 text-sm text-muted"><Spinner small /> Cargando…</div></Card>;
+  if (q.data.missing) return <Card title="Mensajes a clientes"><p className="text-sm text-muted">Para cambiar los mensajes hay que aplicar la actualización 0027 de la base de datos.</p></Card>;
 
-  const sample = debtVars({ firstName: "Juan", balneario: ws.name, number: 125, places: "Carpa 17", start: "2027-01-05", end: "2027-01-20", due: 45000, today: "2027-01-20" });
+  const sample = debtVars({ firstName: "Juan", lastName: "Pérez", phone: "2255 123456", email: "juan@ejemplo.com", balneario: ws.name, number: 125,
+    places: "Carpa 17", start: "2027-01-05", end: "2027-01-20", total: 300000, paid: 100000, due: 200000, today: "2027-01-20" });
+  const isMail = tab === "mail";
+  const bodyKey: Key = isMail ? "mail_cuerpo" : tab;
 
   function insert(key: string) {
-    const el = area.current;
     const tag = `{${key}}`;
-    const cur = draft![tab];
-    const at = el ? el.selectionStart : cur.length;
-    const end = el ? el.selectionEnd : cur.length;
-    setDraft({ ...draft!, [tab]: cur.slice(0, at) + tag + cur.slice(end) });
+    const target: Key = isMail && lastField.current === "subject" ? "mail_asunto" : bodyKey;
+    const el = target === "mail_asunto" ? subjectRef.current : area.current;
+    const cur = draft![target];
+    const at = el?.selectionStart ?? cur.length;
+    const end = el?.selectionEnd ?? cur.length;
+    setDraft({ ...draft!, [target]: cur.slice(0, at) + tag + cur.slice(end) });
     setTimeout(() => { el?.focus(); el?.setSelectionRange(at + tag.length, at + tag.length); }, 0);
   }
 
@@ -297,14 +307,16 @@ function MessagesCard({ editable, onSaved }: { editable: boolean; onSaved: () =>
     setMsg(null);
     // Solo se guarda lo que es distinto del mensaje de siempre.
     const out: Templates = {};
-    for (const c of DEBT_CASES) {
-      const v = draft![c.key].trim();
-      if (v && v !== DEFAULT_TEMPLATES[c.key]) out[c.key] = v.slice(0, 1000);
+    for (const k of KEYS) {
+      const v = draft![k].trim();
+      const max = k === "mail_asunto" ? 200 : k === "mail_cuerpo" ? 3000 : 1000;
+      if (v && v !== DEFAULTS[k]) out[k] = v.slice(0, max);
     }
     const { error } = await sb.from("workspaces").update({ message_templates: Object.keys(out).length ? out : null, version: q.data!.version + 1 }).eq("id", ws.id).select("id").single();
     setBusy(false);
     if (error) {
-      setMsg({ tone: "danger", text: friendlyError(error) });
+      const needs34 = error.code === "23514" && ("mail_asunto" in out || "mail_cuerpo" in out);
+      setMsg({ tone: "danger", text: needs34 ? "Para guardar el mensaje de correo hay que aplicar la actualización 0034 de la base de datos." : friendlyError(error) });
       if (isVersionConflict(error)) q.reload();
       return;
     }
@@ -313,20 +325,33 @@ function MessagesCard({ editable, onSaved }: { editable: boolean; onSaved: () =>
     onSaved(); // la versión del balneario cambió: se recargan las dos tarjetas
   }
 
-  const info = DEBT_CASES.find((c) => c.key === tab)!;
+  const info = isMail ? { label: "Correo", help: "El correo que se arma al tocar «Enviar correo» en una reserva (si el cliente tiene mail cargado)." } : DEBT_CASES.find((c) => c.key === tab)!;
+  const changed = (k: Key) => draft[k] !== DEFAULTS[k];
   return (
     <section id="mensajes" className="scroll-mt-20">
-      <Card title="Mensajes de WhatsApp: recordatorio de deuda" tour="config-mensajes">
+      <Card title="Mensajes a clientes (WhatsApp y correo)" tour="config-mensajes">
         <div className="mb-2 flex flex-wrap gap-1">
           {DEBT_CASES.map((c) => (
             <button key={c.key} type="button" onClick={() => setTab(c.key)}
               className={`rounded-lg border px-2.5 py-1 text-sm ${tab === c.key ? "border-accent bg-accent-soft font-semibold text-accent" : "border-line hover:bg-surface-2"}`}>
-              {c.label}{draft[c.key] !== DEFAULT_TEMPLATES[c.key] ? " *" : ""}
+              {c.label}{changed(c.key) ? " *" : ""}
             </button>
           ))}
+          <button type="button" onClick={() => setTab("mail")}
+            className={`rounded-lg border px-2.5 py-1 text-sm ${isMail ? "border-accent bg-accent-soft font-semibold text-accent" : "border-line hover:bg-surface-2"}`}>
+            Correo{changed("mail_asunto") || changed("mail_cuerpo") ? " *" : ""}
+          </button>
         </div>
-        <p className="mb-2 text-xs text-muted">{info.help}</p>
-        <textarea ref={area} value={draft[tab]} onChange={(e) => setDraft({ ...draft, [tab]: e.target.value })} rows={6} maxLength={1000} disabled={!editable}
+        <p className="mb-2 text-xs text-muted">{isMail ? info.help : `WhatsApp · recordatorio de deuda. ${info.help}`}</p>
+        {isMail && (
+          <label className="mb-2 flex flex-col gap-1 text-sm font-medium">Asunto
+            <input ref={subjectRef} value={draft.mail_asunto} onFocus={() => { lastField.current = "subject"; }} maxLength={200} disabled={!editable}
+              onChange={(e) => setDraft({ ...draft, mail_asunto: e.target.value })}
+              className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm font-normal text-fg" />
+          </label>
+        )}
+        <textarea ref={area} value={draft[bodyKey]} onFocus={() => { lastField.current = "body"; }} onChange={(e) => setDraft({ ...draft, [bodyKey]: e.target.value })}
+          rows={isMail ? 9 : 6} maxLength={isMail ? 3000 : 1000} disabled={!editable}
           className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg" aria-label={`Mensaje: ${info.label}`} />
         {editable && (
           <div className="mt-2 flex flex-wrap items-center gap-1 text-xs">
@@ -338,16 +363,20 @@ function MessagesCard({ editable, onSaved }: { editable: boolean; onSaved: () =>
         )}
         <div className="mt-3 rounded-lg bg-surface-2 p-3 text-sm">
           <div className="mb-1 text-xs font-semibold text-muted">Así le llega (ejemplo)</div>
-          <p className="whitespace-pre-wrap">{fillTemplate(draft[tab], sample)}</p>
+          {isMail && <p className="mb-2 font-semibold">{fillTemplate(draft.mail_asunto, sample)}</p>}
+          <p className="whitespace-pre-wrap">{fillTemplate(draft[bodyKey], sample)}</p>
         </div>
         {msg && <Alert tone={msg.tone} className="mt-2">{msg.text}</Alert>}
         {editable ? (
           <div className="mt-3 flex flex-wrap justify-between gap-2">
-            <Button type="button" variant="ghost" disabled={draft[tab] === DEFAULT_TEMPLATES[tab]} onClick={() => setDraft({ ...draft, [tab]: DEFAULT_TEMPLATES[tab] })}>Volver al mensaje original</Button>
+            <Button type="button" variant="ghost" disabled={isMail ? !changed("mail_asunto") && !changed("mail_cuerpo") : !changed(tab as DebtCase)}
+              onClick={() => setDraft(isMail ? { ...draft, mail_asunto: DEFAULT_MAIL.mail_asunto, mail_cuerpo: DEFAULT_MAIL.mail_cuerpo } : { ...draft, [tab]: DEFAULTS[tab as DebtCase] })}>
+              Volver al mensaje original
+            </Button>
             <Button type="button" loading={busy} onClick={save}>Guardar mensajes</Button>
           </div>
         ) : <p className="mt-2 text-xs text-muted">Solo un administrador puede cambiar los mensajes.</p>}
-        <p className="mt-2 text-xs text-muted">Los datos entre llaves, como {"{nombre}"} o {"{saldo}"}, se completan solos con los de cada cliente. Antes de mandar cada mensaje también lo podés retocar.</p>
+        <p className="mt-2 text-xs text-muted">Los datos entre llaves, como {"{nombre}"}, {"{total}"} o {"{saldo}"}, se completan solos con los de cada cliente y reserva. Antes de mandar cada mensaje también lo podés retocar.</p>
       </Card>
     </section>
   );

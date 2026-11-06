@@ -93,7 +93,11 @@ export default function CierreTarjetasPage() {
 
       <article style={{ width: `${paper - 6}mm` }}
         className={cx("mx-auto bg-white font-mono text-black shadow print:shadow-none", paper === 58 ? "text-[10px]" : "text-[11px]", "p-2 print:p-0 leading-snug")}>
-        <div className="text-center">
+        <div className="own-print-header text-center">
+          {ws.logo_data && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={ws.logo_data} alt="" className="mx-auto mb-1 h-12 w-12 object-contain grayscale" />
+          )}
           <div className="text-[13px] font-bold">{ws.name}</div>
           <div className="font-bold">CIERRE DE TARJETAS</div>
           <div>Caja del {formatDate(s.business_date)}</div>

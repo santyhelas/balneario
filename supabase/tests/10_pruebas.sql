@@ -1089,6 +1089,18 @@ select t.throws(format($$select public.resize_map(%L, 400, 400, (select version 
   'quedarían fuera', 'Plano: no se achica si alguna carpa queda afuera');
 select set_config('request.jwt.claims', '{"sub":"11111111-1111-1111-1111-111111111111","email":"duenio@test.com"}', false);
 
+-- 40. Números de reserva por balneario y mensajes de correo
+select t.ok((select max(number) = count(*) and min(number) = 1 from public.reservations where workspace_id = t.uid('ws')), 'Números: correlativos desde 1 en el balneario, sin huecos');
+select set_config('request.jwt.claims', '{"sub":"99999999-9999-9999-9999-999999999999","email":"cliente@test.com"}', false);
+insert into public.customers (workspace_id, first_name) values (t.uid('wsC'), 'Numerado');
+select t.set('rC1', (public.create_reservation_v2(t.uid('wsC'), gen_random_uuid(), (select id from public.customers where workspace_id = t.uid('wsC') and first_name = 'Numerado'),
+  '2027-02-01', '2027-02-02', jsonb_build_array(jsonb_build_object('space_id', (select id from public.spaces where workspace_id = t.uid('wsC') and active order by code limit 1),
+  'start_date', '2027-02-01', 'end_date', '2027-02-02')), '{"manual_base": 1000}'::jsonb, null, null) ->> 'number'));
+select t.ok(t.get('rC1') = '1', 'Números: la primera reserva de un balneario nuevo es la #1 (no sigue la numeración de otros)', t.get('rC1'));
+update public.workspaces set message_templates = '{"mail_asunto": "Tu reserva en {balneario}", "mail_cuerpo": "Hola {nombre}"}'::jsonb, version = version + 1 where id = t.uid('wsC');
+select t.ok((select message_templates ->> 'mail_asunto' from public.workspaces where id = t.uid('wsC')) = 'Tu reserva en {balneario}', 'Mensajes: se guarda el correo (asunto y texto)');
+select set_config('request.jwt.claims', '{"sub":"11111111-1111-1111-1111-111111111111","email":"duenio@test.com"}', false);
+
 reset role;
 \o
 -- Resultado ----------------------------------------------------------
