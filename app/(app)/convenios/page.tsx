@@ -4,7 +4,7 @@ import { unwrap, useLoader } from "@/lib/data";
 import { useWorkspace } from "@/components/workspace";
 import { PageHeader, SyncNotice } from "@/components/shell";
 import { Alert, Spinner } from "@/components/ui";
-import { AgreementsCard, DiscountModeCard, PackagesCard, loadAgreements, type DiscountMode, type Pkg } from "@/components/pricing";
+import { AgreementsCard, DiscountCapCard, DiscountModeCard, PackagesCard, loadAgreements, type DiscountMode, type Pkg } from "@/components/pricing";
 
 export default function ConveniosPage() {
   const { ws, isAdmin } = useWorkspace();
@@ -12,9 +12,10 @@ export default function ConveniosPage() {
   const q = useLoader(async () => {
     const pkgs = unwrap(await sb.from("package_discounts").select("id, min_days, percent, active, version").eq("workspace_id", ws.id).order("min_days")) as Pkg[];
     const agreements = await loadAgreements(sb, ws.id);
-    let w = await sb.from("workspaces").select("cash_discount_percent, discount_mode, version").eq("id", ws.id).single();
+    let w = await sb.from("workspaces").select("cash_discount_percent, discount_mode, discount_cap_percent, version").eq("id", ws.id).single();
+    if (w.error?.code === "42703") w = (await sb.from("workspaces").select("cash_discount_percent, discount_mode, version").eq("id", ws.id).single()) as typeof w;
     if (w.error?.code === "42703") w = (await sb.from("workspaces").select("cash_discount_percent, version").eq("id", ws.id).single()) as typeof w;
-    const wsRow = unwrap(w) as { cash_discount_percent: number; discount_mode?: DiscountMode; version: number };
+    const wsRow = unwrap(w) as { cash_discount_percent: number; discount_mode?: DiscountMode; discount_cap_percent?: number | null; version: number };
     return { pkgs, agreements, wsRow };
   }, [ws.id], 0);
 
@@ -29,6 +30,7 @@ export default function ConveniosPage() {
           <div className="flex flex-col gap-4">
             <AgreementsCard agreements={q.data.agreements} editable={isAdmin} onChanged={q.reload} />
             <DiscountModeCard mode={q.data.wsRow.discount_mode ?? null} wsVersion={q.data.wsRow.version} editable={isAdmin} onChanged={q.reload} />
+            <DiscountCapCard key={`cap${q.data.wsRow.version}`} cap={q.data.wsRow.discount_cap_percent} wsVersion={q.data.wsRow.version} editable={isAdmin} onChanged={q.reload} />
           </div>
         </div>
       )}

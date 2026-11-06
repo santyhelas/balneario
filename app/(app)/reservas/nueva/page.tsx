@@ -27,6 +27,9 @@ type Quote = {
   total: number;
   /** Descuentos que correspondían pero no se aplicaron (balneario con descuentos no acumulables). */
   no_aplicados?: { kind: string; percent: number; label?: string }[];
+  /** Tope de descuento del balneario y si recortó los descuentos. */
+  tope?: number | null;
+  tope_aplicado?: boolean;
 };
 type PayMode = "pagada" | "despues" | "sena";
 
@@ -651,6 +654,9 @@ export default function NuevaReservaPage() {
                     <span>{discountLabel(d, agreements)}</span><span className="tabular">− {formatMoney(d.amount)}</span>
                   </div>
                 ))}
+                {!courtesy && quote.tope_aplicado && (
+                  <div className="text-xs text-warn">Tope de descuento del balneario: {Number(quote.tope)}% del precio. Los descuentos se recortaron para no pasarlo.</div>
+                )}
                 {!courtesy && (quote.no_aplicados?.length ?? 0) > 0 && (
                   <div className="text-xs text-muted">
                     No acumulables: se aplicó solo el mayor. Quedaron afuera: {quote.no_aplicados!.map((d) => `${d.label ?? d.kind} ${Number(d.percent)}%`).join(", ")}.

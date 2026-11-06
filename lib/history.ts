@@ -97,6 +97,9 @@ const FIELDS: Record<string, Record<string, [string, (v: unknown) => string]>> =
     cash_discount_percent: ["Descuento por efectivo", (v) => `${str(v)}%`], timezone: ["Zona horaria", str],
     logo_data: ["Logo", () => "(imagen)"], tent_style: ["Diseño de carpas", () => "(diseño)"],
     paused_at: ["En pausa", (v) => (v ? "sí" : "no")], paused_reason: ["Motivo de la pausa", str],
+    cash_limit: ["Límite de efectivo en caja", (v) => (v == null ? "sin límite" : money(v))],
+    discount_cap_percent: ["Tope de descuento", (v) => (v == null ? "sin tope" : `${str(v)}%`)],
+    map_width: ["Ancho del plano", str], map_height: ["Alto del plano", str],
     discount_mode: ["Cómo se combinan los descuentos", (v) => ({ cascada: "en cascada", sumados: "sumados sobre el precio", mayor: "no acumulables (solo el mayor)" } as Record<string, string>)[String(v)] ?? str(v)],
   },
 };

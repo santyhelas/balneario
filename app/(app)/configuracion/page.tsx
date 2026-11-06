@@ -14,6 +14,7 @@ import { MyUsernameField, UsersCard } from "@/components/users";
 import { LocationPicker } from "@/components/location-picker";
 import { ExtrasCard } from "@/components/extras";
 import { PlanCard } from "@/components/plan-card";
+import { RulesCard } from "@/components/rules-card";
 import { startTour } from "@/components/demo-tour";
 import { DEBT_CASES, DEFAULT_TEMPLATES, PLACEHOLDERS, debtVars, fillTemplate, type DebtCase, type Templates } from "@/lib/whatsapp-messages";
 
@@ -39,6 +40,7 @@ export default function ConfiguracionPage() {
           <BalnearioCard key={q.data.row.version} row={q.data.row} editable={isAdmin} onSaved={async () => { await reloadWorkspace(); q.reload(); }} onConflict={q.reload} />
           <MessagesCard key={`m${q.data.row.version}`} editable={isAdmin} onSaved={q.reload} />
           <ExtrasCard />
+          <RulesCard />
           </div>
           <div className="flex flex-col gap-4">
             {!isGuest && <PlanCard />}

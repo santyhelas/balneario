@@ -14,7 +14,7 @@ import { CloseCashModal, ExpenseModal, IncomeModal, OpenCashModal, type CashSumm
 import { METHOD_LABEL, PAYMENT_METHODS } from "@/lib/methods";
 
 type Session = { id: string; business_date: string; opening_cash: number; closed_at: string | null; expected_cash: number | null; counted_cash: number | null; difference: number | null };
-type Movement = { id: string; direction: "entrada" | "salida"; method: string; amount: number; category: string; concept: string; created_at: string; expense_id: string | null };
+type Movement = { id: string; direction: "entrada" | "salida"; method: string; amount: number; category: string; concept: string; created_at: string; expense_id: string | null; voids_movement_id?: string | null };
 type Category = { id: string; name: string; active: boolean };
 type ExpenseRow = { id: string; voided_at: string | null };
 
@@ -25,6 +25,8 @@ type PageData = {
   movements: Movement[];
   categories: Category[];
   expenses: Record<string, ExpenseRow>;
+  /** Límite de efectivo en caja (Configuración). undefined: falta la actualización 0033. */
+  cashLimit: number | null | undefined;
 };
 
 const METHOD = METHOD_LABEL;
@@ -36,6 +38,8 @@ const CATEGORY: Record<string, string> = {
   gasto: "Gasto",
   anulacion_gasto: "Anulación de gasto",
   otro_ingreso: "Otro ingreso",
+  deposito: "Depósito",
+  anulacion_deposito: "Anulación de depósito",
 };
 
 export default function CajaPage() {
@@ -56,10 +60,13 @@ export default function CajaPage() {
     let expenses: Record<string, ExpenseRow> = {};
     if (current) {
       summary = unwrap(await sb.rpc("cash_session_summary", { p_session_id: current.id })) as CashSummary;
-      movements = unwrap(
-        await sb.from("cash_movements").select("id, direction, method, amount, category, concept, created_at, expense_id")
-          .eq("cash_session_id", current.id).order("created_at", { ascending: false }),
-      ) as Movement[];
+      let mv = await sb.from("cash_movements").select("id, direction, method, amount, category, concept, created_at, expense_id, voids_movement_id")
+        .eq("cash_session_id", current.id).order("created_at", { ascending: false });
+      if (mv.error?.code === "42703") {
+        mv = (await sb.from("cash_movements").select("id, direction, method, amount, category, concept, created_at, expense_id")
+          .eq("cash_session_id", current.id).order("created_at", { ascending: false })) as typeof mv;
+      }
+      movements = unwrap(mv) as Movement[];
       const ids = movements.map((m) => m.expense_id).filter((x): x is string => !!x);
       if (ids.length) {
         const rows = unwrap(await sb.from("expenses").select("id, voided_at").in("id", ids)) as ExpenseRow[];
@@ -69,7 +76,9 @@ export default function CajaPage() {
     const categories = unwrap(
       await sb.from("expense_categories").select("id, name, active").eq("workspace_id", ws.id).order("name"),
     ) as Category[];
-    return { sessions, current, summary, movements, categories, expenses };
+    const lim = await sb.from("workspaces").select("cash_limit").eq("id", ws.id).single();
+    const cashLimit = lim.error ? undefined : ((lim.data as { cash_limit: number | null }).cash_limit ?? null);
+    return { sessions, current, summary, movements, categories, expenses, cashLimit };
   }, [ws.id, today]);
 
   const [openCash, setOpenCash] = useState(false);
@@ -77,6 +86,8 @@ export default function CajaPage() {
   const [expenseOpen, setExpenseOpen] = useState(false);
   const [incomeOpen, setIncomeOpen] = useState(false);
   const [voiding, setVoiding] = useState<Movement | null>(null);
+  const [depositOpen, setDepositOpen] = useState(false);
+  const [voidingDeposit, setVoidingDeposit] = useState<Movement | null>(null);
 
   if (!data && loading) return <div className="flex items-center gap-2 text-muted"><Spinner small /> Cargando caja…</div>;
 
@@ -96,6 +107,7 @@ export default function CajaPage() {
             {current && <Button variant="secondary" onClick={() => router.push(`/caja/tarjetas?sesion=${current.id}`)}>Cierre de tarjetas</Button>}
             {canOperate && <Button variant="secondary" onClick={() => setIncomeOpen(true)}>Otro ingreso</Button>}
             {canOperate && <Button variant="secondary" onClick={() => setExpenseOpen(true)}>Registrar salida / gasto</Button>}
+            {canOperate && data?.cashLimit !== undefined && <Button variant="secondary" onClick={() => setDepositOpen(true)}>Depósito de efectivo</Button>}
             {isOpen && <Button onClick={() => setCloseCash(true)}>Cerrar caja</Button>}
             {!current && <Button onClick={() => setOpenCash(true)}>Abrir caja</Button>}
           </>
@@ -113,6 +125,14 @@ export default function CajaPage() {
       )}
       {!current && (
         <Alert tone="warn" className="mb-4">La caja de hoy no está abierta. Abrila para poder registrar cobros y gastos.</Alert>
+      )}
+
+      {summary && canOperate && data?.cashLimit && Number(summary.efectivo_esperado) > Number(data.cashLimit) && (
+        <Alert tone="warn" className="mb-4">
+          <strong>Hay mucho efectivo en la caja:</strong> {formatMoney(summary.efectivo_esperado)}, más que el límite de {formatMoney(data.cashLimit)}.
+          Conviene hacer un depósito.{" "}
+          <button className="font-semibold underline" onClick={() => setDepositOpen(true)}>Registrar depósito</button>
+        </Alert>
       )}
 
       {summary && (
@@ -170,7 +190,8 @@ export default function CajaPage() {
                   </thead>
                   <tbody className="divide-y divide-line">
                     {data!.movements.map((m) => {
-                      const voided = m.category === "gasto" && m.expense_id && data!.expenses[m.expense_id]?.voided_at;
+                      const voided = (m.category === "gasto" && m.expense_id && data!.expenses[m.expense_id]?.voided_at)
+                        || (m.category === "deposito" && data!.movements.some((x) => x.voids_movement_id === m.id));
                       return (
                         <tr key={m.id} className={voided ? "text-muted line-through" : ""}>
                           <td className="py-2 pr-3 tabular">{formatTime(m.created_at, ws.timezone)}</td>
@@ -183,6 +204,9 @@ export default function CajaPage() {
                           <td className="text-right">
                             {isAdmin && canOperate && m.category === "gasto" && !voided && (
                               <button className="text-xs text-danger hover:underline" onClick={() => setVoiding(m)}>Anular</button>
+                            )}
+                            {isAdmin && canOperate && m.category === "deposito" && !voided && (
+                              <button className="text-xs text-danger hover:underline" onClick={() => setVoidingDeposit(m)}>Anular</button>
                             )}
                           </td>
                         </tr>
@@ -224,6 +248,11 @@ export default function CajaPage() {
       <CloseCashModal open={closeCash} summary={summary} onClose={() => setCloseCash(false)} onDone={() => { setCloseCash(false); reload(); status.reload(); }} />
       <ExpenseModal open={expenseOpen} categories={data?.categories ?? []} today={today} onClose={() => setExpenseOpen(false)} onDone={() => { setExpenseOpen(false); reload(); status.reload(); }} />
       <IncomeModal open={incomeOpen} onClose={() => setIncomeOpen(false)} onDone={() => { setIncomeOpen(false); reload(); status.reload(); }} />
+      {depositOpen && summary && (
+        <DepositModal expected={Number(summary.efectivo_esperado)} limit={data?.cashLimit ?? null}
+          onClose={() => setDepositOpen(false)} onDone={() => { setDepositOpen(false); reload(); status.reload(); }} />
+      )}
+      <VoidDeposit movement={voidingDeposit} onClose={() => setVoidingDeposit(null)} onDone={() => { setVoidingDeposit(null); reload(); status.reload(); }} />
       <VoidExpense movement={voiding} onClose={() => setVoiding(null)} onDone={() => { setVoiding(null); reload(); status.reload(); }} />
     </>
   );
@@ -276,5 +305,62 @@ function VoidExpense({ movement, onClose, onDone }: { movement: Movement | null;
         </div>
       }
     />
+  );
+}
+
+/** Depósito: sacar efectivo de la caja para llevarlo al banco (no es un gasto). */
+function DepositModal({ expected, limit, onClose, onDone }: { expected: number; limit: number | null; onClose: () => void; onDone: () => void }) {
+  const { ws } = useWorkspace();
+  const [amount, setAmount] = useState(limit && expected > limit ? String(Math.floor(expected - limit)) : "");
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [key] = useState(newKey);
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    const a = parseMoney(amount);
+    if (a == null || a <= 0) return setError("Poné el importe que depositás.");
+    if (a > expected) return setError(`No puede ser más que el efectivo de la caja (${formatMoney(expected)}).`);
+    setBusy(true);
+    setError(null);
+    const { error: err } = await getSupabase().rpc("register_cash_deposit", { p_workspace_id: ws.id, p_idempotency_key: key, p_amount: a, p_note: note.trim() || null });
+    setBusy(false);
+    if (err) return setError(friendlyError(err));
+    onDone();
+  }
+  return (
+    <Modal open onClose={onClose} busy={busy} title="Depósito de efectivo"
+      footer={<><Button variant="secondary" onClick={onClose} disabled={busy}>Cancelar</Button><Button type="submit" form="deposit-form" loading={busy}>Registrar depósito</Button></>}>
+      <form id="deposit-form" onSubmit={submit} className="flex flex-col gap-3">
+        <p className="text-sm text-muted">
+          Sacás efectivo de la caja para llevarlo al banco o guardarlo aparte. Baja el efectivo esperado, pero <strong>no es un gasto</strong>: no aparece en los gastos ni en el resultado.
+        </p>
+        <p className="text-sm">Efectivo en caja ahora: <strong className="tabular">{formatMoney(expected)}</strong>{limit ? <> · límite {formatMoney(limit)}</> : null}</p>
+        <TextField label="Importe" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} required autoFocus />
+        <TextField label="Nota (opcional)" value={note} onChange={(e) => setNote(e.target.value)} maxLength={150} placeholder="Ej: Banco Nación, cuenta del balneario" />
+        {error && <Alert tone="danger">{error}</Alert>}
+      </form>
+    </Modal>
+  );
+}
+
+function VoidDeposit({ movement, onClose, onDone }: { movement: Movement | null; onClose: () => void; onDone: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [key, setKey] = useState(newKey);
+  async function confirm() {
+    if (!movement) return;
+    setBusy(true);
+    setError(null);
+    const { error: err } = await getSupabase().rpc("void_cash_deposit", { p_movement_id: movement.id, p_idempotency_key: key });
+    setBusy(false);
+    if (err) return setError(friendlyError(err));
+    setKey(newKey());
+    onDone();
+  }
+  return (
+    <ConfirmDialog open={movement !== null} title="Anular depósito" confirmLabel="Anular depósito" danger busy={busy}
+      onCancel={() => { setError(null); onClose(); }} onConfirm={confirm}
+      message={<div className="flex flex-col gap-3"><p>El efectivo ({formatMoney(movement?.amount)}) vuelve a contarse en la caja. El depósito no se borra: queda tachado y se registra la anulación.</p>{error && <Alert tone="danger">{error}</Alert>}</div>} />
   );
 }

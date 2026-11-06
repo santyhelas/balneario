@@ -1053,6 +1053,42 @@ insert into public.agreements (workspace_id, name, percent) values (t.uid('ws'),
 select t.ok((select count(*) from public.agreements where lower(name) = 'club borrable') = 2, 'Convenios: se puede crear otro con el mismo nombre');
 select t.ok(exists (select 1 from public.reservation_discounts where kind = 'convenio'), 'Convenios: las reservas viejas conservan su descuento');
 
+-- 39. Tope de descuento, depósitos de caja y tamaño del plano
+update public.workspaces set discount_cap_percent = 20, version = version + 1 where id = t.uid('ws');
+select t.set('qcap', public.quote_reservation(t.uid('ws'), '2027-01-13', '2027-01-17', t.get('seg70')::jsonb,
+  jsonb_build_object('manual_base', 100000, 'cash', true, 'manual', jsonb_build_object('type','monto','value',15000,'reason','Prueba de tope')))::text);
+select t.ok((t.get('qcap')::jsonb ->> 'total')::numeric = 80000 and (t.get('qcap')::jsonb ->> 'tope_aplicado')::boolean
+        and (select sum((d ->> 'amount')::numeric) from jsonb_array_elements(t.get('qcap')::jsonb -> 'discounts') d) = 20000
+        and (select (d ->> 'amount')::numeric from jsonb_array_elements(t.get('qcap')::jsonb -> 'discounts') d where d ->> 'kind' = 'manual') = 5500,
+  'Tope 20%: sobre 100.000 los descuentos no pasan de 20.000 (se recorta desde el último: el manual)', t.get('qcap'));
+update public.workspaces set discount_cap_percent = null, version = version + 1 where id = t.uid('ws');
+select t.throws(format($$update public.workspaces set discount_cap_percent = 150, version = version + 1 where id = %L$$, t.get('ws')), 'check', 'Tope: entre 1 y 100%');
+
+select set_config('request.jwt.claims', '{"sub":"99999999-9999-9999-9999-999999999999","email":"cliente@test.com"}', false);
+select public.open_cash_session(t.uid('wsC'), 30000);
+update public.workspaces set cash_limit = 25000, version = version + 1 where id = t.uid('wsC');
+select t.throws(format($$select public.register_cash_deposit(%L, gen_random_uuid(), 40000)$$, t.get('wsC')), 'supera el efectivo', 'Depósito: no más que el efectivo de la caja');
+select t.set('dep', (public.register_cash_deposit(t.uid('wsC'), gen_random_uuid(), 20000, 'Banco Nación') ->> 'movement_id'));
+select t.ok((public.cash_session_summary((select id from public.cash_sessions where workspace_id = t.uid('wsC'))) ->> 'efectivo_esperado')::numeric = 10000,
+  'Depósito: baja el efectivo esperado (30.000 − 20.000)');
+select t.ok((select count(*) from public.expenses where workspace_id = t.uid('wsC')) = 0, 'Depósito: no cuenta como gasto');
+select public.void_cash_deposit(t.uid('dep'), gen_random_uuid());
+select t.ok((public.cash_session_summary((select id from public.cash_sessions where workspace_id = t.uid('wsC'))) ->> 'efectivo_esperado')::numeric = 30000,
+  'Depósito: anularlo devuelve el efectivo (y queda registrado)');
+select t.throws(format($$select public.void_cash_deposit(%L, gen_random_uuid())$$, t.get('dep')), 'ya fue anulado', 'Depósito: no se anula dos veces');
+select t.ok((select cash_limit from public.workspaces where id = t.uid('wsC')) = 25000, 'Caja: se guarda el límite de efectivo');
+
+select t.set('sp1', (select x::text || ',' || y::text from public.spaces where workspace_id = t.uid('wsC') order by code limit 1));
+select t.set('wv', (select version::text || ',' || map_width || ',' || map_height || ',' || sea_side from public.workspaces where id = t.uid('wsC')));
+select public.resize_map(t.uid('wsC'), split_part(t.get('wv'), ',', 2)::int + 1000, split_part(t.get('wv'), ',', 3)::int + 600, split_part(t.get('wv'), ',', 1)::int);
+select t.ok((select x = split_part(t.get('sp1'), ',', 1)::numeric + case split_part(t.get('wv'), ',', 4) when 'left' then 0 when 'right' then 1000 else 500 end
+             and y = split_part(t.get('sp1'), ',', 2)::numeric + case split_part(t.get('wv'), ',', 4) when 'top' then 0 when 'bottom' then 600 else 300 end
+             from public.spaces where workspace_id = t.uid('wsC') order by code limit 1),
+  'Plano: al agrandarlo las carpas mantienen su lugar respecto del mar');
+select t.throws(format($$select public.resize_map(%L, 400, 400, (select version from public.workspaces where id = %L))$$, t.get('wsC'), t.get('wsC')),
+  'quedarían fuera', 'Plano: no se achica si alguna carpa queda afuera');
+select set_config('request.jwt.claims', '{"sub":"11111111-1111-1111-1111-111111111111","email":"duenio@test.com"}', false);
+
 reset role;
 \o
 -- Resultado ----------------------------------------------------------

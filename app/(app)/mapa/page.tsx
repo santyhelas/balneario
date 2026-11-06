@@ -83,6 +83,25 @@ export default function MapaPage() {
   // Diseño de las carpas: se lee aparte para que el plano funcione aunque falte la actualización 0015.
   const [design, setDesign] = useState<TentStyle | null>(null);
   const [designReady, setDesignReady] = useState(false);
+  const [resizing, setResizing] = useState(false);
+  /** Agranda o achica el plano: lo que está cerca del mar queda cerca del mar; el lugar nuevo va del lado de tierra. */
+  async function resize(factor: number) {
+    const w = Math.round(Math.min(20000, Math.max(400, ws.map_width * factor)));
+    const h = Math.round(Math.min(20000, Math.max(400, ws.map_height * factor)));
+    if (w === ws.map_width && h === ws.map_height) return;
+    setResizing(true);
+    setMessage(null);
+    const { error } = await getSupabase().rpc("resize_map", { p_workspace_id: ws.id, p_width: w, p_height: h, p_expected_version: ws.version });
+    setResizing(false);
+    if (error) {
+      setMessage({ tone: "danger", text: error.code === "PGRST202" ? "Para cambiar el tamaño del plano hay que aplicar la actualización 0033." : friendlyError(error) });
+      return;
+    }
+    setMessage({ tone: "ok", text: factor > 1 ? "Listo: el plano es más grande. Hay más lugar para carpas (se ve más alejado; acercate con +)." : "Listo: el plano es más chico." });
+    await reloadWorkspace();
+    reload();
+    featuresQ.reload();
+  }
   const [designOpen, setDesignOpen] = useState(false);
   useEffect(() => {
     let alive = true;
@@ -242,6 +261,13 @@ export default function MapaPage() {
             </Button>
           )}
           <span className="text-xs text-muted">Tocá un elemento para editarlo; arrastralo para moverlo.</span>
+          {isAdmin && (
+            <span className="ml-auto flex items-center gap-1.5">
+              <span className="text-xs text-muted">Tamaño del plano:</span>
+              <Button variant="secondary" className="py-1.5" disabled={resizing} onClick={() => resize(0.8)} title="Achicar el plano (si no queda nada afuera)">Achicar</Button>
+              <Button variant="secondary" className="py-1.5" disabled={resizing} onClick={() => resize(1.25)} title="Más lugar para carpas: el plano se ve más alejado">Agrandar</Button>
+            </span>
+          )}
         </div>
       )}
 

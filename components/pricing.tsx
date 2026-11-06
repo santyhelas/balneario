@@ -105,6 +105,14 @@ export function AgreementsCard({ agreements, editable, onChanged }: { agreements
   const [deleting, setDeleting] = useState<Agreement | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  async function toggle(a: Agreement) {
+    setBusy(true);
+    setErr(null);
+    const { error } = await getSupabase().from("agreements").update({ active: !a.active, version: a.version + 1 }).eq("id", a.id).select("id").single();
+    setBusy(false);
+    if (error) { setErr(friendlyError(error)); return; }
+    onChanged();
+  }
   async function remove() {
     if (!deleting) return;
     setBusy(true);
@@ -122,7 +130,7 @@ export function AgreementsCard({ agreements, editable, onChanged }: { agreements
           {agreements.map((a) => (
             <li key={a.id} className="flex items-center justify-between gap-2 py-2">
               <div>
-                <div className="font-medium">{a.name} · {Number(a.percent)}% {!a.active && <Badge tone="muted">Desactivado</Badge>}</div>
+                <div className="font-medium">{a.name} · {Number(a.percent)}% {!a.active && <Badge tone="muted">Deshabilitado</Badge>}</div>
                 <div className="text-xs text-muted">
                   {a.valid_from || a.valid_to ? `Vigente ${a.valid_from ? `desde ${formatDate(a.valid_from)}` : ""} ${a.valid_to ? `hasta ${formatDate(a.valid_to)}` : ""}` : "Sin fecha de vencimiento"}
                   {a.conditions ? ` · ${a.conditions}` : ""}
@@ -131,6 +139,7 @@ export function AgreementsCard({ agreements, editable, onChanged }: { agreements
               {editable && (
                 <span className="flex shrink-0 gap-3">
                   <button className="text-xs text-accent hover:underline" onClick={() => setEditing(a)}>Editar</button>
+                  <button className="text-xs text-accent hover:underline" disabled={busy} onClick={() => toggle(a)}>{a.active ? "Deshabilitar" : "Habilitar"}</button>
                   <button className="text-xs text-danger hover:underline" onClick={() => { setErr(null); setDeleting(a); }}>Eliminar</button>
                 </span>
               )}
@@ -290,6 +299,41 @@ export function DiscountModeCard({ mode, wsVersion, editable, onChanged }: { mod
         Cambiar esto no modifica las reservas ya hechas.
       </p>
       {err && <Alert tone="danger" className="mt-2">{err}</Alert>}
+    </Card>
+  );
+}
+
+/** Tope de descuento: el total de descuentos de una reserva no pasa de este % del precio base. */
+export function DiscountCapCard({ cap, wsVersion, editable, onChanged }: { cap: number | null | undefined; wsVersion: number; editable: boolean; onChanged: () => void }) {
+  const { ws } = useWorkspace();
+  const [value, setValue] = useState(cap ? String(Number(cap)) : "");
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ tone: "ok" | "danger"; text: string } | null>(null);
+  if (cap === undefined) {
+    return <Card title="Tope de descuento"><p className="text-sm text-muted">Para usarlo hay que aplicar la actualización 0033 de la base de datos.</p></Card>;
+  }
+  async function save(e: FormEvent) {
+    e.preventDefault();
+    const v = value.trim() === "" ? null : Number(value.replace(",", "."));
+    if (v !== null && (!Number.isFinite(v) || v <= 0 || v > 100)) { setMsg({ tone: "danger", text: "Poné un porcentaje entre 1 y 100, o dejalo vacío para no tener tope." }); return; }
+    setBusy(true);
+    setMsg(null);
+    const { error } = await getSupabase().from("workspaces").update({ discount_cap_percent: v, version: wsVersion + 1 }).eq("id", ws.id).select("id").single();
+    setBusy(false);
+    if (error) { setMsg({ tone: "danger", text: friendlyError(error) }); return; }
+    setMsg({ tone: "ok", text: v === null ? "Listo: sin tope de descuento." : `Listo: ninguna reserva va a tener más de ${v}% de descuento en total.` });
+    onChanged();
+  }
+  return (
+    <Card title="Tope de descuento">
+      <form onSubmit={save} className="flex flex-col gap-2 text-sm">
+        <p className="text-muted">El total de descuentos de una reserva (paquete, convenio, efectivo y manual) no puede pasar de este porcentaje del precio. Si se pasa, se recorta empezando por el último (el manual).</p>
+        <div className="flex items-end gap-2">
+          <TextField label="Tope (%)" inputMode="decimal" value={value} onChange={(e) => setValue(e.target.value)} placeholder="Sin tope" disabled={!editable} className="w-32" />
+          {editable && <Button type="submit" variant="secondary" loading={busy}>Guardar</Button>}
+        </div>
+        {msg && <Alert tone={msg.tone}>{msg.text}</Alert>}
+      </form>
     </Card>
   );
 }

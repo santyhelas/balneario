@@ -96,7 +96,10 @@ export function StatusProvider({ children }: { children: ReactNode }) {
     }
     const fut = await sb.from("reservations").select("id", { count: "exact", head: true }).eq("workspace_id", ws.id).eq("status", "confirmada").gt("start_date", summary.fecha);
     if (fut.error) throw fut.error;
-    return { summary, debts, endingSoon, futureCount: fut.count ?? 0 };
+    // Límite de efectivo en caja (actualización 0033; si falta, no se avisa).
+    const lim = await sb.from("workspaces").select("cash_limit").eq("id", ws.id).single();
+    const cashLimit = lim.error ? null : ((lim.data as { cash_limit: number | null }).cash_limit ?? null);
+    return { summary, debts, endingSoon, futureCount: fut.count ?? 0, cashLimit };
   }, [ws.id], 60_000);
 
   // Copia de seguridad automática: una por día como máximo (la base controla que no se repita).
@@ -123,6 +126,11 @@ export function StatusProvider({ children }: { children: ReactNode }) {
       list.push({ id: "caja-ant", tone: "danger", title: "Caja anterior sin cerrar", detail: `La caja del ${formatDate(s.caja_anterior_sin_cerrar.fecha)} quedó abierta.`, href: "/caja" });
     } else if (s.caja.estado === "sin_abrir") {
       list.push({ id: "caja", tone: "warn", title: "Caja sin abrir", detail: "Abrila para registrar cobros y gastos.", href: "/caja" });
+    }
+    const limit = q.data?.cashLimit;
+    if (limit && s.efectivo_en_caja != null && Number(s.efectivo_en_caja) > Number(limit)) {
+      list.push({ id: "caja-limite", tone: "warn", title: "Mucho efectivo en la caja: hacé un depósito",
+        detail: `Hay ${formatMoney(s.efectivo_en_caja)} y el límite es ${formatMoney(limit)}.`, href: "/caja" });
     }
     for (const r of s.finalizan_hoy) {
       if (Number(r.due_amount) > 0) {

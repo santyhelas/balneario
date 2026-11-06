@@ -6,6 +6,7 @@ import { formatDate, formatDateTime, formatMoney, todayISO } from "@/lib/format"
 import { exportCustomersXlsx } from "@/lib/customers-export";
 import { METHOD_LABEL } from "@/lib/methods";
 import { seasonOf } from "@/lib/history";
+import { whatsappLink } from "@/lib/reservations";
 import { useWorkspace } from "@/components/workspace";
 import { PageHeader, SyncNotice } from "@/components/shell";
 import { Alert, Badge, Button, Card, EmptyState, Input, Spinner, cx } from "@/components/ui";
@@ -159,11 +160,33 @@ function CustomerDetail({ customer, onEdit }: { customer: Customer; onEdit: () =
     >
       <dl className="mb-4 grid grid-cols-2 gap-2 text-sm">
         <div><dt className="text-xs text-muted">Teléfono</dt><dd>{customer.phone ? <a className="text-accent underline" href={`tel:${customer.phone.replace(/[^\d+]/g, "")}`}>{customer.phone}</a> : "—"}</dd></div>
-        <div><dt className="text-xs text-muted">Correo</dt><dd className="truncate">{customer.email ?? "—"}</dd></div>
+        <div><dt className="text-xs text-muted">Correo</dt><dd className="truncate">{customer.email ? <a className="text-accent underline" href={`mailto:${encodeURIComponent(customer.email)}`}>{customer.email}</a> : "—"}</dd></div>
         {customer.locality && <div><dt className="text-xs text-muted">Localidad</dt><dd>{customer.locality}</dd></div>}
         {customer.other_contact && <div className="col-span-2"><dt className="text-xs text-muted">Otro contacto</dt><dd>{customer.other_contact}</dd></div>}
         {customer.notes && <div className="col-span-2"><dt className="text-xs text-muted">Observaciones</dt><dd className="whitespace-pre-wrap">{customer.notes}</dd></div>}
       </dl>
+
+      {(customer.phone || customer.email) && (
+        <div className="mb-4 flex flex-wrap gap-2">
+          {customer.phone && whatsappLink(customer.phone, `¡Hola ${customer.first_name}! `) && (
+            <a href={whatsappLink(customer.phone, `¡Hola ${customer.first_name}! `)!} target="_blank" rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-ok/40 bg-ok-soft px-3 py-1.5 text-sm font-semibold text-ok hover:opacity-90">
+              WhatsApp
+            </a>
+          )}
+          {customer.phone && (
+            <a href={`tel:${customer.phone.replace(/[^\d+]/g, "")}`} className="inline-flex items-center gap-1.5 rounded-lg border border-line px-3 py-1.5 text-sm font-semibold hover:bg-surface-2">
+              Llamar
+            </a>
+          )}
+          {customer.email && (
+            <a href={`mailto:${encodeURIComponent(customer.email)}?subject=${encodeURIComponent(ws.name)}&body=${encodeURIComponent(`¡Hola ${customer.first_name}!\n\n`)}`}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-accent/40 bg-accent-soft px-3 py-1.5 text-sm font-semibold text-accent hover:opacity-90">
+              Enviar correo
+            </a>
+          )}
+        </div>
+      )}
 
       <div className="mb-3 flex flex-wrap gap-2">
         <Badge tone="muted">{active.length} {active.length === 1 ? "alquiler" : "alquileres"}</Badge>

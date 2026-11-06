@@ -90,7 +90,7 @@ export function BeachMap({
 
   /** La vista nunca sale del dibujo: sin bordes grises ni zonas vacías. */
   const clamp = useCallback((v: View): View => {
-    const w = Math.min(width, Math.max(width / 6, v.w));
+    const w = Math.min(width, Math.max(width / 10, v.w));
     const h = (w * height) / width;
     return { w, h, x: Math.min(width - w, Math.max(0, v.x)), y: Math.min(height - h, Math.max(0, v.y)) };
   }, [width, height]);
@@ -338,7 +338,8 @@ export function BeachMap({
   }
 
   const sea = useMemo(() => {
-    const band = Math.round((seaSide === "top" || seaSide === "bottom" ? height : width) * 0.17);
+    // Franja de mar: 17% del plano, con un máximo, para que al agrandar el plano el mar no "avance" sobre la arena.
+    const band = Math.min(400, Math.round((seaSide === "top" || seaSide === "bottom" ? height : width) * 0.17));
     switch (seaSide) {
       case "bottom": return { x: 0, y: height - band, w: width, h: band, shore: "h" as const, shoreAt: height - band };
       case "left": return { x: 0, y: 0, w: band, h: height, shore: "v" as const, shoreAt: band };
