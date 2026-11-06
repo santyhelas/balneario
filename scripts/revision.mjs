@@ -76,7 +76,31 @@ async function check(page, path, name, view, issues, extraWait = 1200) {
   return row;
 }
 
-const browser = await chromium.launch();
+// Con ventana (xvfb en CI): Cloudflare desconfía menos que del modo "headless".
+const browser = await chromium.launch({ headless: process.env.HEADLESS === "1", args: ["--disable-blink-features=AutomationControlled"] });
+
+/** Si aparece la casilla "no soy un robot" de Cloudflare, la toca (como haría una persona). */
+async function passCaptcha(page, ms = 25000) {
+  const end = Date.now() + ms;
+  let clicked = 0;
+  while (Date.now() < end) {
+    const frames = page.locator('iframe[src*="challenges.cloudflare.com"]');
+    const n = await frames.count().catch(() => 0);
+    for (let i = 0; i < n; i++) {
+      const box = await frames.nth(i).boundingBox().catch(() => null);
+      if (box && box.width > 50 && box.height > 30 && clicked < 3) {
+        await page.mouse.move(box.x + 10, box.y + 10);
+        await page.waitForTimeout(400);
+        await page.mouse.click(box.x + 28, box.y + box.height / 2);
+        clicked++;
+        await page.waitForTimeout(4000);
+      }
+    }
+    if (n === 0 && clicked > 0) return "tocada";
+    await page.waitForTimeout(800);
+  }
+  return clicked ? "tocada (sigue visible)" : "no apareció";
+}
 
 // ---------- 1. Parte pública ----------
 for (const [view, opts] of Object.entries(VIEWS)) {
@@ -105,7 +129,9 @@ for (const [view, opts] of Object.entries(VIEWS)) {
       await page.locator('input[type="email"], input[name="email"], input[autocomplete="username"]').first().fill("no-existe@ejemplo.com");
       await page.locator('input[type="password"]').first().fill("clave-equivocada-123");
       await page.getByRole("button", { name: /^Ingresar$/ }).first().click();
-      await page.waitForTimeout(5000);
+      const cap = await passCaptcha(page, 20000);
+      await page.waitForTimeout(4000);
+      report.flujos.push({ flujo: "Casilla de Cloudflare en el ingreso", resultado: cap });
       const txt = await page.locator('[role="alert"]').allTextContents();
       await page.screenshot({ path: `${OUT}/capturas/login-incorrecto.png` });
       report.flujos.push({ flujo: "Ingreso con clave incorrecta", resultado: txt.join(" | ") || "(no mostró ningún aviso)", captura: "login-incorrecto.png" });
@@ -140,6 +166,7 @@ async function enterDemo(page) {
   // Que no arranque el tutorial ni el aviso de caja encima
   await page.evaluate(() => { try { sessionStorage.setItem("bal_tour_visto", "1"); } catch {} });
   await page.getByRole("button", { name: /Probar la demo/i }).first().click();
+  report.flujos.push({ flujo: "Casilla de Cloudflare en la demo", resultado: await passCaptcha(page, 30000) });
   await page.getByText("Inicio / Panel").first().waitFor({ timeout: 90000 });
   await page.waitForTimeout(1500);
   const skip = page.getByRole("button", { name: /Saltar tutorial/ });

@@ -19,7 +19,7 @@ jobs:
       - run: npm install --no-save --no-audit --no-fund playwright@1.49.1
       - run: npx playwright install --with-deps chromium
       - name: Recorrer el sitio
-        run: node scripts/revision.mjs
+        run: xvfb-run -a node scripts/revision.mjs
       - name: Guardar el informe en la rama "revision"
         if: always()
         run: |

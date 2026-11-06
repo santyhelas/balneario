@@ -41,6 +41,10 @@ export async function middleware(request: NextRequest) {
     url.pathname = "/inicio";
     return NextResponse.rewrite(url, { request });
   }
+  // Sin sesión, los pedidos a la API reciben un error claro (no la página de presentación).
+  if (!user && !isPublic && path.startsWith("/api/")) {
+    return NextResponse.json({ error: "Tenés que iniciar sesión." }, { status: 401 });
+  }
   // Sin sesión, cualquier pantalla del sistema lleva a la presentación (desde ahí se ingresa).
   if (!user && !isPublic) {
     const url = request.nextUrl.clone();
