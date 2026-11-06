@@ -1,5 +1,5 @@
 "use client";
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { cardinal, cardinalName, sunPosition, sunTimes } from "@/lib/sun";
 import { formatTemperature } from "@/lib/format";
 import { useWorkspace } from "@/components/workspace";
@@ -63,9 +63,16 @@ export function WeatherProvider({ children }: { children: ReactNode }) {
     return () => { cancelled = true; };
   }, [lat, lon, noLocation, tick]);
 
+  // El clima se consulta cada 10 minutos, y solo si la pantalla se está mirando.
+  // Al volver a la pestaña, si pasaron más de 10 minutos, se actualiza enseguida.
+  const lastAsk = useRef(Date.now());
   useEffect(() => {
-    const id = window.setInterval(() => { if (document.visibilityState === "visible") setTick((t) => t + 1); }, 60_000);
-    return () => window.clearInterval(id);
+    const EVERY = 10 * 60_000;
+    const ask = () => { lastAsk.current = Date.now(); setTick((t) => t + 1); };
+    const id = window.setInterval(() => { if (document.visibilityState === "visible") ask(); }, EVERY);
+    const onShow = () => { if (document.visibilityState === "visible" && Date.now() - lastAsk.current >= EVERY) ask(); };
+    document.addEventListener("visibilitychange", onShow);
+    return () => { window.clearInterval(id); document.removeEventListener("visibilitychange", onShow); };
   }, []);
 
   return <WeatherCtx.Provider value={{ data, error, loading, fetchedAt, reload: () => setTick((t) => t + 1), noLocation }}>{children}</WeatherCtx.Provider>;
