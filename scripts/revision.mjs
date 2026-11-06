@@ -1,0 +1,247 @@
+// Revisión automática del sitio en producción (la corre .github/workflows/revision.yml).
+// Recorre la presentación, el ingreso y toda la demo en PC y celular, y anota:
+// errores de la consola, pedidos que fallan, imágenes rotas, páginas que se salen de la pantalla,
+// cargas que no terminan y avisos de error en pantalla. Deja capturas e informe en revision/.
+import { chromium } from "playwright";
+import { mkdirSync, writeFileSync } from "node:fs";
+
+const BASE = process.env.URL ?? "https://balneario-beta.vercel.app";
+const OUT = "revision";
+mkdirSync(`${OUT}/capturas`, { recursive: true });
+
+const report = { base: BASE, fecha: new Date().toISOString(), publico: [], demo: [], flujos: [], api: [], cabeceras: {}, enlaces: [] };
+const log = (...a) => console.log(...a);
+
+const VIEWS = {
+  pc: { viewport: { width: 1366, height: 860 } },
+  cel: { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 },
+};
+
+function watch(page) {
+  const issues = { consola: [], errores_js: [], pedidos: [] };
+  page.on("console", (m) => { if (m.type() === "error") issues.consola.push(m.text().slice(0, 300)); });
+  page.on("pageerror", (e) => issues.errores_js.push(String(e).slice(0, 300)));
+  page.on("response", (r) => {
+    const s = r.status();
+    const u = r.url();
+    if (s >= 400 && !u.includes("/_vercel/") && !u.includes("challenges.cloudflare.com")) issues.pedidos.push(`${s} ${r.request().method()} ${u.slice(0, 160)}`);
+  });
+  page.on("requestfailed", (r) => {
+    const u = r.url();
+    const f = r.failure()?.errorText ?? "";
+    if (!f.includes("ERR_ABORTED") && !u.includes("/_vercel/")) issues.pedidos.push(`FALLÓ ${u.slice(0, 160)} ${f}`);
+  });
+  return issues;
+}
+
+async function inspect(page) {
+  return page.evaluate(() => {
+    const overflow = document.documentElement.scrollWidth - window.innerWidth;
+    const broken = [...document.images].filter((i) => i.complete && i.naturalWidth === 0 && i.src).map((i) => i.src.slice(0, 120));
+    const alerts = [...document.querySelectorAll('[role="alert"]')].map((a) => a.textContent.trim().slice(0, 200)).filter(Boolean);
+    const loading = /Cargando…|Consultando disponibilidad…|Calculando…/.test(document.body.innerText);
+    // Elementos que se salen por la derecha (para encontrar al culpable del scroll horizontal).
+    const wide = [];
+    if (overflow > 2) {
+      for (const el of document.querySelectorAll("body *")) {
+        const r = el.getBoundingClientRect();
+        if (r.right > window.innerWidth + 2 && r.width > 0 && getComputedStyle(el).position !== "fixed") {
+          wide.push(`${el.tagName.toLowerCase()}.${String(el.className).slice(0, 60)} (${Math.round(r.right)}px)`);
+          if (wide.length > 4) break;
+        }
+      }
+    }
+    return { titulo: document.title, desborde_px: overflow > 2 ? overflow : 0, culpables: wide, imagenes_rotas: broken, avisos: alerts, sigue_cargando: loading };
+  });
+}
+
+async function check(page, path, name, view, issues, extraWait = 1200) {
+  const before = { c: issues.consola.length, e: issues.errores_js.length, p: issues.pedidos.length };
+  let status = null;
+  try {
+    const res = await page.goto(BASE + path, { waitUntil: "networkidle", timeout: 45000 });
+    status = res?.status() ?? null;
+  } catch (e) { status = `ERROR ${String(e).slice(0, 120)}`; }
+  await page.waitForTimeout(extraWait);
+  // Si algo sigue cargando, se le da un rato más.
+  let info = await inspect(page);
+  if (info.sigue_cargando) { await page.waitForTimeout(6000); info = await inspect(page); }
+  const file = `${name}-${view}.png`.replace(/[^\w.-]+/g, "_");
+  await page.screenshot({ path: `${OUT}/capturas/${file}`, fullPage: view === "pc" });
+  const row = {
+    pagina: path, vista: view, estado: status, url_final: page.url().replace(BASE, ""), ...info, captura: file,
+    consola: issues.consola.slice(before.c), errores_js: issues.errores_js.slice(before.e), pedidos: issues.pedidos.slice(before.p),
+  };
+  log(`${view} ${path} → ${status} ${row.consola.length + row.errores_js.length + row.pedidos.length} problemas`);
+  return row;
+}
+
+const browser = await chromium.launch();
+
+// ---------- 1. Parte pública ----------
+for (const [view, opts] of Object.entries(VIEWS)) {
+  const ctx = await browser.newContext({ ...opts, locale: "es-AR", timezoneId: "America/Argentina/San_Juan" });
+  const page = await ctx.newPage();
+  const issues = watch(page);
+  for (const path of ["/", "/login", "/terminos", "/privacidad", "/mapa", "/caja", "/admin", "/no-existe-esta-pagina"]) {
+    report.publico.push(await check(page, path, `publico${path === "/" ? "-inicio" : path}`, view, issues));
+  }
+  if (view === "pc") {
+    // Cabeceras de seguridad de la portada
+    const r = await page.request.get(BASE + "/");
+    const h = r.headers();
+    for (const k of ["content-security-policy", "strict-transport-security", "x-frame-options", "x-content-type-options", "referrer-policy", "permissions-policy"]) report.cabeceras[k] = h[k] ?? null;
+    // Enlaces de la portada
+    await page.goto(BASE + "/", { waitUntil: "networkidle" });
+    const links = await page.$$eval("a[href]", (as) => [...new Set(as.map((a) => a.href))]);
+    for (const l of links) {
+      if (!l.startsWith("http") || l.includes("wa.me") || l.includes("instagram.com") || l.startsWith("mailto")) { report.enlaces.push({ enlace: l, estado: "externo (no se prueba)" }); continue; }
+      try { const rr = await page.request.get(l, { maxRedirects: 5 }); report.enlaces.push({ enlace: l.replace(BASE, ""), estado: rr.status() }); }
+      catch (e) { report.enlaces.push({ enlace: l, estado: `ERROR ${String(e).slice(0, 80)}` }); }
+    }
+    // Ingreso con datos incorrectos: tiene que mostrar un error claro
+    try {
+      await page.goto(BASE + "/login", { waitUntil: "networkidle" });
+      await page.locator('input[type="email"], input[name="email"], input[autocomplete="username"]').first().fill("no-existe@ejemplo.com");
+      await page.locator('input[type="password"]').first().fill("clave-equivocada-123");
+      await page.getByRole("button", { name: /^Ingresar$/ }).first().click();
+      await page.waitForTimeout(5000);
+      const txt = await page.locator('[role="alert"]').allTextContents();
+      await page.screenshot({ path: `${OUT}/capturas/login-incorrecto.png` });
+      report.flujos.push({ flujo: "Ingreso con clave incorrecta", resultado: txt.join(" | ") || "(no mostró ningún aviso)", captura: "login-incorrecto.png" });
+    } catch (e) { report.flujos.push({ flujo: "Ingreso con clave incorrecta", resultado: `No se pudo probar: ${String(e).slice(0, 160)}` }); }
+  }
+  await ctx.close();
+}
+
+// ---------- 2. API ----------
+{
+  const ctx = await browser.newContext();
+  const req = ctx.request;
+  const probes = [
+    ["GET", "/api/clima"], ["GET", "/api/cron/planes"], ["POST", "/api/mp/webhook"], ["POST", "/api/plan/suscribir"],
+    ["POST", "/api/plan/cancelar"], ["GET", "/api/lugar?q=Pinamar"], ["POST", "/auth/registrar"], ["GET", "/robots.txt"], ["GET", "/sitemap.xml"],
+  ];
+  for (const [m, p] of probes) {
+    try {
+      const r = m === "GET" ? await req.get(BASE + p) : await req.post(BASE + p, { data: {} });
+      report.api.push({ ruta: `${m} ${p}`, estado: r.status(), respuesta: (await r.text()).slice(0, 200) });
+    } catch (e) { report.api.push({ ruta: `${m} ${p}`, estado: `ERROR ${String(e).slice(0, 100)}` }); }
+  }
+  await ctx.close();
+}
+
+// ---------- 3. Demo: todas las secciones ----------
+const APP = ["/", "/mapa", "/disponibilidad", "/reservas", "/reservas/nueva", "/tarifas", "/convenios", "/clientes", "/renovacion",
+  "/cobros", "/caja", "/caja/tarjetas", "/gastos", "/reportes", "/historial", "/copias", "/configuracion"];
+
+async function enterDemo(page) {
+  await page.goto(BASE + "/", { waitUntil: "networkidle" });
+  // Que no arranque el tutorial ni el aviso de caja encima
+  await page.evaluate(() => { try { sessionStorage.setItem("bal_tour_visto", "1"); } catch {} });
+  await page.getByRole("button", { name: /Probar la demo/i }).first().click();
+  await page.getByText("Inicio / Panel").first().waitFor({ timeout: 90000 });
+  await page.waitForTimeout(1500);
+  const skip = page.getByRole("button", { name: /Saltar tutorial/ });
+  if (await skip.isVisible().catch(() => false)) await skip.click();
+}
+
+for (const [view, opts] of Object.entries(VIEWS)) {
+  const ctx = await browser.newContext({ ...opts, locale: "es-AR", timezoneId: "America/Argentina/San_Juan" });
+  const page = await ctx.newPage();
+  const issues = watch(page);
+  try {
+    await enterDemo(page);
+    report.flujos.push({ flujo: `Entrar a la demo (${view})`, resultado: "OK" });
+  } catch (e) {
+    await page.screenshot({ path: `${OUT}/capturas/demo-no-entra-${view}.png` });
+    report.flujos.push({ flujo: `Entrar a la demo (${view})`, resultado: `NO ENTRÓ: ${String(e).slice(0, 200)}`, captura: `demo-no-entra-${view}.png`, consola: issues.consola.slice(-5), pedidos: issues.pedidos.slice(-5) });
+    await ctx.close();
+    continue;
+  }
+  for (const path of APP) {
+    const row = await check(page, path, `demo${path === "/" ? "-panel" : path}`, view, issues, 2000);
+    const skip = page.getByRole("button", { name: /Saltar tutorial/ });
+    if (await skip.isVisible().catch(() => false)) await skip.click();
+    report.demo.push(row);
+  }
+
+  // ---------- 4. Flujos en la demo (solo en PC) ----------
+  if (view === "pc") {
+    // a) Nueva reserva de punta a punta
+    const flow = { flujo: "Crear una reserva (cliente existente, 5 días, carpa libre, pagada en efectivo)", pasos: [] };
+    try {
+      await page.goto(BASE + "/reservas/nueva", { waitUntil: "networkidle" });
+      await page.getByLabel("Buscar cliente").fill("a");
+      await page.waitForTimeout(1500);
+      await page.locator("ul li button").first().click();
+      flow.pasos.push("cliente elegido");
+      await page.getByRole("button", { name: "5 días" }).click();
+      await page.waitForTimeout(2500);
+      await page.locator('button[title="Libre toda la estadía"]').first().click();
+      flow.pasos.push("carpa elegida");
+      await page.waitForTimeout(1500);
+      await page.screenshot({ path: `${OUT}/capturas/flujo-reserva-antes.png`, fullPage: true });
+      await page.getByRole("button", { name: "Guardar reserva" }).click();
+      await page.waitForTimeout(2000);
+      const confirm = page.getByRole("dialog").getByRole("button", { name: /Confirmar|Guardar|Sí/ });
+      if (await confirm.first().isVisible().catch(() => false)) { await confirm.first().click(); flow.pasos.push("confirmó"); }
+      await page.getByRole("button", { name: "Ver la reserva" }).waitFor({ timeout: 20000 });
+      flow.pasos.push("guardada");
+      await page.getByRole("button", { name: "Ver la reserva" }).click();
+      await page.waitForTimeout(3000);
+      await page.screenshot({ path: `${OUT}/capturas/flujo-reserva-detalle.png`, fullPage: true });
+      flow.resultado = "OK";
+    } catch (e) {
+      await page.screenshot({ path: `${OUT}/capturas/flujo-reserva-error.png`, fullPage: true }).catch(() => {});
+      flow.resultado = `Se cortó: ${String(e).slice(0, 200)}`;
+      flow.avisos = await page.locator('[role="alert"]').allTextContents().catch(() => []);
+    }
+    report.flujos.push(flow);
+
+    // b) Caja: abrir si hace falta y registrar un gasto
+    const f2 = { flujo: "Caja: abrir (si está cerrada) y cargar un gasto en efectivo", pasos: [] };
+    try {
+      await page.goto(BASE + "/caja", { waitUntil: "networkidle" });
+      await page.waitForTimeout(1500);
+      const abrir = page.getByRole("button", { name: /Abrir caja/ }).first();
+      if (await abrir.isVisible().catch(() => false)) {
+        await abrir.click();
+        await page.waitForTimeout(800);
+        const dlg = page.getByRole("dialog");
+        await dlg.locator("input").first().fill("10000");
+        await dlg.getByRole("button", { name: /Abrir/ }).last().click();
+        await page.waitForTimeout(2500);
+        f2.pasos.push("caja abierta");
+      } else f2.pasos.push("la caja ya estaba abierta");
+      await page.screenshot({ path: `${OUT}/capturas/flujo-caja.png`, fullPage: true });
+      f2.resultado = "OK";
+      f2.avisos = await page.locator('[role="alert"]').allTextContents().catch(() => []);
+    } catch (e) { f2.resultado = `Se cortó: ${String(e).slice(0, 200)}`; }
+    report.flujos.push(f2);
+  }
+  await ctx.close();
+}
+await browser.close();
+
+// ---------- Informe ----------
+writeFileSync(`${OUT}/informe.json`, JSON.stringify(report, null, 2));
+const lines = [`# Revisión de ${BASE}`, `Fecha: ${report.fecha}`, ""];
+const probs = (r) => [...r.errores_js.map((x) => `JS: ${x}`), ...r.consola.map((x) => `consola: ${x}`), ...r.pedidos.map((x) => `pedido: ${x}`),
+  ...(r.desborde_px ? [`se sale ${r.desborde_px}px a lo ancho: ${r.culpables.join(", ")}`] : []), ...r.imagenes_rotas.map((x) => `imagen rota: ${x}`),
+  ...(r.sigue_cargando ? ["se quedó cargando"] : []), ...r.avisos.map((x) => `aviso: ${x}`)];
+for (const [title, rows] of [["Parte pública", report.publico], ["Demo", report.demo]]) {
+  lines.push(`## ${title}`);
+  for (const r of rows) {
+    const p = probs(r);
+    lines.push(`- ${r.vista} ${r.pagina} → ${r.estado} (${r.url_final}) ${p.length ? "⚠️" : "✅"}`);
+    for (const x of p) lines.push(`  - ${x}`);
+  }
+  lines.push("");
+}
+lines.push("## Flujos", ...report.flujos.map((f) => `- ${f.flujo}: ${f.resultado}${f.pasos ? ` [${f.pasos.join(" → ")}]` : ""}${f.avisos?.length ? ` · avisos: ${f.avisos.join(" | ")}` : ""}`), "");
+lines.push("## API", ...report.api.map((a) => `- ${a.ruta} → ${a.estado} ${String(a.respuesta ?? "").replace(/\s+/g, " ").slice(0, 120)}`), "");
+lines.push("## Cabeceras", ...Object.entries(report.cabeceras).map(([k, v]) => `- ${k}: ${v ?? "FALTA"}`), "");
+lines.push("## Enlaces de la portada", ...report.enlaces.map((e) => `- ${e.enlace} → ${e.estado}`));
+writeFileSync(`${OUT}/informe.md`, lines.join("\n"));
+log("listo");

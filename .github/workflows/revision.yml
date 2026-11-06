@@ -1,0 +1,31 @@
+name: Revisión del sitio en producción
+
+on:
+  workflow_dispatch:
+  push:
+    paths: ["scripts/revision.mjs", ".github/workflows/revision.yml"]
+
+permissions:
+  contents: write
+
+jobs:
+  revision:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --no-save --no-audit --no-fund playwright@1.49.1
+      - run: npx playwright install --with-deps chromium
+      - name: Recorrer el sitio
+        run: node scripts/revision.mjs
+      - name: Guardar el informe en la rama "revision"
+        if: always()
+        run: |
+          cd revision
+          echo '{ "git": { "deploymentEnabled": false } }' > vercel.json
+          git init -q -b revision
+          git config user.name "revision" && git config user.email "revision@users.noreply.github.com"
+          git add -A && git commit -qm "Revisión de ${GITHUB_SHA::7}"
+          git push -qf "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git" revision

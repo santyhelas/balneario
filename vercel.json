@@ -11,7 +11,8 @@
   ],
   "git": {
     "deploymentEnabled": {
-      "capturas": false
+      "capturas": false,
+      "revision": false
     }
   }
 }
