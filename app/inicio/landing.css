@@ -61,7 +61,6 @@ html[data-tb="oscuro"] .tb {
   --tinta: #e6eef1;
   --gris: #a7bac2;
   --foam: #17394a;
-  --sand: #2a2619;
   --sand-2: #4d4330;
   background: #0b1d26;
 }
@@ -83,3 +82,7 @@ html[data-tb="oscuro"] .tb .border-\[\#e3c98f\] { border-color: #4d4330; }
 html[data-tb="oscuro"] .tb .border-\[\#bfe3cb\] { border-color: #2a5a3d; }
 /* El botón «Escribinos por mail» y otros blancos sobre el azul siguen claros */
 html[data-tb="oscuro"] .tb .hover\:bg-\[var\(--foam\)\]:hover { background-color: #17394a; }
+html[data-tb="oscuro"] .tb .bg-\[var\(--sand\)\] { background-color: #2a2619; }
+html[data-tb="oscuro"] .tb .bg-\[var\(--tinta\)\] { background-color: #06131a; }
+/* Los dibujos (el plano de la portada) mantienen sus colores de día */
+html[data-tb="oscuro"] .tb svg { --tinta: #13252e; --sand-2: #e3c98f; }
