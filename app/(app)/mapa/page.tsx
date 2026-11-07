@@ -288,7 +288,7 @@ export default function MapaPage() {
             <>
               {editMode && <Button variant="secondary" onClick={() => setLayoutConfirm(true)}>Diseño Parador</Button>}
               {editMode && <Button variant="secondary" onClick={() => setAdding(true)}>Agregar carpa o sombrilla</Button>}
-              <Button variant={editMode ? "primary" : "secondary"} onClick={() => { setEditMode((v) => !v); setMessage(null); }}>
+              <Button data-tour="mapa-editar" variant={editMode ? "primary" : "secondary"} onClick={() => { setEditMode((v) => !v); setMessage(null); }}>
                 {editMode ? "Terminar edición" : "Editar plano"}
               </Button>
             </>

@@ -10,7 +10,7 @@ import { Icon, NAV } from "@/components/shell";
 import { Alert, Button, Spinner, cx } from "@/components/ui";
 import { CloseCashModal, OpenCashModal, type CashSummary } from "@/components/cash";
 import { WeatherStrip } from "@/components/weather";
-import { useTourActive } from "@/components/demo-tour";
+import { useNewsUnseen, useTourActive } from "@/components/demo-tour";
 import { ArrivalButtons, type ArrivalState } from "@/components/arrival";
 
 type Tone = "accent" | "ok" | "danger" | "warn" | "orange" | "neutral";
@@ -31,7 +31,9 @@ export default function DashboardPage() {
   // En la demo, el pedido de abrir la caja espera a que termine el tutorial.
   const demoTour = useTourActive(isGuest);
   const guideTour = useTourActive(!isGuest && role === "propietario", "guia", !guideDone);
-  const touring = demoTour || guideTour;
+  const newsUnseen = useNewsUnseen();
+  const newsTour = useTourActive(isGuest || role === "propietario" || role === "administrador", "novedades", !isGuest && guideDone && newsUnseen);
+  const touring = demoTour || guideTour || newsTour;
   const [cash, setCash] = useState<CashSummary | null>(null);
   const [openCash, setOpenCash] = useState(false);
   const [askedToday, setAskedToday] = useState(false);

@@ -373,6 +373,31 @@ for (const [view, opts] of Object.entries(VIEWS)) {
       f6.resultado = chosen && Math.abs(after.x - before.x) > 5 && moved1 && n1 > n0 ? "OK" : "Revisar";
     } catch (e) { f6.resultado = `Se cortó: ${String(e).slice(0, 200)}`; }
     report.flujos.push(f6);
+
+    // g) Tutorial de novedades: cada paso encuentra lo que explica
+    const f7 = { flujo: "Tutorial de novedades", pasos: [] };
+    try {
+      await page.goto(DEMO + "/", { waitUntil: "networkidle" });
+      await page.getByRole("button", { name: "Novedades" }).first().click();
+      const dlg = page.locator('[role="dialog"][aria-labelledby="tour-titulo"]');
+      await dlg.waitFor({ timeout: 8000 });
+      const total = Number((await dlg.getByText(/Paso \d+ de \d+/).textContent()).match(/de (\d+)/)[1]);
+      const sinMarca = [];
+      for (let i = 0; i < total; i++) {
+        await page.waitForTimeout(2200);
+        const title = (await page.locator("#tour-titulo").textContent())?.trim();
+        const marked = await dlg.locator(".ring-4").count();
+        f7.pasos.push(`${i + 1}. ${title}${marked ? "" : " (sin resaltar)"}`);
+        if (!marked) sinMarca.push(title);
+        if (i === 2 || i === 3) await page.screenshot({ path: `${OUT}/capturas/novedades-${i + 1}.png` });
+        if (i < total - 1) await dlg.getByRole("button", { name: "Siguiente" }).click();
+        else await dlg.getByRole("button", { name: /Terminar|Empezar/ }).click();
+      }
+      // El primero y el último no resaltan nada a propósito.
+      const esperado = sinMarca.filter((t) => !/^Novedades de|^¡Eso es todo/.test(t));
+      f7.resultado = esperado.length ? `Revisar: ${esperado.join(", ")}` : "OK";
+    } catch (e) { f7.resultado = `Se cortó: ${String(e).slice(0, 200)}`; }
+    report.flujos.push(f7);
   }
   await ctx.close();
 }

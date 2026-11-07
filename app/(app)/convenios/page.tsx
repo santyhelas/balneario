@@ -29,8 +29,10 @@ export default function ConveniosPage() {
           <PackagesCard pkgs={q.data.pkgs} cashPercent={q.data.wsRow.cash_discount_percent} wsVersion={q.data.wsRow.version} editable={isAdmin} onChanged={q.reload} />
           <div className="flex flex-col gap-4">
             <AgreementsCard agreements={q.data.agreements} editable={isAdmin} onChanged={q.reload} />
+            <div data-tour="convenios-modo" className="flex flex-col gap-4">
             <DiscountModeCard mode={q.data.wsRow.discount_mode ?? null} wsVersion={q.data.wsRow.version} editable={isAdmin} onChanged={q.reload} />
             <DiscountCapCard key={`cap${q.data.wsRow.version}`} cap={q.data.wsRow.discount_cap_percent} wsVersion={q.data.wsRow.version} editable={isAdmin} onChanged={q.reload} />
+            </div>
           </div>
         </div>
       )}

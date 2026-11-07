@@ -85,7 +85,7 @@ export default function GastosPage() {
         subtitle="Solo gastos ya pagados. Los pagados en efectivo salen de la caja; los demás no tocan el efectivo."
         actions={
           <>
-            <Button variant="secondary" disabled={rows.length === 0} onClick={() => downloadXlsx(`gastos_${from}_${to}.xlsx`, [{
+            <Button data-tour="gastos-excel" variant="secondary" disabled={rows.length === 0} onClick={() => downloadXlsx(`gastos_${from}_${to}.xlsx`, [{
               name: "Gastos",
               header: ["Fecha", "Concepto", "Categoría", "Proveedor", "Medio de pago", "Importe", "Estado", "Observaciones"],
               rows: [

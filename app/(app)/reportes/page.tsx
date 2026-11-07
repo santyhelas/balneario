@@ -239,7 +239,7 @@ export default function ReportesPage() {
           </div>
         </div>
       )}
-      <div className="mt-4"><SeasonCompare /></div>
+      <div className="mt-4" data-tour="temporadas"><SeasonCompare /></div>
     </>
   );
 }

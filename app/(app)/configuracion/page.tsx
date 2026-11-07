@@ -40,7 +40,7 @@ export default function ConfiguracionPage() {
           <BalnearioCard key={q.data.row.version} row={q.data.row} editable={isAdmin} onSaved={async () => { await reloadWorkspace(); q.reload(); }} onConflict={q.reload} />
           <MessagesCard key={`m${q.data.row.version}`} editable={isAdmin} onSaved={q.reload} />
           <ExtrasCard />
-          <RulesCard />
+          <div data-tour="config-reglas"><RulesCard /></div>
           </div>
           <div className="flex flex-col gap-4">
             {!isGuest && <PlanCard />}
@@ -52,9 +52,12 @@ export default function ConfiguracionPage() {
                 ¿Dudas, problemas o sugerencias? Escribinos a{" "}
                 <a href={gmailCompose(SITE_EMAIL)} target="_blank" rel="noopener noreferrer" className="font-medium text-accent hover:underline">{SITE_EMAIL}</a>.
               </p>
-              {!isGuest && role === "propietario" && (
-                <Button variant="secondary" className="mt-3" onClick={() => startTour("guia")}>Ver la guía de nuevo</Button>
-              )}
+              <div className="mt-3 flex flex-wrap gap-2">
+                {!isGuest && role === "propietario" && (
+                  <Button variant="secondary" onClick={() => startTour("guia")}>Ver la guía de nuevo</Button>
+                )}
+                {(isGuest || isAdmin) && <Button variant="secondary" onClick={() => startTour("novedades")}>Ver las novedades</Button>}
+              </div>
             </Card>
           </div>
         </div>
