@@ -152,10 +152,13 @@ begin
   perform set_config('app.restore_ws', p_ws::text, true);
 
   -- ── Reservas: carpa por carpa, a lo largo del tiempo ─────────────
-  for v_sp in select id, kind from public.spaces where workspace_id = p_ws and active order by random() loop
+  -- Casi lleno, pero 5 carpas y 1 sombrilla quedan libres desde hoy por 10 días, para poder probar una reserva.
+  for v_sp in select id, kind, (row_number() over (partition by kind order by random())) <= (case kind when 'carpa' then 5 else 1 end) as libre
+                from public.spaces where workspace_id = p_ws and active order by random() loop
     v_d := v_today - v_hist + floor(random() * 4)::int;
     loop
       exit when v_d > v_today + v_far;
+      if v_sp.libre and v_d between v_today and v_today + 10 then v_d := v_today + 11; continue; end if;
       -- Qué tan lleno: la historia bastante, hoy y la semana casi completo, más adelante cada vez menos.
       v_p := case when v_d < v_today - 12 then 0.75 when v_d <= v_today + 8 then 0.93 when v_d <= v_today + 25 then 0.5 else 0.14 end;
       if random() > v_p then
@@ -166,6 +169,7 @@ begin
       v_end := v_d + v_len - 1;
       -- Algunas estadías terminan hoy (para ver las salidas del día).
       if v_d < v_today and v_end > v_today and random() < 0.15 then v_end := v_today; end if;
+      if v_sp.libre and v_d < v_today and v_end >= v_today then v_end := v_today - 1; end if;
 
       -- Cliente: los primeros de la lista vuelven más seguido (clientes frecuentes).
       v_cid := v_custs[1 + floor(power(random(), 1.25) * v_n_cust)::int];
