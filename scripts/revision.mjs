@@ -378,7 +378,8 @@ for (const [view, opts] of Object.entries(VIEWS)) {
     const f7 = { flujo: "Tutorial de novedades", pasos: [] };
     try {
       await page.goto(DEMO + "/", { waitUntil: "networkidle" });
-      await page.getByRole("button", { name: "Novedades" }).first().click();
+      await page.waitForTimeout(1500);
+      await page.locator("button:visible", { hasText: /^Novedades$/ }).first().click();
       const dlg = page.locator('[role="dialog"][aria-labelledby="tour-titulo"]');
       await dlg.waitFor({ timeout: 8000 });
       const total = Number((await dlg.getByText(/Paso \d+ de \d+/).textContent()).match(/de (\d+)/)[1]);
@@ -396,7 +397,7 @@ for (const [view, opts] of Object.entries(VIEWS)) {
       // El primero y el último no resaltan nada a propósito.
       const esperado = sinMarca.filter((t) => !/^Novedades de|^¡Eso es todo/.test(t));
       f7.resultado = esperado.length ? `Revisar: ${esperado.join(", ")}` : "OK";
-    } catch (e) { f7.resultado = `Se cortó: ${String(e).slice(0, 200)}`; }
+    } catch (e) { f7.resultado = `Se cortó: ${String(e).slice(0, 200)}`; await page.screenshot({ path: `${OUT}/capturas/novedades-error.png` }); }
     report.flujos.push(f7);
   }
   await ctx.close();
