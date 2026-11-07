@@ -457,9 +457,24 @@ select t.ok((select state from public.map_day_status(t.uid('ws'), t.get('d0')::d
 -- =====================================================================
 -- 11. Inventario
 -- =====================================================================
+-- Cantidad contratada: el balneario se creó con 79 carpas y no puede tener más activas.
+select t.ok((select max_tents = 79 and max_umbrellas = 10 from public.workspaces where id = t.uid('ws')), 'Límite: el máximo es lo que se cargó al crear el balneario');
+select t.throws(format($$insert into public.spaces (workspace_id, kind, code, x, y) values (%L, 'carpa', '91', 1800, 400)$$, t.get('ws')),
+  'Tu plan incluye 79 carpas', 'Límite: no se puede agregar una carpa de más');
+select t.throws(format($$update public.workspaces set max_tents = 500 where id = %L$$, t.get('ws')), 'permission denied',
+  'Límite: el balneario no puede cambiarse su máximo');
+select t.throws(format($$select public.admin_set_space_limits(%L, 500, 50)$$, t.get('ws')), 'panel del dueño',
+  'Límite: solo el dueño de la plataforma cambia el máximo');
+insert into public.spaces (workspace_id, kind, code, x, y, active) values (t.uid('ws'), 'carpa', '92', 1800, 500, false);
+select t.ok(exists (select 1 from public.spaces where code = '92' and not active), 'Límite: se puede cargar una carpa desactivada');
+select t.throws(format($$update public.spaces set active = true, version = version + 1 where workspace_id = %L and code = '92'$$, t.get('ws')),
+  'Tu plan incluye 79 carpas', 'Límite: no se puede activar una carpa de más');
+reset role;
+update public.workspaces set max_tents = 80, version = version + 1 where id = t.uid('ws');  -- (lo que haría el dueño de la plataforma)
+set role authenticated;
 insert into public.spaces (workspace_id, kind, code, x, y) values (t.uid('ws'), 'carpa', '91', 1800, 400);
-select t.ok((select count(*) from public.spaces where kind = 'carpa') = 80, 'Inventario: se agregan carpas');
-select t.throws(format($$insert into public.spaces (workspace_id, kind, code) values (%L, 'carpa', ' 17')$$, t.get('ws')),
+select t.ok((select count(*) from public.spaces where kind = 'carpa' and active) = 80, 'Inventario: se agregan carpas (hasta el máximo)');
+select t.throws(format($$insert into public.spaces (workspace_id, kind, code, active) values (%L, 'carpa', ' 17', false)$$, t.get('ws')),
   'duplicate key', 'Inventario: no se repiten códigos');
 select t.throws(format($$update public.spaces set active = false, version = version + 1 where id = %L$$, t.space('17')),
   'tiene reservas pendientes', 'Inventario: no se desactiva una carpa con reservas futuras');
@@ -1003,12 +1018,14 @@ select t.ok(private.extend_until('temporada', null, '2026-11-20') = '2027-03-31'
         and private.extend_until('temporada', '2026-12-01', '2026-12-01') = '2027-03-31', 'Planes: la temporada paga hasta el 31/3 que corresponde');
 select t.ok(private.extend_until('mensual', '2027-01-10', '2027-01-08') = '2027-02-10' and private.extend_until('mensual', '2026-12-01', '2027-01-05') = '2027-02-05', 'Planes: el mensual suma un mes desde el vencimiento (o desde el pago si estaba vencido)');
 select public.admin_set_prices(15000, 120000);
-select public.admin_allow_signup('cliente@test.com', 'La Ola', 'mensual', null);
+select public.admin_allow_signup('cliente@test.com', 'La Ola', 'mensual', null, 10, 2);
 reset role;
 insert into auth.users (id, email) values ('99999999-9999-9999-9999-999999999999', 'cliente@test.com');
 set role authenticated;
 select set_config('request.jwt.claims', '{"sub":"99999999-9999-9999-9999-999999999999","email":"cliente@test.com"}', false);
+select t.throws($$select public.create_workspace('La Ola', 11, 0)$$, 'incluye hasta 10 carpas', 'Límite: al crear no se pasa de lo habilitado');
 select t.set('wsC', public.create_workspace('La Ola', 3, 0)::text);
+select t.ok((select max_tents = 10 and max_umbrellas = 2 from public.workspaces where id = t.uid('wsC')), 'Límite: el máximo es lo habilitado aunque se carguen menos');
 select t.ok((select plan = 'mensual' and price = 15000 and status = 'pendiente' and paid_until = private.today_ar() from public.subscriptions where workspace_id = t.uid('wsC')),
         'Planes: al crear el balneario nace su plan con el precio general');
 insert into public.customers (workspace_id, first_name) values (t.uid('wsC'), 'Primer');

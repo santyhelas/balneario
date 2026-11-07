@@ -287,6 +287,17 @@ function Onboarding({ email, onDone }: { email: string | null; onDone: () => Pro
   const [umbrellas, setUmbrellas] = useState("10");
   const [lat, setLat] = useState<number | null>(null);
   const [lon, setLon] = useState<number | null>(null);
+  // Lo que incluye la habilitación (carpas y sombrillas contratadas), si lo dice.
+  const [limits, setLimits] = useState<{ carpas: number | null; sombrillas: number | null } | null>(null);
+  useEffect(() => {
+    getSupabase().rpc("my_signup_limits").then(({ data }) => {
+      const l = data as { carpas: number | null; sombrillas: number | null } | null;
+      if (!l) return;
+      setLimits(l);
+      if (l.carpas != null) setTents(String(l.carpas));
+      if (l.sombrillas != null) setUmbrellas(String(l.sombrillas));
+    });
+  }, []);
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -324,11 +335,14 @@ function Onboarding({ email, onDone }: { email: string | null; onDone: () => Pro
           </p>
           <TextField label="Nombre del balneario" required maxLength={120} value={name} onChange={(e) => setName(e.target.value)} />
           <div className="grid grid-cols-2 gap-3">
-            <TextField label="Carpas" type="number" inputMode="numeric" min={0} max={600} value={tents} onChange={(e) => setTents(e.target.value)} />
-            <TextField label="Sombrillas" type="number" inputMode="numeric" min={0} max={300} value={umbrellas} onChange={(e) => setUmbrellas(e.target.value)} />
+            <TextField label="Carpas" type="number" inputMode="numeric" min={0} max={limits?.carpas ?? 600} value={tents} onChange={(e) => setTents(e.target.value)} />
+            <TextField label="Sombrillas" type="number" inputMode="numeric" min={0} max={limits?.sombrillas ?? 300} value={umbrellas} onChange={(e) => setUmbrellas(e.target.value)} />
           </div>
+          {limits && (limits.carpas != null || limits.sombrillas != null) && (
+            <p className="text-xs text-muted">Tu plan incluye hasta {limits.carpas ?? "—"} carpas y {limits.sombrillas ?? "—"} sombrillas.</p>
+          )}
           <LocationPicker lat={lat} lon={lon} onChange={(a, b) => { setLat(a); setLon(b); }} />
-          <p className="text-xs text-muted">La ubicación es para mostrarte el clima, el viento y el sol de tu playa. Si no la ponés ahora, la cargás después en Configuración. Las carpas y sombrillas se pueden agregar, quitar y renombrar cuando quieras.</p>
+          <p className="text-xs text-muted">La ubicación es para mostrarte el clima, el viento y el sol de tu playa. Si no la ponés ahora, la cargás después en Configuración. Las carpas y sombrillas se pueden mover, renombrar y desactivar cuando quieras; la cantidad máxima es la de tu plan.</p>
           {error && <Alert tone="danger">{error}</Alert>}
           <Button type="submit" loading={busy}>Crear balneario</Button>
           <button type="button" className="text-sm text-muted hover:underline" onClick={logout}>Usar otra cuenta</button>

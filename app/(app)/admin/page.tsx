@@ -17,10 +17,10 @@ type PlanInfo = {
 };
 type Balneario = {
   id: string; nombre: string; creado: string; pausado: string | null; motivo_pausa: string | null; propietario: string | null;
-  usuarios: number; carpas: number; sombrillas: number; reservas: number; reservas_30d: number; ultimo_uso: string | null;
+  usuarios: number; carpas: number; sombrillas: number; max_carpas?: number | null; max_sombrillas?: number | null; reservas: number; reservas_30d: number; ultimo_uso: string | null;
   plan: PlanInfo | null;
 };
-type Habilitacion = { correo: string; nota: string | null; creado: string; usado: string | null; balneario: string | null; plan: PlanKind | null; precio: number | null };
+type Habilitacion = { correo: string; nota: string | null; creado: string; usado: string | null; balneario: string | null; plan: PlanKind | null; precio: number | null; carpas?: number | null; sombrillas?: number | null };
 type Aviso = { id: string; tipo: "cancelada" | "pago_rechazado"; balneario: string; workspace_id: string; importe: number | null; detalle: string | null; fecha: string };
 type Overview = {
   balnearios: Balneario[]; habilitaciones: Habilitacion[]; avisos: Aviso[]; hoy: string; demos_abiertas: number;
@@ -51,6 +51,7 @@ export default function AdminPage() {
   const [resuming, setResuming] = useState<Balneario | null>(null);
   const [revoking, setRevoking] = useState<Habilitacion | null>(null);
   const [planFor, setPlanFor] = useState<Balneario | null>(null);
+  const [limitsFor, setLimitsFor] = useState<Balneario | null>(null);
   const [payFor, setPayFor] = useState<Balneario | null>(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ tone: "ok" | "danger"; text: string } | null>(null);
@@ -159,7 +160,12 @@ export default function AdminPage() {
                               </div>
                             )}
                           </td>
-                          <td className="py-2 text-right tabular">{b.carpas} + {b.sombrillas}</td>
+                          <td className="py-2 text-right tabular">
+                            <button type="button" className="hover:underline" title="Cambiar la cantidad contratada" onClick={() => setLimitsFor(b)}>
+                              {b.carpas}{b.max_carpas != null ? `/${b.max_carpas}` : ""} + {b.sombrillas}{b.max_sombrillas != null ? `/${b.max_sombrillas}` : ""}
+                            </button>
+                            <div className="text-xs text-muted">{b.max_carpas == null && b.max_sombrillas == null ? "sin límite" : "activas / máximo"}</div>
+                          </td>
                           <td className="py-2 text-right tabular">{b.reservas}<div className="text-xs text-muted">{b.reservas_30d} en 30 días</div></td>
                           <td className="py-2 text-xs">{b.ultimo_uso ? <>{ago === 0 ? "Hoy" : ago === 1 ? "Ayer" : `Hace ${ago} días`}<div className="text-muted">{formatDateTime(b.ultimo_uso)}</div></> : "Nunca"}</td>
                           <td className="py-2">
@@ -186,7 +192,7 @@ export default function AdminPage() {
 
           <div className="grid gap-4 lg:grid-cols-2">
             <SignupsCard rows={d.habilitaciones} busy={busy} prices={d.precios}
-              onAdd={(email, note, plan, price) => run(() => sb.rpc("admin_allow_signup", { p_email: email, p_note: note || null, p_plan: plan, p_price: price }),
+              onAdd={(email, note, plan, price, tents, umbrellas) => run(() => sb.rpc("admin_allow_signup", { p_email: email, p_note: note || null, p_plan: plan, p_price: price, p_tents: tents, p_umbrellas: umbrellas }),
                 `Listo: ${email} ya puede crear su balneario (con usuario o con Google).`)}
               onRevoke={setRevoking} />
             <PricesCard prices={d.precios} busy={busy}
@@ -195,6 +201,8 @@ export default function AdminPage() {
         </div>
       )}
 
+      {limitsFor && <LimitsModal b={limitsFor} busy={busy} onClose={() => setLimitsFor(null)}
+        onSave={async (t, u) => { if (await run(() => sb.rpc("admin_set_space_limits", { p_workspace_id: limitsFor.id, p_tents: t, p_umbrellas: u }), `Cantidad de ${limitsFor.nombre} guardada.`)) setLimitsFor(null); }} />}
       {pausing && <PauseModal b={pausing} busy={busy} onClose={() => setPausing(null)}
         onConfirm={async (reason) => { if (await run(() => sb.rpc("admin_set_paused", { p_workspace_id: pausing.id, p_paused: true, p_reason: reason }), `${pausing.nombre} quedó en pausa.`)) setPausing(null); }} />}
       {planFor && d && <PlanModal b={planFor} prices={d.precios} busy={busy} onClose={() => setPlanFor(null)}
@@ -239,9 +247,11 @@ function PlanFields({ plan, setPlan, price, setPrice }: { plan: PlanKind; setPla
 
 function SignupsCard({ rows, busy, prices, onAdd, onRevoke }: {
   rows: Habilitacion[]; busy: boolean; prices: Overview["precios"];
-  onAdd: (email: string, note: string, plan: PlanKind, price: number) => Promise<boolean>; onRevoke: (h: Habilitacion) => void;
+  onAdd: (email: string, note: string, plan: PlanKind, price: number, tents: number | null, umbrellas: number | null) => Promise<boolean>; onRevoke: (h: Habilitacion) => void;
 }) {
   const [email, setEmail] = useState("");
+  const [tents, setTents] = useState("");
+  const [umbrellas, setUmbrellas] = useState("");
   const [note, setNote] = useState("");
   const [plan, setPlan] = useState<PlanKind>("temporada");
   const [price, setPrice] = useState(String(prices.temporada || ""));
@@ -250,8 +260,11 @@ function SignupsCard({ rows, busy, prices, onAdd, onRevoke }: {
     e.preventDefault();
     const p = parseMoney(price);
     if (p == null || p < 0) return setErr("Poné el precio del plan.");
+    const t = tents.trim() === "" ? null : Number(tents);
+    const u = umbrellas.trim() === "" ? null : Number(umbrellas);
+    if ((t != null && (!Number.isInteger(t) || t < 0 || t > 600)) || (u != null && (!Number.isInteger(u) || u < 0 || u > 300))) return setErr("Carpas: de 0 a 600; sombrillas: de 0 a 300.");
     setErr(null);
-    if (await onAdd(email.trim().toLowerCase(), note.trim(), plan, p)) { setEmail(""); setNote(""); }
+    if (await onAdd(email.trim().toLowerCase(), note.trim(), plan, p, t, u)) { setEmail(""); setNote(""); setTents(""); setUmbrellas(""); }
   }
   return (
     <Card title="Altas habilitadas">
@@ -259,6 +272,11 @@ function SignupsCard({ rows, busy, prices, onAdd, onRevoke }: {
       <form onSubmit={submit} className="mb-4 flex flex-col gap-2">
         <TextField label="Correo" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="cliente@gmail.com" />
         <PlanFields plan={plan} setPlan={(v) => { setPlan(v); setPrice(String((v === "mensual" ? prices.mensual : prices.temporada) || "")); }} price={price} setPrice={setPrice} />
+        <div className="grid grid-cols-2 gap-2">
+          <TextField label="Carpas contratadas" type="number" inputMode="numeric" min={0} max={600} value={tents} onChange={(e) => setTents(e.target.value)} placeholder="Ej: 90" />
+          <TextField label="Sombrillas contratadas" type="number" inputMode="numeric" min={0} max={300} value={umbrellas} onChange={(e) => setUmbrellas(e.target.value)} placeholder="Ej: 10" />
+        </div>
+        <p className="-mt-1 text-xs text-muted">Es el máximo que va a poder tener activas. Si lo dejás vacío, el máximo es lo que cargue al crear su balneario.</p>
         <TextField label="Nota (opcional)" value={note} onChange={(e) => setNote(e.target.value)} maxLength={200} placeholder="Ej: Balneario La Ola" />
         {err && <Alert tone="danger">{err}</Alert>}
         <Button type="submit" loading={busy}>Habilitar</Button>
@@ -270,7 +288,7 @@ function SignupsCard({ rows, busy, prices, onAdd, onRevoke }: {
               <div className="min-w-0">
                 <div className="truncate font-medium">{h.correo}</div>
                 <div className="text-xs text-muted">
-                  {h.plan ? `${PLAN_LABEL[h.plan]}${h.precio != null ? ` ${formatMoney(h.precio)}` : ""} · ` : ""}{h.nota ? `${h.nota} · ` : ""}habilitado el {formatDate(h.creado.slice(0, 10))}
+                  {h.plan ? `${PLAN_LABEL[h.plan]}${h.precio != null ? ` ${formatMoney(h.precio)}` : ""} · ` : ""}{h.carpas != null || h.sombrillas != null ? `${h.carpas ?? "—"} carpas + ${h.sombrillas ?? "—"} sombrillas · ` : ""}{h.nota ? `${h.nota} · ` : ""}habilitado el {formatDate(h.creado.slice(0, 10))}
                 </div>
               </div>
               {h.usado
@@ -356,6 +374,39 @@ function PauseModal({ b, busy, onClose, onConfirm }: { b: Balneario; busy: boole
       footer={<><Button variant="secondary" onClick={onClose} disabled={busy}>Cancelar</Button><Button variant="danger" loading={busy} disabled={reason.trim().length < 3} onClick={() => onConfirm(reason.trim())}>Pausar</Button></>}>
       <p className="text-sm text-muted">Van a poder seguir entrando, ver y descargar sus datos, pero no cargar reservas, cobros ni cambios hasta que lo reactives. No se borra nada.</p>
       <TextField label="Motivo (lo ven ellos)" value={reason} onChange={(e) => setReason(e.target.value)} maxLength={300} placeholder="Ej: Falta el pago de noviembre" />
+    </Modal>
+  );
+}
+
+function LimitsModal({ b, busy, onClose, onSave }: { b: Balneario; busy: boolean; onClose: () => void; onSave: (t: number | null, u: number | null) => void }) {
+  const [t, setT] = useState(b.max_carpas != null ? String(b.max_carpas) : "");
+  const [u, setU] = useState(b.max_sombrillas != null ? String(b.max_sombrillas) : "");
+  const [err, setErr] = useState<string | null>(null);
+  function submit(e: FormEvent) {
+    e.preventDefault();
+    const tn = t.trim() === "" ? null : Number(t);
+    const un = u.trim() === "" ? null : Number(u);
+    if ((tn != null && (!Number.isInteger(tn) || tn < 0)) || (un != null && (!Number.isInteger(un) || un < 0))) return setErr("Poné números enteros (o dejalo vacío para sin límite).");
+    setErr(null);
+    onSave(tn, un);
+  }
+  return (
+    <Modal open onClose={onClose} title={`Cantidad contratada · ${b.nombre}`} busy={busy}>
+      <form onSubmit={submit} className="flex flex-col gap-3">
+        <p className="text-sm text-muted">Hoy tiene activas {b.carpas} carpas y {b.sombrillas} sombrillas. El balneario puede desactivar las que quiera, pero no tener más activas que este máximo.</p>
+        <div className="grid grid-cols-2 gap-3">
+          <TextField label="Máximo de carpas" type="number" inputMode="numeric" min={0} value={t} onChange={(e) => setT(e.target.value)} placeholder="sin límite" />
+          <TextField label="Máximo de sombrillas" type="number" inputMode="numeric" min={0} value={u} onChange={(e) => setU(e.target.value)} placeholder="sin límite" />
+        </div>
+        {((t !== "" && Number(t) < b.carpas) || (u !== "" && Number(u) < b.sombrillas)) && (
+          <Alert tone="warn">Es menos de lo que tiene activo hoy: no se le desactiva nada, pero no va a poder activar ni agregar hasta quedar por debajo.</Alert>
+        )}
+        {err && <Alert tone="danger">{err}</Alert>}
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="secondary" onClick={onClose} disabled={busy}>Cancelar</Button>
+          <Button type="submit" loading={busy}>Guardar</Button>
+        </div>
+      </form>
     </Modal>
   );
 }

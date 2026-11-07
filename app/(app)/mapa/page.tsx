@@ -76,6 +76,18 @@ export default function MapaPage() {
     [ws.id, day],
   );
 
+  // Cantidad contratada (null = sin límite; sin la actualización 0039 tampoco hay límite).
+  const limitsQ = useLoader<{ carpa: number | null; sombrilla: number | null }>(
+    async () => {
+      const res = await sb.from("workspaces").select("max_tents, max_umbrellas").eq("id", ws.id).single();
+      if (res.error) return { carpa: null, sombrilla: null };
+      const r = res.data as { max_tents: number | null; max_umbrellas: number | null };
+      return { carpa: r.max_tents, sombrilla: r.max_umbrellas };
+    },
+    [ws.id],
+    0,
+  );
+
   const featuresQ = useLoader<MapFeature[]>(
     async () => {
       const q = (cols: string) => sb.from("map_features").select(cols).eq("workspace_id", ws.id).eq("active", true).order("created_at");
@@ -151,6 +163,10 @@ export default function MapaPage() {
   }
 
   const spaces = data ?? [];
+  const usage = {
+    carpa: { used: spaces.filter((x) => x.kind === "carpa" && x.state !== "desactivada").length, max: limitsQ.data?.carpa ?? null },
+    sombrilla: { used: spaces.filter((x) => x.kind === "sombrilla" && x.state !== "desactivada").length, max: limitsQ.data?.sombrilla ?? null },
+  };
   const features = featuresQ.data ?? [];
   const selectedSpace = sel?.type === "space" ? spaces.find((s) => s.space_id === sel.id) ?? null : null;
   const selectedFeature = sel?.type === "feature" ? features.find((f) => f.id === sel.id) ?? null : null;
@@ -288,6 +304,11 @@ export default function MapaPage() {
             <>
               {editMode && <Button variant="secondary" onClick={() => setLayoutConfirm(true)}>Diseño Parador</Button>}
               {editMode && <Button variant="secondary" onClick={() => setAdding(true)}>Agregar carpa o sombrilla</Button>}
+              {editMode && (usage.carpa.max != null || usage.sombrilla.max != null) && (
+                <span className="text-xs text-muted" title="Lo que incluye tu plan. Podés desactivar y activar otras, sin pasar el máximo.">
+                  Plan: {usage.carpa.used}/{usage.carpa.max ?? "∞"} carpas · {usage.sombrilla.used}/{usage.sombrilla.max ?? "∞"} sombrillas
+                </span>
+              )}
               <Button data-tour="mapa-editar" variant={editMode ? "primary" : "secondary"} onClick={() => { setEditMode((v) => !v); setMessage(null); }}>
                 {editMode ? "Terminar edición" : "Editar plano"}
               </Button>
@@ -407,7 +428,7 @@ export default function MapaPage() {
       {isAdmin && designReady && (
         <TentDesigner open={designOpen} value={design ?? DEFAULT_TENT_STYLE} onClose={() => setDesignOpen(false)} onSave={saveDesign} />
       )}
-      {isAdmin && <AddSpaceModal open={adding} onClose={() => setAdding(false)} onDone={(id) => { setAdding(false); reload(); setSel({ type: "space", id }); }} mapW={ws.map_width} mapH={ws.map_height} />}
+      {isAdmin && <AddSpaceModal open={adding} onClose={() => setAdding(false)} onDone={(id) => { setAdding(false); reload(); setSel({ type: "space", id }); }} mapW={ws.map_width} mapH={ws.map_height} usage={usage} />}
     </>
   );
 }
@@ -690,7 +711,10 @@ function MaintenanceModal({ open, space, today, onClose, onDone }: { open: boole
   );
 }
 
-function AddSpaceModal({ open, onClose, onDone, mapW, mapH }: { open: boolean; onClose: () => void; onDone: (id: string) => void; mapW: number; mapH: number }) {
+type Usage = Record<"carpa" | "sombrilla", { used: number; max: number | null }>;
+const kindLabel = (k: "carpa" | "sombrilla", n: number) => (k === "carpa" ? (n === 1 ? "carpa" : "carpas") : n === 1 ? "sombrilla" : "sombrillas");
+
+function AddSpaceModal({ open, onClose, onDone, mapW, mapH, usage }: { open: boolean; onClose: () => void; onDone: (id: string) => void; mapW: number; mapH: number; usage: Usage }) {
   const { ws } = useWorkspace();
   const [kind, setKind] = useState<"carpa" | "sombrilla">("carpa");
   const [code, setCode] = useState("");
@@ -718,11 +742,19 @@ function AddSpaceModal({ open, onClose, onDone, mapW, mapH }: { open: boolean; o
           </Select>
         </Field>
         <TextField label="Identificación" value={code} onChange={(e) => setCode(e.target.value)} required maxLength={20} placeholder={kind === "carpa" ? "Ej: 90" : "Ej: 91"} />
+        {usage[kind].max != null && (usage[kind].used >= usage[kind].max! ? (
+          <Alert tone="warn">
+            Ya tenés las {usage[kind].max} {kindLabel(kind, usage[kind].max!)} de tu plan activas. Podés desactivar una y sumar otra en su lugar;
+            para tener más, escribinos.
+          </Alert>
+        ) : (
+          <p className="text-xs text-muted">Tu plan: {usage[kind].used} de {usage[kind].max} {kindLabel(kind, usage[kind].max!)} activas.</p>
+        ))}
         <p className="text-xs text-muted">Aparece en el centro del mapa; después arrastralo a su lugar.</p>
         {error && <Alert tone="danger">{error}</Alert>}
         <div className="flex justify-end gap-2">
           <Button type="button" variant="secondary" onClick={onClose} disabled={busy}>Cancelar</Button>
-          <Button type="submit" loading={busy}>Agregar</Button>
+          <Button type="submit" loading={busy} disabled={usage[kind].max != null && usage[kind].used >= usage[kind].max!}>Agregar</Button>
         </div>
       </form>
     </Modal>
