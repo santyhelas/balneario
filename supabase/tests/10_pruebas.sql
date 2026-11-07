@@ -1101,6 +1101,28 @@ update public.workspaces set message_templates = '{"mail_asunto": "Tu reserva en
 select t.ok((select message_templates ->> 'mail_asunto' from public.workspaces where id = t.uid('wsC')) = 'Tu reserva en {balneario}', 'Mensajes: se guarda el correo (asunto y texto)');
 select set_config('request.jwt.claims', '{"sub":"11111111-1111-1111-1111-111111111111","email":"duenio@test.com"}', false);
 
+-- 41. Plano: mover varias cosas juntas y copiar/pegar
+select set_config('request.jwt.claims', '{"sub":"99999999-9999-9999-9999-999999999999","email":"cliente@test.com"}', false);
+select t.set('mv', (select jsonb_agg(jsonb_build_object('type','space','id',id,'x',x + 10,'y',y + 10,'version',version))::text
+  from (select * from public.spaces where workspace_id = t.uid('wsC') and active order by code limit 2) s));
+select t.ok(public.move_map_items(t.uid('wsC'), t.get('mv')::jsonb) = 2, 'Plano: se mueven dos carpas juntas');
+select t.throws(format($$select public.move_map_items(%L, %L::jsonb)$$, t.get('wsC'), t.get('mv')), 'modificado desde otro dispositivo',
+  'Plano: mover con datos viejos avisa del conflicto (no pisa)');
+select t.throws(format($$select public.move_map_items(%L, (select jsonb_agg(jsonb_build_object('type','space','id',id,'x',-5,'y',y,'version',version)) from public.spaces where workspace_id = %L and active))$$, t.get('wsC'), t.get('wsC')),
+  'fuera del plano', 'Plano: no se mueve nada fuera del plano');
+update public.spaces set code = 'C7', version = version + 1 where id = (select id from public.spaces where workspace_id = t.uid('wsC') and active order by code limit 1);
+select t.set('pst', public.paste_map_items(t.uid('wsC'), (select jsonb_agg(jsonb_build_object('type','space','id',id)) from public.spaces where workspace_id = t.uid('wsC') and code = 'C7'), 40, 40)::text);
+select t.ok((select code from public.spaces where id = (t.get('pst')::jsonb -> 0 ->> 'id')::uuid) = 'C8', 'Copiar y pegar: la copia de C7 es C8',
+  (select code from public.spaces where id = (t.get('pst')::jsonb -> 0 ->> 'id')::uuid));
+select public.paste_map_items(t.uid('wsC'), (select jsonb_agg(jsonb_build_object('type','space','id',id)) from public.spaces where workspace_id = t.uid('wsC') and code = 'C7'), 40, 40);
+select t.ok(exists (select 1 from public.spaces where workspace_id = t.uid('wsC') and code = 'C9'), 'Copiar y pegar: dos veces no repite el número (C9)');
+insert into public.map_features (workspace_id, kind, label, x, y, width, height) values (t.uid('wsC'), 'instalacion', 'Bar copiable', 100, 100, 50, 50);
+select public.paste_map_items(t.uid('wsC'), (select jsonb_agg(jsonb_build_object('type','feature','id',id)) from public.map_features where label = 'Bar copiable'), 30, 0);
+select t.ok((select count(*) = 2 and min(x) = 100 and max(x) = 130 from public.map_features where label = 'Bar copiable'), 'Copiar y pegar: se duplican elementos del plano');
+select set_config('request.jwt.claims', '{"sub":"11111111-1111-1111-1111-111111111111","email":"duenio@test.com"}', false);
+select t.throws(format($$select public.paste_map_items(%L, '[{"type":"space","id":"%s"}]'::jsonb, 0, 0)$$, t.get('wsC'), t.get('pst')::jsonb -> 0 ->> 'id'), 'permiso',
+  'Copiar y pegar: otro balneario no puede pegar carpas ajenas');
+
 reset role;
 \o
 -- Resultado ----------------------------------------------------------

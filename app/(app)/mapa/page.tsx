@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { getSupabase } from "@/lib/supabase/client";
 import { unwrap, useLoader } from "@/lib/data";
 import { friendlyError } from "@/lib/errors";
@@ -8,7 +8,7 @@ import { addDays, formatDate, formatMoney, todayISO } from "@/lib/format";
 import { useWorkspace } from "@/components/workspace";
 import { PageHeader, SyncNotice } from "@/components/shell";
 import { Alert, Badge, Button, Card, ConfirmDialog, Field, Input, Modal, Select, Spinner, Textarea, TextField } from "@/components/ui";
-import { BeachMap, FEATURE_KIND_LABEL, type MapFeature, type MapSpace, type Selection } from "@/components/map/BeachMap";
+import { BeachMap, FEATURE_KIND_LABEL, type MapFeature, type MapItem, type MapItemPos, type MapSpace, type Selection } from "@/components/map/BeachMap";
 import { WeatherStrip, WindCompass } from "@/components/weather";
 import { DEFAULT_TENT_STYLE, normalizeTentStyle, STATE_COLOR, STATE_LABEL, type SpaceState, type TentStyle } from "@/components/map/icons";
 import { TentDesigner } from "@/components/map/TentDesigner";
@@ -42,7 +42,15 @@ export default function MapaPage() {
   }, []);
   const [layoutConfirm, setLayoutConfirm] = useState(false);
   const [layoutBusy, setLayoutBusy] = useState(false);
-  const [sel, setSel] = useState<Selection>(null);
+  const [sel, setSelRaw] = useState<Selection>(null);
+  /** Varias cosas elegidas a la vez (modo edición). */
+  const [group, setGroupRaw] = useState<MapItem[]>([]);
+  const setSel = (v: Selection) => { setSelRaw(v); setGroupRaw(v ? [v] : []); };
+  const setGroup = (items: MapItem[]) => { setGroupRaw(items); setSelRaw(items.length === 1 ? items[0] : null); };
+  /** Lo copiado con Ctrl + C (y cuántas veces se pegó, para correr cada copia un poco más). */
+  const clip = useRef<{ items: MapItem[]; pastes: number } | null>(null);
+  const [clipCount, setClipCount] = useState(0);
+  const [pasting, setPasting] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [message, setMessage] = useState<{ tone: "danger" | "ok"; text: string } | null>(null);
   const [adding, setAdding] = useState(false);
@@ -147,10 +155,78 @@ export default function MapaPage() {
   const selectedSpace = sel?.type === "space" ? spaces.find((s) => s.space_id === sel.id) ?? null : null;
   const selectedFeature = sel?.type === "feature" ? features.find((f) => f.id === sel.id) ?? null : null;
 
-  // Fuera del modo edición no se seleccionan elementos del plano.
+  // Fuera del modo edición no se seleccionan elementos del plano ni varias cosas a la vez.
   useEffect(() => {
     if (!editMode && sel?.type === "feature") setSel(null);
-  }, [editMode, sel]);
+    if (!editMode && group.length > 1) setGroup([]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editMode, sel, group.length]);
+
+  function copyGroup() {
+    const items = group.length ? group : sel ? [sel] : [];
+    if (!items.length) return;
+    clip.current = { items, pastes: 0 };
+    setClipCount(items.length);
+    setMessage({ tone: "ok", text: `Copiado: ${items.length === 1 ? "1 cosa" : `${items.length} cosas`}. Pegalo con Ctrl + V o con «Pegar».` });
+  }
+
+  async function pasteClip() {
+    const c = clip.current;
+    if (!c || pasting) return;
+    setPasting(true);
+    setMessage(null);
+    const off = 40 * (c.pastes + 1);
+    const { data: res, error: err } = await sb.rpc("paste_map_items", { p_workspace_id: ws.id, p_items: c.items, p_dx: off, p_dy: off });
+    setPasting(false);
+    if (err) {
+      setMessage({ tone: "danger", text: err.code === "PGRST202" ? "Para copiar y pegar hay que aplicar la actualización 0036 de la base de datos." : friendlyError(err) });
+      return;
+    }
+    c.pastes += 1;
+    const created = res as MapItem[];
+    await Promise.all([reload(), featuresQ.reload()]);
+    setGroup(created);
+    const nSp = created.filter((i) => i.type === "space").length;
+    setMessage({ tone: "ok", text: `Pegado: ${created.length === 1 ? "1 copia" : `${created.length} copias`}${nSp ? " (las carpas y sombrillas nuevas tienen el número siguiente libre)" : ""}. Ya quedaron elegidas: arrastralas a su lugar.` });
+  }
+
+  async function moveMany(items: MapItemPos[]): Promise<boolean> {
+    const payload = items.map((i) => ({
+      ...i,
+      version: i.type === "space" ? spaces.find((s) => s.space_id === i.id)?.version : features.find((f) => f.id === i.id)?.version,
+    }));
+    const { error: err } = await sb.rpc("move_map_items", { p_workspace_id: ws.id, p_items: payload });
+    if (err) {
+      setMessage({ tone: "danger", text: err.code === "PGRST202" ? "Para mover varias cosas juntas hay que aplicar la actualización 0036 de la base de datos." : `No se guardó: ${friendlyError(err)}` });
+      reload();
+      featuresQ.reload();
+      return false;
+    }
+    setMessage(null);
+    await Promise.all([reload(), featuresQ.reload()]);
+    return true;
+  }
+
+  // Atajos del modo edición: Ctrl + C, Ctrl + V, Ctrl + A y Esc (fuera de los campos de texto).
+  const keys = useRef({ copyGroup, pasteClip, setGroup, spaces, features, group });
+  keys.current = { copyGroup, pasteClip, setGroup, spaces, features, group };
+  useEffect(() => {
+    if (!editMode || !isAdmin) return;
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (t && (t.closest("input, textarea, select, [contenteditable=true]") || t.closest("[role=dialog]"))) return;
+      const k = keys.current;
+      const mod = e.ctrlKey || e.metaKey;
+      if (mod && e.key.toLowerCase() === "c" && k.group.length) { e.preventDefault(); k.copyGroup(); }
+      else if (mod && e.key.toLowerCase() === "v" && clip.current) { e.preventDefault(); void k.pasteClip(); }
+      else if (mod && e.key.toLowerCase() === "a") {
+        e.preventDefault();
+        k.setGroup([...k.spaces.map((x) => ({ type: "space" as const, id: x.space_id })), ...k.features.map((f) => ({ type: "feature" as const, id: f.id }))]);
+      } else if (e.key === "Escape" && k.group.length > 1) k.setGroup([]);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [editMode, isAdmin]);
 
   // En pantallas chicas la ficha queda debajo del plano: bajar hasta ella.
   useEffect(() => {
@@ -260,7 +336,7 @@ export default function MapaPage() {
               Diseño de carpas
             </Button>
           )}
-          <span className="text-xs text-muted">Tocá un elemento para editarlo; arrastralo para moverlo.</span>
+          <span className="text-xs text-muted">Tocá un elemento para editarlo; arrastralo para moverlo. Para elegir varios, arrastrá sobre la arena o usá Ctrl + clic.</span>
           {isAdmin && (
             <span className="ml-auto flex items-center gap-1.5">
               <span className="text-xs text-muted">Tamaño del plano:</span>
@@ -268,6 +344,21 @@ export default function MapaPage() {
               <Button variant="secondary" className="py-1.5" disabled={resizing} onClick={() => resize(1.25)} title="Más lugar para carpas: el plano se ve más alejado">Agrandar</Button>
             </span>
           )}
+        </div>
+      )}
+
+      {editMode && (group.length > 1 || clipCount > 0) && (
+        <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-line bg-surface p-2 text-sm">
+          {group.length > 1 && (
+            <span className="px-1 font-medium">
+              {group.length} elegidas
+              <span className="font-normal text-muted"> ({group.filter((g) => g.type === "space").length} carpas o sombrillas, {group.filter((g) => g.type === "feature").length} elementos)</span>
+            </span>
+          )}
+          {group.length > 0 && <Button variant="secondary" className="py-1.5" onClick={copyGroup}>Copiar</Button>}
+          {clipCount > 0 && <Button variant="secondary" className="py-1.5" loading={pasting} onClick={() => void pasteClip()}>Pegar {clipCount === 1 ? "1 cosa" : `${clipCount} cosas`}</Button>}
+          {group.length > 1 && <Button variant="secondary" className="py-1.5" onClick={() => setGroup([])}>Quitar selección</Button>}
+          {group.length > 1 && <span className="text-xs text-muted">Arrastrá cualquiera de las elegidas para moverlas todas juntas.</span>}
         </div>
       )}
 
@@ -284,6 +375,9 @@ export default function MapaPage() {
             onSelect={setSel}
             onMove={moveSpace}
             onFeatureChange={(id, g) => updateFeature(id, g)}
+            group={editMode ? group : []}
+            onGroupChange={setGroup}
+            onMoveMany={moveMany}
             overlay={<WindCompass seaSide={ws.sea_side} />}
             design={design}
           />

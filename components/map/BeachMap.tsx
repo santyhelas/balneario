@@ -31,6 +31,8 @@ export type MapFeature = {
 };
 
 export type Selection = { type: "space" | "feature"; id: string } | null;
+export type MapItem = { type: "space" | "feature"; id: string };
+export type MapItemPos = MapItem & { x: number; y: number };
 export type FeatureGeom = { x: number; y: number; width: number; height: number };
 
 type View = { x: number; y: number; w: number; h: number };
@@ -40,6 +42,9 @@ type Drag =
   | { type: "feature"; id: string; dx: number; dy: number; startX: number; startY: number; moved: boolean }
   | { type: "resize"; id: string; startX: number; startY: number; moved: boolean; hx: -1 | 0 | 1; hy: -1 | 0 | 1; g0: FeatureGeom; angle: number }
   | { type: "pinch"; lastDist: number; lastMid: { x: number; y: number } }
+  | { type: "group"; anchor: MapItem; startX: number; startY: number; moved: boolean; p0: { x: number; y: number }; items: (MapItemPos & { lo: [number, number]; hi: [number, number] })[] }
+  | { type: "marquee"; startX: number; startY: number; moved: boolean; p0: { x: number; y: number }; additive: boolean }
+  | { type: "toggle"; item: MapItem; startX: number; startY: number; moved: boolean }
   | null;
 
 const MIN_FEATURE = 16;
@@ -48,6 +53,8 @@ const MIN_FEATURE = 16;
  * Plano del balneario, integrado a la página: ocupa todo el ancho y mantiene la proporción del dibujo.
  * - Se puede acercar con los botones, Ctrl + rueda o dos dedos; cuando está acercado, se arrastra para moverse.
  * - En modo edición: arrastrar carpas y elementos (caminos, juegos…), y agrandarlos desde la esquina.
+ *   Varias a la vez: arrastrando sobre la arena se encierran en un recuadro; Ctrl + clic suma o quita una.
+ *   Con varias elegidas, arrastrar una mueve todas juntas.
  */
 export function BeachMap({
   width,
@@ -60,9 +67,17 @@ export function BeachMap({
   onSelect,
   onMove,
   onFeatureChange,
+  group = [],
+  onGroupChange,
+  onMoveMany,
   overlay,
   design = null,
 }: {
+  /** Selección múltiple (modo edición). */
+  group?: MapItem[];
+  onGroupChange?: (items: MapItem[]) => void;
+  /** Guarda de una vez la ubicación nueva de varias cosas. */
+  onMoveMany?: (items: MapItemPos[]) => Promise<boolean>;
   /** Diseño de carpas y sombrillas (null = el clásico, a rayas según el estado). */
   design?: TentStyle | null;
   width: number;
@@ -83,7 +98,9 @@ export function BeachMap({
   const [view, setViewRaw] = useState<View>(full);
   const [localSpaces, setLocalSpaces] = useState<Record<string, { x: number; y: number }>>({});
   const [localFeatures, setLocalFeatures] = useState<Record<string, FeatureGeom>>({});
-  const [saving, setSaving] = useState<string | null>(null);
+  const [savingIds, setSavingIds] = useState<Set<string>>(new Set());
+  const setSaving = (id: string | null) => setSavingIds(id ? new Set([id]) : new Set());
+  const [marquee, setMarquee] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
   const drag = useRef<Drag>(null);
   const pointers = useRef(new Map<number, { x: number; y: number }>());
   const zoomed = view.w < width - 1;
@@ -150,6 +167,11 @@ export function BeachMap({
       if (d.type === "space") setLocalSpaces((p) => { const n = { ...p }; delete n[d.id]; return n; });
       if (d.type === "feature" || d.type === "resize") setLocalFeatures((p) => { const n = { ...p }; delete n[d.id]; return n; });
       if (d.type === "pan") setView(d.view);
+      if (d.type === "group") {
+        setLocalSpaces((p) => { const n = { ...p }; d.items.forEach((i) => { if (i.type === "space") delete n[i.id]; }); return n; });
+        setLocalFeatures((p) => { const n = { ...p }; d.items.forEach((i) => { if (i.type === "feature") delete n[i.id]; }); return n; });
+      }
+      if (d.type === "marquee") setMarquee(null);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -190,6 +212,11 @@ export function BeachMap({
       const d = drag.current;
       if (d?.type === "space") setLocalSpaces((p) => { const n = { ...p }; delete n[d.id]; return n; });
       if (d?.type === "feature" || d?.type === "resize") setLocalFeatures((p) => { const n = { ...p }; delete n[d.id]; return n; });
+      if (d?.type === "group") {
+        setLocalSpaces((p) => { const n = { ...p }; d.items.forEach((i) => { if (i.type === "space") delete n[i.id]; }); return n; });
+        setLocalFeatures((p) => { const n = { ...p }; d.items.forEach((i) => { if (i.type === "feature") delete n[i.id]; }); return n; });
+      }
+      if (d?.type === "marquee") setMarquee(null);
       const { dist, mid } = pinchInfo();
       drag.current = { type: "pinch", lastDist: dist, lastMid: mid };
     } else if (pointers.current.size > 2) {
@@ -202,15 +229,63 @@ export function BeachMap({
     drag.current = { type: "pan", startX: e.clientX, startY: e.clientY, view, moved: false, tap };
   }
 
+  const inGroup = (type: MapItem["type"], id: string) => group.some((g) => g.type === type && g.id === id);
+  const multi = editMode && group.length > 1;
+
+  function startMarquee(e: RPointerEvent, additive: boolean) {
+    capture(e);
+    const p = toSvg(e.clientX, e.clientY);
+    drag.current = { type: "marquee", startX: e.clientX, startY: e.clientY, moved: false, p0: p, additive };
+  }
+
+  /** Arrastre de todo lo elegido: cada cosa guarda sus límites para que el grupo no se deforme contra los bordes. */
+  function startGroup(e: RPointerEvent, anchor: MapItem) {
+    capture(e);
+    const items = group.flatMap((g) => {
+      if (g.type === "space") {
+        const s = spaces.find((x) => x.space_id === g.id);
+        if (!s) return [];
+        const pos = spacePos(s);
+        const hw = s.kind === "carpa" ? TENT_W / 2 : UMBRELLA_R;
+        const hh = s.kind === "carpa" ? TENT_H / 2 + 9 : UMBRELLA_R;
+        return [{ ...g, x: pos.x, y: pos.y, lo: [hw, hh] as [number, number], hi: [width - hw, height - hh] as [number, number] }];
+      }
+      const f = features.find((x) => x.id === g.id);
+      if (!f) return [];
+      const fg = featGeom(f);
+      return [{ ...g, x: fg.x, y: fg.y, lo: [0, 0] as [number, number], hi: [width, height] as [number, number] }];
+    });
+    drag.current = { type: "group", anchor, startX: e.clientX, startY: e.clientY, moved: false, p0: toSvg(e.clientX, e.clientY), items };
+  }
+
   function onBgPointerDown(e: RPointerEvent<SVGElement>) {
-    if (e.button !== 0) return;
+    if (editMode && e.button === 0) return startMarquee(e, e.ctrlKey || e.metaKey || e.shiftKey);
+    // En modo edición, con la rueda apretada o el botón derecho se recorre el plano.
+    if (e.button !== 0 && !(editMode && (e.button === 1 || e.button === 2))) return;
     startPan(e, null);
   }
 
+  /** Ctrl/Shift en modo edición: Ctrl + clic suma o quita; Shift + arrastre encierra con un recuadro. */
+  function multiPointerDown(e: RPointerEvent, item: MapItem): boolean {
+    if (!editMode) return false;
+    if (e.shiftKey) { startMarquee(e, true); return true; }
+    if (e.ctrlKey || e.metaKey) {
+      capture(e);
+      drag.current = { type: "toggle", item, startX: e.clientX, startY: e.clientY, moved: false };
+      return true;
+    }
+    if (group.length > 1 && inGroup(item.type, item.id)) { startGroup(e, item); return true; }
+    return false;
+  }
+
   function onSpacePointerDown(e: RPointerEvent<SVGGElement>, s: MapSpace) {
-    if (e.button !== 0) return;
+    if (e.button !== 0) {
+      if (editMode && (e.button === 1 || e.button === 2)) { e.stopPropagation(); startPan(e, null); }
+      return;
+    }
     e.stopPropagation();
     if (!editMode) return startPan(e, { type: "space", id: s.space_id });
+    if (multiPointerDown(e, { type: "space", id: s.space_id })) return;
     capture(e);
     const pos = spacePos(s);
     const p = toSvg(e.clientX, e.clientY);
@@ -218,8 +293,13 @@ export function BeachMap({
   }
 
   function onFeaturePointerDown(e: RPointerEvent<SVGGElement>, f: MapFeature) {
-    if (e.button !== 0 || !editMode) return;
+    if (!editMode) return;
+    if (e.button !== 0) {
+      if (e.button === 1 || e.button === 2) { e.stopPropagation(); startPan(e, null); }
+      return;
+    }
     e.stopPropagation();
+    if (multiPointerDown(e, { type: "feature", id: f.id })) return;
     capture(e);
     const g = featGeom(f);
     const p = toSvg(e.clientX, e.clientY);
@@ -258,6 +338,33 @@ export function BeachMap({
     if (Math.hypot(e.clientX - d.startX, e.clientY - d.startY) > (e.pointerType === "touch" ? 8 : 4)) d.moved = true;
     if (!d.moved) return;
     const p = toSvg(e.clientX, e.clientY);
+    if (d.type === "toggle") return;
+    if (d.type === "marquee") {
+      setMarquee({ x0: Math.min(d.p0.x, p.x), y0: Math.min(d.p0.y, p.y), x1: Math.max(d.p0.x, p.x), y1: Math.max(d.p0.y, p.y) });
+      return;
+    }
+    if (d.type === "group") {
+      let dx = p.x - d.p0.x;
+      let dy = p.y - d.p0.y;
+      for (const i of d.items) {
+        dx = Math.min(i.hi[0] - i.x, Math.max(i.lo[0] - i.x, dx));
+        dy = Math.min(i.hi[1] - i.y, Math.max(i.lo[1] - i.y, dy));
+      }
+      dx = Math.round(dx);
+      dy = Math.round(dy);
+      const ns: Record<string, { x: number; y: number }> = {};
+      const nf: Record<string, FeatureGeom> = {};
+      for (const i of d.items) {
+        if (i.type === "space") ns[i.id] = { x: Math.round(i.x + dx), y: Math.round(i.y + dy) };
+        else {
+          const f = features.find((x) => x.id === i.id);
+          if (f) nf[i.id] = { ...featGeom(f), x: Math.round(i.x + dx), y: Math.round(i.y + dy) };
+        }
+      }
+      setLocalSpaces((prev) => ({ ...prev, ...ns }));
+      setLocalFeatures((prev) => ({ ...prev, ...nf }));
+      return;
+    }
     if (d.type === "pan") {
       if (!zoomed) return; // sin acercar no hay nada que mover: el dibujo ya entra completo
       const upp = unitsPerPx(d.view);
@@ -315,6 +422,48 @@ export function BeachMap({
       if (!d.moved) onSelect(d.tap ?? null);
       return;
     }
+    if (d.type === "toggle") {
+      if (d.moved) return;
+      const has = inGroup(d.item.type, d.item.id);
+      // La que estaba abierta sola también cuenta como elegida.
+      const base = group.length ? group : selected ? [selected] : [];
+      const next = has ? base.filter((g) => !(g.type === d.item.type && g.id === d.item.id))
+        : base.some((g) => g.type === d.item.type && g.id === d.item.id) ? base.filter((g) => !(g.type === d.item.type && g.id === d.item.id)) : [...base, d.item];
+      onGroupChange?.(next);
+      return;
+    }
+    if (d.type === "marquee") {
+      setMarquee(null);
+      if (!d.moved) { if (!d.additive) onSelect(null); return; }
+      const p = toSvg(e.clientX, e.clientY);
+      const r = { x0: Math.min(d.p0.x, p.x), y0: Math.min(d.p0.y, p.y), x1: Math.max(d.p0.x, p.x), y1: Math.max(d.p0.y, p.y) };
+      const inside = (x: number, y: number) => x >= r.x0 && x <= r.x1 && y >= r.y0 && y <= r.y1;
+      const found: MapItem[] = [
+        ...spaces.filter((s) => { const q = spacePos(s); return inside(q.x, q.y); }).map((s) => ({ type: "space" as const, id: s.space_id })),
+        ...features.filter((f) => { const g = featGeom(f); return inside(g.x, g.y); }).map((f) => ({ type: "feature" as const, id: f.id })),
+      ];
+      const base = d.additive ? (group.length ? group : selected ? [selected] : []) : [];
+      const next = [...base, ...found.filter((f) => !base.some((b) => b.type === f.type && b.id === f.id))];
+      onGroupChange?.(next);
+      return;
+    }
+    if (d.type === "group") {
+      if (!d.moved) { onSelect(d.anchor); return; } // clic sin arrastrar: queda elegida solo esa
+      const moved: MapItemPos[] = d.items.map((i) => {
+        const l = i.type === "space" ? localSpaces[i.id] : localFeatures[i.id];
+        return { type: i.type, id: i.id, x: l?.x ?? i.x, y: l?.y ?? i.y };
+      });
+      const clear = () => {
+        setLocalSpaces((p) => { const n = { ...p }; d.items.forEach((i) => { if (i.type === "space") delete n[i.id]; }); return n; });
+        setLocalFeatures((p) => { const n = { ...p }; d.items.forEach((i) => { if (i.type === "feature") delete n[i.id]; }); return n; });
+      };
+      if (!onMoveMany) return clear();
+      setSavingIds(new Set(d.items.map((i) => i.id)));
+      const ok = await onMoveMany(moved);
+      setSavingIds(new Set());
+      if (!ok) clear();
+      return;
+    }
     if (!d.moved) {
       onSelect({ type: d.type === "space" ? "space" : "feature", id: d.id });
       return;
@@ -350,6 +499,7 @@ export function BeachMap({
 
   const selSpace = selected?.type === "space" ? selected.id : null;
   const selFeature = selected?.type === "feature" ? selected.id : null;
+  const saving = (id: string) => savingIds.has(id);
 
   return (
     <div className="relative" ref={wrapRef}>
@@ -403,8 +553,9 @@ export function BeachMap({
               f={f}
               g={featGeom(f)}
               editable={editMode}
-              selected={selFeature === f.id}
-              saving={saving === f.id}
+              selected={selFeature === f.id && !multi}
+              grouped={multi && inGroup("feature", f.id)}
+              saving={saving(f.id)}
               onPointerDown={(e) => onFeaturePointerDown(e, f)}
               onResizeDown={(e, hx, hy) => onResizePointerDown(e, f, hx, hy)}
             />
@@ -421,7 +572,7 @@ export function BeachMap({
                 transform={`translate(${pos.x} ${pos.y})`}
                 onPointerDown={(e) => onSpacePointerDown(e, s)}
                 className={editMode ? "cursor-move" : "cursor-pointer"}
-                opacity={saving === s.space_id ? 0.6 : 1}
+                opacity={saving(s.space_id) ? 0.6 : 1}
                 tabIndex={0}
                 role="button"
                 aria-label={`${s.kind === "carpa" ? "Carpa" : "Sombrilla"} ${s.code}`}
@@ -429,14 +580,19 @@ export function BeachMap({
               >
                 <g transform={`rotate(${Number(s.rotation) || 0})`}>
                   {s.kind === "carpa"
-                    ? <TentIcon color={color} selected={selSpace === s.space_id} dashed={s.state === "desactivada"} design={dsg} />
-                    : <UmbrellaIcon color={color} selected={selSpace === s.space_id} dashed={s.state === "desactivada"} design={dsg} />}
+                    ? <TentIcon color={color} selected={selSpace === s.space_id || (multi && inGroup("space", s.space_id))} dashed={s.state === "desactivada"} design={dsg} />
+                    : <UmbrellaIcon color={color} selected={selSpace === s.space_id || (multi && inGroup("space", s.space_id))} dashed={s.state === "desactivada"} design={dsg} />}
                 </g>
                 <SpaceNumber code={s.code} color={color} design={dsg} dy={surname ? -9 : 0} />
                 {surname && <SpaceSurname name={surname} kind={s.kind} />}
               </g>
             );
           })}
+
+          {marquee && (
+            <rect x={marquee.x0} y={marquee.y0} width={marquee.x1 - marquee.x0} height={marquee.y1 - marquee.y0}
+              fill="var(--accent)" fillOpacity={0.12} stroke="var(--accent)" strokeWidth={Math.max(2, view.w / 400)} strokeDasharray="10 6" pointerEvents="none" />
+          )}
         </g>
       </svg>
 
@@ -450,7 +606,7 @@ export function BeachMap({
       {(zoomed || editMode) && (
         <p className="pointer-events-none absolute bottom-3 left-3 rounded-lg bg-surface/90 px-2 py-1 text-[11px] text-muted print:hidden">
           {zoomed && "Arrastrá para recorrer el plano. "}
-          {editMode && "Arrastrá carpas y elementos para ubicarlos. Para estirar un elemento, tirá de las agarraderas de sus lados o esquinas. Esc cancela."}
+          {editMode && "Arrastrá carpas y elementos para ubicarlos. Para elegir varios, arrastrá sobre la arena (o Ctrl + clic); después movelos juntos. Ctrl + C / Ctrl + V copia y pega. Con el botón derecho se recorre el plano. Esc cancela."}
         </p>
       )}
     </div>
@@ -483,8 +639,8 @@ export const FEATURE_KIND_LABEL: Record<MapFeature["kind"], string> = {
 };
 
 /** Caminos, pasarelas, edificios y áreas comunes. Solo se pueden tocar en modo edición. */
-function FeatureShape({ f, g, editable, selected, saving, onPointerDown, onResizeDown }: {
-  f: MapFeature; g: FeatureGeom; editable: boolean; selected: boolean; saving: boolean;
+function FeatureShape({ f, g, editable, selected, grouped, saving, onPointerDown, onResizeDown }: {
+  f: MapFeature; g: FeatureGeom; editable: boolean; selected: boolean; grouped?: boolean; saving: boolean;
   onPointerDown: (e: RPointerEvent<SVGGElement>) => void;
   onResizeDown: (e: RPointerEvent<SVGElement>, hx: -1 | 0 | 1, hy: -1 | 0 | 1) => void;
 }) {
@@ -507,6 +663,9 @@ function FeatureShape({ f, g, editable, selected, saving, onPointerDown, onResiz
           transform={vertical && w < 180 ? "rotate(-90)" : undefined} pointerEvents="none">
           {f.label}
         </text>
+      )}
+      {editable && grouped && (
+        <rect x={-w / 2 - 6} y={-h / 2 - 6} width={w + 12} height={h + 12} rx={14} fill="none" stroke="var(--accent)" strokeWidth={4} strokeDasharray="12 8" pointerEvents="none" />
       )}
       {editable && selected && (
         <>
