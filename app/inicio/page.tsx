@@ -4,7 +4,7 @@ import "@fontsource-variable/bricolage-grotesque";
 import "@fontsource-variable/figtree";
 import { SITE_EMAIL, SITE_INSTAGRAM, SITE_INSTAGRAM_URL, SITE_URL, SITE_WHATSAPP_URL } from "@/lib/site";
 import { Analytics } from "@vercel/analytics/next";
-import { CopyEmailButton, DemoButton, DemoEndedNotice, LoginLink, MobileMenu } from "@/components/landing";
+import { CopyEmailButton, DemoButton, DemoEndedNotice, LandingThemeToggle, LoginLink, MobileMenu, TB_THEME_SCRIPT } from "@/components/landing";
 import { DayTimeline, HeroBeach, PhotoStrip, Slider, type DayStep } from "@/components/landing-interactive";
 import "./landing.css";
 
@@ -261,7 +261,9 @@ export default function InicioPage() {
   return (
     <div className="tb min-h-dvh">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(JSON_LD) }} />
-      <header className="sticky top-0 z-40 bg-[#fbf7ee]/90 backdrop-blur">
+      {/* Tema de la página (claro u oscuro): se aplica antes de pintar para que no parpadee. */}
+      <script dangerouslySetInnerHTML={{ __html: TB_THEME_SCRIPT }} />
+      <header className="tb-header sticky top-0 z-40 bg-[#fbf7ee]/90 backdrop-blur">
         <div className="relative mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3">
           <a href="#arriba" className="flex items-center gap-2.5">
             <img src="/logo.png" alt="" className="h-12 w-12" />
@@ -271,6 +273,7 @@ export default function InicioPage() {
             {NAV.map((l) => <a key={l.href} href={l.href} className="text-[var(--gris)] hover:text-[var(--atl)]">{l.label}</a>)}
           </nav>
           <div className="flex items-center gap-2">
+            <LandingThemeToggle />
             <LoginLink className="rounded-full bg-[var(--atl)] px-5 py-2.5 text-sm font-bold text-white hover:bg-[var(--atl-2)]" />
             <MobileMenu links={NAV} />
           </div>
@@ -399,7 +402,7 @@ export default function InicioPage() {
         {/* Cierre */}
         <section className="relative overflow-hidden bg-[var(--atl-2)] text-white">
           <svg viewBox="0 0 1200 60" preserveAspectRatio="none" className="absolute inset-x-0 top-0 h-10 w-full" aria-hidden>
-            <path d="M0 0 H1200 V30 Q1100 60 1000 30 T800 30 T600 30 T400 30 T200 30 T0 30 Z" fill="#fff" />
+            <path className="tb-fill-white" d="M0 0 H1200 V30 Q1100 60 1000 30 T800 30 T600 30 T400 30 T200 30 T0 30 Z" fill="#fff" />
           </svg>
           <div className="mx-auto flex max-w-6xl flex-col items-start gap-6 px-4 pb-16 pt-24 md:flex-row md:items-end md:justify-between">
             <div>

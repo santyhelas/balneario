@@ -118,3 +118,34 @@ export function CopyEmailButton({ email, className, children }: { email: string;
     </>
   );
 }
+
+/** Tema de la página de presentación (independiente del tema del sistema). Se guarda en este navegador. */
+const TB_KEY = "mb_inicio_tema";
+export const TB_THEME_SCRIPT = `try{var t=localStorage.getItem("${TB_KEY}");if(t==="oscuro")document.documentElement.setAttribute("data-tb","oscuro")}catch(e){}`;
+
+export function LandingThemeToggle() {
+  const [dark, setDark] = useState(false);
+  useEffect(() => { setDark(document.documentElement.getAttribute("data-tb") === "oscuro"); }, []);
+  function toggle() {
+    const next = !dark;
+    setDark(next);
+    if (next) document.documentElement.setAttribute("data-tb", "oscuro");
+    else document.documentElement.removeAttribute("data-tb");
+    try { localStorage.setItem(TB_KEY, next ? "oscuro" : "claro"); } catch { /* sin almacenamiento */ }
+  }
+  return (
+    <button type="button" onClick={toggle} aria-pressed={dark}
+      aria-label={dark ? "Pasar a modo claro" : "Pasar a modo oscuro"} title={dark ? "Modo claro" : "Modo oscuro"}
+      className="flex h-10 w-10 items-center justify-center rounded-full border border-[var(--sand-2)] text-[var(--tinta)] hover:bg-[var(--foam)]">
+      {dark ? (
+        <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
+          <circle cx="12" cy="12" r="4.5" /><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />
+        </svg>
+      ) : (
+        <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          <path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z" />
+        </svg>
+      )}
+    </button>
+  );
+}

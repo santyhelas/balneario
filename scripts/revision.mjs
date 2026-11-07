@@ -113,6 +113,17 @@ for (const [view, opts] of Object.entries(VIEWS)) {
   for (const path of ["/", "/login", "/terminos", "/privacidad", "/mapa", "/caja", "/admin", "/no-existe-esta-pagina"]) {
     report.publico.push(await check(page, path, `publico${path === "/" ? "-inicio" : path}`, view, issues));
   }
+  // Portada en modo oscuro (con el botón luna)
+  try {
+    await page.goto(BASE + "/", { waitUntil: "networkidle" });
+    await page.getByRole("button", { name: "Pasar a modo oscuro" }).click();
+    await page.waitForTimeout(600);
+    await page.screenshot({ path: `${OUT}/capturas/publico-inicio-oscuro-${view}.png`, fullPage: true });
+    await page.reload({ waitUntil: "networkidle" });
+    const kept = await page.evaluate(() => document.documentElement.getAttribute("data-tb"));
+    report.flujos.push({ flujo: `Portada en modo oscuro (${view})`, pasos: [], resultado: kept === "oscuro" ? "OK" : "no se recordó el modo" });
+    await page.getByRole("button", { name: "Pasar a modo claro" }).click();
+  } catch (e) { report.flujos.push({ flujo: `Portada en modo oscuro (${view})`, pasos: [], resultado: `Se cortó: ${String(e).slice(0, 160)}` }); }
   if (view === "pc") {
     // Cabeceras de seguridad de la portada
     const r = await page.request.get(BASE + "/");

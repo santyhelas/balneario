@@ -54,3 +54,32 @@
   .tb-wave, .tb-wave-slow, .tb-marquee, .tb-pop { animation: none; }
   .tb-track { scroll-behavior: auto; }
 }
+
+/* ── Modo oscuro de la presentación (botón luna/sol del encabezado) ── */
+html[data-tb="oscuro"] { color-scheme: dark; }
+html[data-tb="oscuro"] .tb {
+  --tinta: #e6eef1;
+  --gris: #a7bac2;
+  --foam: #17394a;
+  --sand: #2a2619;
+  --sand-2: #4d4330;
+  background: #0b1d26;
+}
+html[data-tb="oscuro"] body { background: #0b1d26; }
+html[data-tb="oscuro"] .tb .bg-\[\#fbf7ee\]\/90 { background-color: rgb(11 29 38 / .9); }
+html[data-tb="oscuro"] .tb .bg-\[\#fbf7ee\] { background-color: #0b1d26; }
+html[data-tb="oscuro"] .tb .bg-white { background-color: #10293a; }
+html[data-tb="oscuro"] .tb .tb-fill-white { fill: #10293a; }
+html[data-tb="oscuro"] .tb .bg-\[\#f7f3ea\] { background-color: #0f2531; }
+html[data-tb="oscuro"] .tb .bg-\[\#fdf3dc\] { background-color: #3a2f12; }
+html[data-tb="oscuro"] .tb .bg-\[\#fde8e6\] { background-color: #3d1c1a; }
+html[data-tb="oscuro"] .tb .bg-\[\#e7f6ec\] { background-color: #143323; }
+html[data-tb="oscuro"] .tb .text-\[var\(--atl\)\] { color: #8fc6d6; }
+html[data-tb="oscuro"] .tb .border-\[var\(--atl\)\] { border-color: #8fc6d6; }
+html[data-tb="oscuro"] .tb .text-\[\#b42318\] { color: #ff9b8f; }
+html[data-tb="oscuro"] .tb .text-\[\#1f7a43\] { color: #7ee2a8; }
+html[data-tb="oscuro"] .tb .text-\[\#9a6b00\] { color: #f2c45a; }
+html[data-tb="oscuro"] .tb .border-\[\#e3c98f\] { border-color: #4d4330; }
+html[data-tb="oscuro"] .tb .border-\[\#bfe3cb\] { border-color: #2a5a3d; }
+/* El botón «Escribinos por mail» y otros blancos sobre el azul siguen claros */
+html[data-tb="oscuro"] .tb .hover\:bg-\[var\(--foam\)\]:hover { background-color: #17394a; }
