@@ -239,19 +239,22 @@ for (const [view, opts] of Object.entries(VIEWS)) {
         await page.goto(DEMO + "/configuracion", { waitUntil: "networkidle" });
         await page.getByRole("button", { name: "Agregar extra" }).first().click();
         const d = page.getByRole("dialog");
-        await d.getByLabel("Nombre").fill("Reposera");
+        await d.getByLabel("Nombre").fill("Reposera de prueba");
         await d.getByLabel("Precio").fill("2000");
         await d.getByRole("button", { name: "Guardar" }).click();
-        await page.getByText("Reposera").first().waitFor({ timeout: 10000 });
+        await page.getByText("Reposera de prueba").first().waitFor({ timeout: 10000 });
         f3.pasos.push("extra creado");
         await page.goto(resUrl, { waitUntil: "networkidle" });
         await page.waitForTimeout(1500);
         await page.getByRole("button", { name: "Agregar extra" }).first().click();
-        await page.getByRole("dialog").getByRole("button", { name: /^Agregar/ }).click();
+        const dlg = page.getByRole("dialog");
+        const sel = dlg.locator("select").first();
+        if (await sel.count()) await sel.selectOption({ label: await sel.locator("option", { hasText: "Reposera de prueba" }).first().textContent() });
+        await dlg.getByRole("button", { name: /^Agregar/ }).click();
         await page.waitForTimeout(2500);
         await page.screenshot({ path: `${OUT}/capturas/flujo-extra.png`, fullPage: true });
         const txt = await page.locator("body").innerText();
-        f3.resultado = /Reposera/.test(txt) ? "OK" : "No apareció el extra en la reserva";
+        f3.resultado = /Reposera de prueba/.test(txt) ? "OK" : "No apareció el extra en la reserva";
         f3.avisos = await page.locator('[role="alert"]').allTextContents().catch(() => []);
       } catch (e) {
         await page.screenshot({ path: `${OUT}/capturas/flujo-extra-error.png`, fullPage: true }).catch(() => {});
