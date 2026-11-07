@@ -8208,6 +8208,13 @@ begin
   select id into v_session from public.cash_sessions where workspace_id = p_ws and business_date = p_day;
   select id into v_cat from public.expense_categories where workspace_id = p_ws and name = p_category;
   if v_session is null or v_cat is null then return; end if;
+  -- Si en la caja no alcanza el efectivo, se paga por transferencia (la caja nunca queda en negativo).
+  if p_method = 'efectivo' and p_amount > (select s.opening_cash
+        + coalesce(sum(m.amount) filter (where m.direction = 'entrada' and m.method = 'efectivo'), 0)
+        - coalesce(sum(m.amount) filter (where m.direction = 'salida' and m.method = 'efectivo'), 0)
+        from public.cash_sessions s left join public.cash_movements m on m.cash_session_id = s.id where s.id = v_session group by s.opening_cash) then
+    p_method := 'transferencia';
+  end if;
   insert into public.expenses (workspace_id, cash_session_id, amount, spent_on, concept, category_id, supplier, method, idempotency_key, created_at)
   values (p_ws, v_session, p_amount, p_day, p_concept, v_cat, p_supplier, p_method, gen_random_uuid(), p_at)
   returning id into v_id;
