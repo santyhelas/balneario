@@ -11,7 +11,7 @@ import { useStatus } from "@/components/status";
 import { PageHeader, SyncNotice } from "@/components/shell";
 import { Alert, Button, Card, ConfirmDialog, EmptyState, Field, Input, Select, Spinner, TextField, cx } from "@/components/ui";
 import { ExpenseModal, type ExpenseCategory } from "@/components/cash";
-import { downloadCsv } from "@/lib/csv";
+import { downloadXlsx } from "@/lib/xlsx";
 
 type Row = {
   id: string; amount: number; spent_on: string; concept: string; supplier: string | null; method: string; notes: string | null;
@@ -85,10 +85,25 @@ export default function GastosPage() {
         subtitle="Solo gastos ya pagados. Los pagados en efectivo salen de la caja; los demás no tocan el efectivo."
         actions={
           <>
-            <Button variant="secondary" disabled={rows.length === 0} onClick={() => downloadCsv(`gastos_${from}_${to}.csv`,
-              ["Fecha", "Concepto", "Categoría", "Proveedor", "Medio", "Importe", "Estado", "Observaciones"],
-              rows.map((r) => [formatDate(r.spent_on), r.concept, catName.get(r.category_id) ?? "", r.supplier ?? "", METHOD_LABEL[r.method] ?? r.method, Number(r.amount), r.voided_at ? `Anulado: ${r.void_reason}` : "Vigente", r.notes ?? ""]))}>
-              Exportar CSV
+            <Button variant="secondary" disabled={rows.length === 0} onClick={() => downloadXlsx(`gastos_${from}_${to}.xlsx`, [{
+              name: "Gastos",
+              header: ["Fecha", "Concepto", "Categoría", "Proveedor", "Medio de pago", "Importe", "Estado", "Observaciones"],
+              rows: [
+                ...rows.map((r) => [formatDate(r.spent_on), r.concept, catName.get(r.category_id) ?? "", r.supplier ?? "", METHOD_LABEL[r.method] ?? r.method, Number(r.amount), r.voided_at ? `Anulado: ${r.void_reason}` : "Vigente", r.notes ?? ""]),
+                [],
+                ["", "TOTAL (sin anulados)", "", "", "", total, "", ""],
+                ["", "Pagado en efectivo", "", "", "", cash, "", ""],
+              ],
+              widths: [12, 34, 20, 20, 16, 14, 26, 30],
+              money: [5],
+            }, {
+              name: "Por categoría",
+              header: ["Categoría", "Importe", "% del total"],
+              rows: byCat.map(([id, amount]) => [catName.get(id) ?? "", amount, total ? Math.round((amount / total) * 1000) / 10 : 0]),
+              widths: [28, 16, 12],
+              money: [1],
+            }])}>
+              Descargar Excel
             </Button>
             <Button onClick={() => setNewOpen(true)} disabled={!cajaAbierta}>Nuevo gasto</Button>
           </>
@@ -124,20 +139,43 @@ export default function GastosPage() {
         <Card title="Detalle">
           {q.loading && !q.data ? <div className="flex items-center gap-2 text-sm text-muted"><Spinner small /> Cargando…</div>
             : rows.length === 0 ? <EmptyState>No hay gastos en el período.</EmptyState> : (
-            <ul className="divide-y divide-line text-sm">
-              {rows.map((r) => (
-                <li key={r.id} className={cx("flex flex-wrap items-center justify-between gap-2 py-2", r.voided_at && "text-muted line-through")}>
-                  <div className="min-w-0">
-                    <div className="font-medium">{r.concept}</div>
-                    <div className="text-xs text-muted">{formatDate(r.spent_on)} · {catName.get(r.category_id)} · {METHOD_LABEL[r.method] ?? r.method}{r.supplier ? ` · ${r.supplier}` : ""}{r.voided_at ? ` · Anulado: ${r.void_reason}` : ""}</div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <span className="tabular font-semibold text-danger">− {formatMoney(r.amount)}</span>
-                    {isAdmin && !r.voided_at && cajaAbierta && <button className="text-xs text-danger hover:underline" onClick={() => { setError(null); setVoiding(r); }}>Anular</button>}
-                  </div>
-                </li>
-              ))}
-            </ul>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[640px] border-collapse text-sm">
+                <thead>
+                  <tr className="border-b border-line bg-surface-2 text-left text-xs text-muted">
+                    <th className="border-r border-line px-2 py-1.5 font-semibold">Fecha</th>
+                    <th className="border-r border-line px-2 py-1.5 font-semibold">Concepto</th>
+                    <th className="border-r border-line px-2 py-1.5 font-semibold">Categoría</th>
+                    <th className="border-r border-line px-2 py-1.5 font-semibold">Proveedor</th>
+                    <th className="border-r border-line px-2 py-1.5 font-semibold">Medio</th>
+                    <th className="border-r border-line px-2 py-1.5 text-right font-semibold">Importe</th>
+                    <th className="px-2 py-1.5" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((r) => (
+                    <tr key={r.id} className={cx("border-b border-line", r.voided_at && "text-muted line-through")} title={r.voided_at ? `Anulado: ${r.void_reason}` : r.notes ?? undefined}>
+                      <td className="border-r border-line px-2 py-1.5 tabular">{formatDate(r.spent_on)}</td>
+                      <td className="border-r border-line px-2 py-1.5 font-medium">{r.concept}</td>
+                      <td className="border-r border-line px-2 py-1.5">{catName.get(r.category_id)}</td>
+                      <td className="border-r border-line px-2 py-1.5">{r.supplier ?? ""}</td>
+                      <td className="border-r border-line px-2 py-1.5">{METHOD_LABEL[r.method] ?? r.method}</td>
+                      <td className="border-r border-line px-2 py-1.5 text-right tabular font-semibold">{formatMoney(r.amount)}</td>
+                      <td className="px-2 py-1.5 text-right">
+                        {isAdmin && !r.voided_at && cajaAbierta && <button className="text-xs text-danger hover:underline" onClick={() => { setError(null); setVoiding(r); }}>Anular</button>}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="bg-surface-2 font-semibold">
+                    <td className="px-2 py-1.5" colSpan={5}>Total (sin anulados)</td>
+                    <td className="border-r border-line px-2 py-1.5 text-right tabular">{formatMoney(total)}</td>
+                    <td />
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
           )}
         </Card>
         <Card title="Por categoría">

@@ -70,4 +70,13 @@ test("correo: abre el correo que usa el balneario", async () => {
   assert.match(mailtoLink("a@b.com", "Hola", "Texto"), /^https:\/\/mail\.google\.com\/mail\/\?view=cm&fs=1&to=a%40b\.com&su=Hola&body=Texto$/);
   assert.match(mailtoLink("a@b.com", "Hola", "Texto", "outlook"), /^https:\/\/outlook\.live\.com\/mail\/0\/deeplink\/compose\?to=a%40b\.com&subject=Hola&body=Texto$/);
   assert.match(mailtoLink("a@b.com", "Hola", "Texto", "app"), /^mailto:a%40b\.com\?subject=Hola&body=Texto$/);
+  assert.match(mailtoLink("a@b.com", "Hola", "Texto", "gmail", "yo@gmail.com"), /^https:\/\/mail\.google\.com\/mail\/\?authuser=yo%40gmail\.com&view=cm/);
+  assert.match(mailtoLink("a@b.com", "Hola que tal", "x"), /su=Hola%20que%20tal/);
+  const { providerForEmail } = await import("./whatsapp-messages.ts");
+  assert.equal(providerForEmail("x@gmail.com"), "gmail");
+  assert.equal(providerForEmail("x@hotmail.com.ar"), "outlook");
+  assert.equal(providerForEmail("x@outlook.com"), "outlook");
+  assert.equal(providerForEmail("x@yahoo.com.ar"), "yahoo");
+  assert.equal(providerForEmail("x@mibalneario.com.ar"), "app");
+  assert.equal(providerForEmail(null), "gmail");
 });

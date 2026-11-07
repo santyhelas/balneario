@@ -98,15 +98,30 @@ export const MAIL_PROVIDERS: { key: MailProvider; label: string }[] = [
   { key: "app", label: "El programa de correo de la compu" },
 ];
 
-/** Enlace que abre la ventana de "Redactar" del correo que usa el balneario, con el mail del cliente, asunto y texto. */
-export function mailtoLink(email: string, subject: string, body: string, provider: MailProvider = "gmail"): string {
-  const q = (o: Record<string, string>) => new URLSearchParams(o).toString();
+/**
+ * Con qué correo se escribe: el de la cuenta con la que se entró al sistema.
+ * Gmail (y cuentas de Google), Outlook/Hotmail/Live y Yahoo se abren en la web;
+ * cualquier otro dominio, con el programa de correo de la compu.
+ */
+export function providerForEmail(from: string | null | undefined): MailProvider {
+  const d = (from ?? "").split("@")[1]?.toLowerCase().trim() ?? "";
+  if (!d || d === "gmail.com" || d === "googlemail.com") return "gmail";
+  if (/^(outlook|hotmail|live|msn)\.[a-z.]+$/.test(d)) return "outlook";
+  if (/^(yahoo|ymail)\.[a-z.]+$/.test(d)) return "yahoo";
+  return "app";
+}
+
+/** Enlace que abre la ventana de "Redactar" del correo de la cuenta (from), con el mail del cliente, asunto y texto. */
+export function mailtoLink(email: string, subject: string, body: string, provider: MailProvider = "gmail", from?: string | null): string {
+  // %20 para los espacios (no "+"): algunos correos web muestran el "+" tal cual.
+  const q = (o: Record<string, string>) => Object.entries(o).map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join("&");
   switch (provider) {
     case "outlook": return `https://outlook.live.com/mail/0/deeplink/compose?${q({ to: email, subject, body })}`;
     case "office365": return `https://outlook.office.com/mail/deeplink/compose?${q({ to: email, subject, body })}`;
     case "yahoo": return `https://compose.mail.yahoo.com/?${q({ to: email, subject, body })}`;
     case "app": return `mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-    default: return `https://mail.google.com/mail/?${q({ view: "cm", fs: "1", to: email, su: subject, body })}`;
+    // authuser: si hay varias cuentas de Google abiertas, escribe desde la del balneario.
+    default: return `https://mail.google.com/mail/?${q({ ...(from ? { authuser: from } : {}), view: "cm", fs: "1", to: email, su: subject, body })}`;
   }
 }
 

@@ -10,13 +10,13 @@ import { useStatus } from "@/components/status";
 import { PageHeader, SyncNotice } from "@/components/shell";
 import { Alert, Badge, Button, Card, EmptyState, Input, Spinner, cx } from "@/components/ui";
 import { PaymentModal } from "@/components/payments";
-import { debtReminder } from "@/lib/whatsapp-messages";
-import { WhatsAppSend, useMessageTemplates } from "@/components/whatsapp";
+import { debtReminder, mailMessage } from "@/lib/whatsapp-messages";
+import { MailLink, WhatsAppSend, useMailProvider, useMessageTemplates } from "@/components/whatsapp";
 import { VoucherList } from "@/components/vouchers";
 
 type DebtRow = {
   id: string; number: number; start_date: string; end_date: string; total_amount: number;
-  customers: { first_name: string; last_name: string; phone: string | null };
+  customers: { first_name: string; last_name: string; phone: string | null; email?: string | null };
   reservation_segments?: { active: boolean; start_date: string; spaces: { code: string; kind: string } | null }[];
   due: number; paid: number;
 };
@@ -31,6 +31,7 @@ export default function CobrosPage() {
   const sb = getSupabase();
   const today = todayISO(ws.timezone);
   const templates = useMessageTemplates();
+  const mailProvider = useMailProvider();
   const [q, setQ] = useState("");
   const [paying, setPaying] = useState<DebtRow | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
@@ -40,7 +41,7 @@ export default function CobrosPage() {
     const bal = unwrap(await sb.from("reservation_balances").select("reservation_id, due_amount, paid_amount").eq("workspace_id", ws.id).gt("due_amount", 0)) as { reservation_id: string; due_amount: number; paid_amount: number }[];
     let debts: DebtRow[] = [];
     if (bal.length) {
-      const rows = unwrap(await sb.from("reservations").select("id, number, start_date, end_date, total_amount, customers(first_name, last_name, phone), reservation_segments(active, start_date, spaces(code, kind))").in("id", bal.map((b) => b.reservation_id))) as unknown as Omit<DebtRow, "due" | "paid">[];
+      const rows = unwrap(await sb.from("reservations").select("id, number, start_date, end_date, total_amount, customers(first_name, last_name, phone, email), reservation_segments(active, start_date, spaces(code, kind))").in("id", bal.map((b) => b.reservation_id))) as unknown as Omit<DebtRow, "due" | "paid">[];
       const m = new Map(bal.map((b) => [b.reservation_id, b]));
       debts = rows.map((r) => ({ ...r, due: Number(m.get(r.id)!.due_amount), paid: Number(m.get(r.id)!.paid_amount) }))
         .sort((a, b) => a.end_date.localeCompare(b.end_date));
@@ -108,11 +109,16 @@ export default function CobrosPage() {
                       {(() => {
                         const places = [...new Set((d.reservation_segments ?? []).filter((x) => x.active).sort((a, b) => a.start_date.localeCompare(b.start_date))
                           .map((x) => `${x.spaces?.kind === "sombrilla" ? "Sombrilla" : "Carpa"} ${x.spaces?.code ?? ""}`))].join(" y ");
+                        const info = { firstName: d.customers.first_name, lastName: d.customers.last_name, phone: d.customers.phone, email: d.customers.email ?? null,
+                          balneario: ws.name, number: d.number, places, start: d.start_date, end: d.end_date, due: d.due, today,
+                          total: Number(d.total_amount), paid: d.paid };
+                        const mail = d.customers.email ? mailMessage(info, templates) : null;
                         return (
-                          <WhatsAppSend phone={d.customers.phone} className="py-2" title="Mandar recordatorio por WhatsApp (podés editar el mensaje)"
-                            text={debtReminder({ firstName: d.customers.first_name, lastName: d.customers.last_name, phone: d.customers.phone,
-                              balneario: ws.name, number: d.number, places, start: d.start_date, end: d.end_date, due: d.due, today,
-                              total: Number(d.total_amount), paid: d.paid }, templates)} />
+                          <>
+                            <WhatsAppSend phone={d.customers.phone} className="py-2" title="Mandar recordatorio por WhatsApp (podés editar el mensaje)"
+                              text={debtReminder(info, templates)} />
+                            {mail && d.customers.email && <MailLink provider={mailProvider} email={d.customers.email} subject={mail.subject} body={mail.body} label="Enviar mail" className="py-2" />}
+                          </>
                         );
                       })()}
                       <Button onClick={() => { setMsg(null); setPaying(d); }} disabled={!cajaAbierta}>Cobrar</Button>

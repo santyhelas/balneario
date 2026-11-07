@@ -7,7 +7,8 @@ import { exportCustomersXlsx } from "@/lib/customers-export";
 import { METHOD_LABEL } from "@/lib/methods";
 import { seasonOf } from "@/lib/history";
 import { whatsappLink } from "@/lib/reservations";
-import { MailButton } from "@/components/whatsapp";
+import { MailButton, useMessageTemplates } from "@/components/whatsapp";
+import { mailMessage } from "@/lib/whatsapp-messages";
 import { useWorkspace } from "@/components/workspace";
 import { PageHeader, SyncNotice } from "@/components/shell";
 import { Alert, Badge, Button, Card, EmptyState, Input, Spinner, cx } from "@/components/ui";
@@ -127,6 +128,7 @@ export default function ClientesPage() {
 
 function CustomerDetail({ customer, onEdit }: { customer: Customer; onEdit: () => void }) {
   const sb = getSupabase();
+  const templates = useMessageTemplates();
   const history = useLoader(async () => {
     const rows = unwrap(
       await sb.from("reservations")
@@ -180,7 +182,17 @@ function CustomerDetail({ customer, onEdit }: { customer: Customer; onEdit: () =
               Llamar
             </a>
           )}
-          {customer.email && <MailButton email={customer.email} subject={ws.name} body={`¡Hola ${customer.first_name}!\n\n`} />}
+          {customer.email && (() => {
+            // Con el mensaje de correo de Configuración, completado con su reserva más reciente.
+            const last = rows.find((x) => x.status === "confirmada") ?? rows[0];
+            if (!last) return <MailButton email={customer.email} subject={ws.name} body={`¡Hola ${customer.first_name}!\n\n`} />;
+            const b = history.data?.balances[last.id];
+            const places = [...new Set((last.reservation_segments ?? []).filter((x) => x.active).map((x) => x.spaces?.code).filter(Boolean))].map((c) => `Carpa ${c}`).join(" y ");
+            const m = mailMessage({ firstName: customer.first_name, lastName: customer.last_name, phone: customer.phone, email: customer.email,
+              balneario: ws.name, number: last.number, places, start: last.start_date, end: last.end_date,
+              total: Number(last.total_amount), paid: Number(b?.paid_amount ?? 0), due: Number(b?.due_amount ?? 0), today: todayISO(ws.timezone) }, templates);
+            return <MailButton email={customer.email} subject={m.subject} body={m.body} />;
+          })()}
         </div>
       )}
 

@@ -15,8 +15,8 @@ export const SITE_WHATSAPP_URL = SITE_WHATSAPP
  * abre la ventana de "Redactar" de Gmail en el navegador, con destinatario, asunto y texto.
  */
 export function gmailCompose(to: string, subject = "", body = ""): string {
-  const p = new URLSearchParams({ view: "cm", fs: "1", to });
-  if (subject) p.set("su", subject);
-  if (body) p.set("body", body);
-  return `https://mail.google.com/mail/?${p.toString()}`;
+  let url = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(to)}`;
+  if (subject) url += `&su=${encodeURIComponent(subject)}`;
+  if (body) url += `&body=${encodeURIComponent(body)}`;
+  return url;
 }
