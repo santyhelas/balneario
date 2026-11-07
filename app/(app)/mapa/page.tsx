@@ -167,7 +167,6 @@ export default function MapaPage() {
     if (!items.length) return;
     clip.current = { items, pastes: 0 };
     setClipCount(items.length);
-    setMessage({ tone: "ok", text: `Copiado: ${items.length === 1 ? "1 cosa" : `${items.length} cosas`}. Pegalo con Ctrl + V o con «Pegar».` });
   }
 
   async function pasteClip() {
@@ -347,22 +346,22 @@ export default function MapaPage() {
         </div>
       )}
 
-      {editMode && (group.length > 1 || clipCount > 0) && (
-        <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-line bg-surface p-2 text-sm">
-          {group.length > 1 && (
-            <span className="px-1 font-medium">
-              {group.length} elegidas
-              <span className="font-normal text-muted"> ({group.filter((g) => g.type === "space").length} carpas o sombrillas, {group.filter((g) => g.type === "feature").length} elementos)</span>
-            </span>
-          )}
-          {group.length > 0 && <Button variant="secondary" className="py-1.5" onClick={copyGroup}>Copiar</Button>}
-          {clipCount > 0 && <Button variant="secondary" className="py-1.5" loading={pasting} onClick={() => void pasteClip()}>Pegar {clipCount === 1 ? "1 cosa" : `${clipCount} cosas`}</Button>}
-          {group.length > 1 && <Button variant="secondary" className="py-1.5" onClick={() => setGroup([])}>Quitar selección</Button>}
-          {group.length > 1 && <span className="text-xs text-muted">Arrastrá cualquiera de las elegidas para moverlas todas juntas.</span>}
-        </div>
-      )}
-
       <div className="relative" data-tour="mapa">
+        {editMode && (group.length > 1 || clipCount > 0) && (
+          <div className="absolute left-1/2 top-3 z-10 flex max-w-[calc(100%-7rem)] -translate-x-1/2 flex-wrap items-center justify-center gap-2 rounded-xl border border-line bg-surface/95 p-2 text-sm shadow-lg backdrop-blur print:hidden">
+            {group.length > 1 && (
+              <span className="px-1 font-medium">
+                {group.length} elegidas
+                <span className="font-normal text-muted"> ({group.filter((g) => g.type === "space").length} carpas o sombrillas, {group.filter((g) => g.type === "feature").length} elementos)</span>
+              </span>
+            )}
+            {group.length > 0 && <Button variant="secondary" className="py-1.5" onClick={copyGroup}>Copiar</Button>}
+            {clipCount > 0 && <Button variant="secondary" className="py-1.5" loading={pasting} onClick={() => void pasteClip()}>Pegar {clipCount === 1 ? "1 cosa" : `${clipCount} cosas`}</Button>}
+            {group.length > 1 && <Button variant="secondary" className="py-1.5" onClick={() => setGroup([])}>Quitar selección</Button>}
+          </div>
+        )}
+
+
         {data ? (
           <BeachMap
             width={ws.map_width}

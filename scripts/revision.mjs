@@ -332,8 +332,7 @@ for (const [view, opts] of Object.entries(VIEWS)) {
       await page.getByRole("button", { name: "Agrandar" }).click();
       await page.waitForTimeout(3000);
       await page.screenshot({ path: `${OUT}/capturas/flujo-plano.png`, fullPage: true });
-      const txt = await page.locator('[role="alert"]').allTextContents().catch(() => []);
-      f5.resultado = txt.some((t) => t.includes("el plano es más grande")) ? "OK" : `Revisar: ${txt.join(" | ")}`;
+      f5.resultado = (await page.getByText("el plano es más grande").count()) ? "OK" : "Revisar: no apareció el aviso";
     } catch (e) { f5.resultado = `Se cortó: ${String(e).slice(0, 200)}`; }
     report.flujos.push(f5);
 
@@ -351,13 +350,15 @@ for (const [view, opts] of Object.entries(VIEWS)) {
       await page.mouse.move(x0, y0); await page.mouse.down(); await page.mouse.move((x0 + x1) / 2, (y0 + y1) / 2, { steps: 5 }); await page.mouse.move(x1, y1, { steps: 5 }); await page.mouse.up();
       const chosen = await page.getByText(/\d+ elegidas/).textContent({ timeout: 4000 }).catch(() => null);
       f6.pasos.push(chosen ? `recuadro: ${chosen.trim()}` : "recuadro: no eligió nada");
-      // Mover el grupo
+      // Mover el grupo (se mide de nuevo: el plano pudo correrse)
+      await page.waitForTimeout(500);
       const before = await pos(0);
-      await page.mouse.move(a0.x, a0.y); await page.mouse.down(); await page.mouse.move(a0.x + 20, a0.y + 20, { steps: 6 }); await page.mouse.move(a0.x + 40, a0.y + 25, { steps: 6 }); await page.mouse.up();
+      const b0 = before;
+      await page.mouse.move(b0.x, b0.y); await page.mouse.down(); await page.mouse.move(b0.x + 20, b0.y + 20, { steps: 6 }); await page.mouse.move(b0.x + 40, b0.y + 25, { steps: 6 }); await page.mouse.up();
       await page.waitForTimeout(2500);
       const after = await pos(0);
-      const err = await page.locator('[role="alert"]').allTextContents().catch(() => []);
-      f6.pasos.push(Math.abs(after.x - before.x) > 5 ? "se movieron juntas" : `no se movió${err.length ? ` (${err.join(" | ")})` : ""}`);
+      const moved1 = Math.abs((await pos(1)).x - a1.x) > 5;
+      f6.pasos.push(Math.abs(after.x - before.x) > 5 ? `se movió la primera${moved1 ? " y la segunda junto con ella" : " (la segunda NO)"}` : "no se movió");
       // Copiar y pegar
       const n0 = await tents.count();
       await page.keyboard.press("Control+c");
@@ -366,7 +367,7 @@ for (const [view, opts] of Object.entries(VIEWS)) {
       const n1 = await tents.count();
       f6.pasos.push(`pegar: ${n0} → ${n1} espacios`);
       await page.screenshot({ path: `${OUT}/capturas/flujo-plano-varias.png`, fullPage: true });
-      f6.resultado = chosen && Math.abs(after.x - before.x) > 5 && n1 > n0 ? "OK" : "Revisar";
+      f6.resultado = chosen && Math.abs(after.x - before.x) > 5 && moved1 && n1 > n0 ? "OK" : "Revisar";
     } catch (e) { f6.resultado = `Se cortó: ${String(e).slice(0, 200)}`; }
     report.flujos.push(f6);
   }
