@@ -399,6 +399,27 @@ for (const [view, opts] of Object.entries(VIEWS)) {
       f7.resultado = esperado.length ? `Revisar: ${esperado.join(", ")}` : "OK";
     } catch (e) { f7.resultado = `Se cortó: ${String(e).slice(0, 200)}`; await page.screenshot({ path: `${OUT}/capturas/novedades-error.png` }); }
     report.flujos.push(f7);
+
+    // h) Configuración: marcar el punto exacto en el mapa
+    const f8 = { flujo: "Ubicación: mapa para marcar el punto", pasos: [] };
+    try {
+      await page.goto(DEMO + "/configuracion", { waitUntil: "networkidle" });
+      await page.getByRole("button", { name: "Marcar el punto exacto en el mapa" }).click();
+      const box = page.locator('[aria-label="Mapa para marcar la ubicación del balneario"]');
+      await box.waitFor({ timeout: 15000 });
+      await page.waitForTimeout(3000);
+      const tiles = await box.locator("img.leaflet-tile-loaded").count();
+      f8.pasos.push(`mosaicos cargados: ${tiles}`);
+      const bb = await box.boundingBox();
+      await page.mouse.click(bb.x + bb.width * 0.3, bb.y + bb.height * 0.4);
+      await page.waitForTimeout(1500);
+      const coords = await page.locator("text=/\\(-?\\d+\\.\\d+, -?\\d+\\.\\d+\\)/").first().textContent().catch(() => null);
+      f8.pasos.push(`ubicación: ${coords ?? "—"}`);
+      await box.scrollIntoViewIfNeeded();
+      await page.screenshot({ path: `${OUT}/capturas/ubicacion-mapa.png` });
+      f8.resultado = tiles > 0 && coords ? "OK" : "Revisar";
+    } catch (e) { f8.resultado = `Se cortó: ${String(e).slice(0, 200)}`; }
+    report.flujos.push(f8);
   }
   await ctx.close();
 }
