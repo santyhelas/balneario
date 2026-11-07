@@ -33,6 +33,11 @@ export async function GET(req: Request) {
     if (!h.get("x-vercel-ip-latitude") || !Number.isFinite(lat) || !Number.isFinite(lon)) return json({ lat: null, lon: null, ciudad: null });
     let ciudad: string | null = null;
     try { ciudad = decodeURIComponent(h.get("x-vercel-ip-city") ?? "") || null; } catch { ciudad = null; }
+    // Nombre completo («Rivadavia, San Juan») a partir del punto.
+    try {
+      const body = (await nominatim(`reverse?format=jsonv2&addressdetails=1&zoom=10&lat=${lat.toFixed(3)}&lon=${lon.toFixed(3)}`)) as { error?: string };
+      if (body && !body.error) ciudad = placeLabel(body as never) || ciudad;
+    } catch { /* queda la ciudad que dio Vercel */ }
     return json({ lat, lon, ciudad });
   }
   try {

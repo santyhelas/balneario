@@ -87,3 +87,34 @@ export function DemoEndedNotice() {
   );
 }
 
+
+/** «Escribinos por mail»: copia nuestro mail y avisa con un cartel que ya está copiado. */
+export function CopyEmailButton({ email, className, children }: { email: string; className?: string; children: ReactNode }) {
+  const [shown, setShown] = useState<"ok" | "manual" | null>(null);
+  useEffect(() => {
+    if (!shown) return;
+    const id = window.setTimeout(() => setShown(null), 4000);
+    return () => window.clearTimeout(id);
+  }, [shown]);
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(email);
+      setShown("ok");
+    } catch {
+      setShown("manual"); // sin permiso para copiar: se muestra el mail para copiarlo a mano
+    }
+  }
+  return (
+    <>
+      <button type="button" onClick={copy} className={className}>{children}</button>
+      {shown && (
+        <div role="status" aria-live="polite"
+          className="fixed bottom-6 left-1/2 z-50 w-[calc(100%-2rem)] max-w-sm -translate-x-1/2 rounded-2xl bg-[#0f2a3d] px-5 py-3 text-center text-sm text-white shadow-2xl">
+          {shown === "ok"
+            ? <><b>¡Mail copiado!</b> Pegalo en tu correo: <span className="font-semibold underline decoration-dotted">{email}</span></>
+            : <>Copiá nuestro mail: <span className="select-all font-semibold">{email}</span></>}
+        </div>
+      )}
+    </>
+  );
+}

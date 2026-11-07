@@ -1,13 +1,20 @@
 "use client";
 import { useEffect, useState } from "react";
 import type { Place } from "@/lib/places";
+import dynamic from "next/dynamic";
 import { Alert, Button, Input, Spinner, TextField, cx } from "@/components/ui";
+
+// El mapa se carga solo cuando se abre (Leaflet no funciona en el servidor).
+const MapPointPicker = dynamic(() => import("@/components/map-point-picker").then((m) => m.MapPointPicker), {
+  ssr: false,
+  loading: () => <div className="flex h-80 items-center justify-center rounded-lg border border-line text-sm text-muted"><Spinner small /> Cargando el mapa…</div>,
+});
 
 const round = (n: number) => Math.round(n * 1e5) / 1e5;
 
 /**
  * Ubicación del balneario para el clima, el viento y el sol:
- * se detecta con el celular o la compu, se busca por nombre, o se carga a mano.
+ * se detecta con el celular o la compu, se busca por nombre, se marca en el mapa o se carga a mano.
  */
 export function LocationPicker({ lat, lon, onChange, disabled }: {
   lat: number | null; lon: number | null; onChange: (lat: number | null, lon: number | null) => void; disabled?: boolean;
@@ -18,6 +25,7 @@ export function LocationPicker({ lat, lon, onChange, disabled }: {
   const [busy, setBusy] = useState<null | "gps" | "buscar">(null);
   const [error, setError] = useState<string | null>(null);
   const [manual, setManual] = useState(false);
+  const [showMap, setShowMap] = useState(false);
   const [mLat, setMLat] = useState(lat?.toString() ?? "");
   const [mLon, setMLon] = useState(lon?.toString() ?? "");
 
@@ -37,7 +45,7 @@ export function LocationPicker({ lat, lon, onChange, disabled }: {
       const r = await fetch("/api/lugar?ip=1");
       const b = (await r.json()) as { lat: number | null; lon: number | null; ciudad: string | null };
       if (b.lat != null && b.lon != null) {
-        setResults([{ lat: round(b.lat), lon: round(b.lon), label: `${b.ciudad ?? "Ubicación aproximada"} (según tu conexión a internet; revisá que sea el balneario)` }]);
+        setResults([{ lat: round(b.lat), lon: round(b.lon), label: `${b.ciudad ?? "Ubicación aproximada"} (aproximada, según tu conexión a internet)` }]);
         setError(`${reason} Te mostramos abajo la ubicación aproximada de tu conexión: tocala solo si corresponde al balneario. Si no, buscalo por nombre.`);
         return;
       }
@@ -71,11 +79,15 @@ export function LocationPicker({ lat, lon, onChange, disabled }: {
           : "La compu no pudo ubicarse (en Windows, revisá Configuración → Privacidad → Ubicación).");
       }
     };
-    // Primero rápido (red o wifi); si falla por tiempo, una vez más con más precisión.
-    navigator.geolocation.getCurrentPosition(ok, (e) => {
-      if (e.code === e.PERMISSION_DENIED) return fail(e);
-      navigator.geolocation.getCurrentPosition(ok, fail, { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 });
-    }, { enableHighAccuracy: false, timeout: 10000, maximumAge: 300000 });
+    // En la compu la ubicación sale del wifi o de la red (Windows puede tardar): se espera hasta 25 segundos.
+    // En el celular, si la primera es imprecisa, se intenta afinar con el GPS.
+    navigator.geolocation.getCurrentPosition((p) => {
+      ok(p);
+      if (p.coords.accuracy > 300 && /Android|iPhone|iPad/i.test(navigator.userAgent)) {
+        navigator.geolocation.getCurrentPosition((q) => { if (q.coords.accuracy < p.coords.accuracy) ok(q); }, () => undefined,
+          { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 });
+      }
+    }, fail, { enableHighAccuracy: false, timeout: 25000, maximumAge: 600000 });
   }
 
   async function search() {
@@ -88,6 +100,8 @@ export function LocationPicker({ lat, lon, onChange, disabled }: {
       const b = (await r.json()) as { lugares?: Place[]; error?: string };
       if (!r.ok) throw new Error(b.error);
       setResults(b.lugares ?? []);
+      // Las esquinas («100 y playa») casi nunca aparecen: se busca la ciudad y se marca en el mapa.
+      if ((b.lugares ?? []).length === 0) setShowMap(true);
     } catch (e) {
       setError(e instanceof Error && e.message ? e.message : "No se pudo buscar el lugar.");
     } finally {
@@ -129,7 +143,7 @@ export function LocationPicker({ lat, lon, onChange, disabled }: {
             <Button type="button" variant="secondary" onClick={search} disabled={busy !== null} className="shrink-0">{busy === "buscar" ? <Spinner small /> : "Buscar"}</Button>
           </div>
           {results && (
-            results.length === 0 ? <p className="text-sm text-muted">No se encontró ese lugar. Probá con el nombre de la ciudad.</p> : (
+            results.length === 0 ? <p className="text-sm text-muted">No se encontró esa dirección. Buscá la ciudad (por ejemplo «Villa Gesell») y después marcá el punto exacto en el mapa.</p> : (
               <ul className="overflow-hidden rounded-lg border border-line text-sm">
                 {results.map((r) => (
                   <li key={`${r.lat},${r.lon}`} className="border-b border-line last:border-0">
@@ -138,6 +152,15 @@ export function LocationPicker({ lat, lon, onChange, disabled }: {
                 ))}
               </ul>
             )
+          )}
+          <Button type="button" variant="secondary" onClick={() => setShowMap((v) => !v)}>
+            {showMap ? "Ocultar el mapa" : "Marcar el punto exacto en el mapa"}
+          </Button>
+          {showMap && (
+            <>
+              <p className="text-xs text-muted">Acercate con la rueda o con los dedos y tocá justo donde está el balneario (por ejemplo, Paseo 100 y la playa). La marca también se puede arrastrar. Después tocá «Guardar cambios».</p>
+              <MapPointPicker lat={lat} lon={lon} onPick={(a, b) => { setResults(null); setError(null); onChange(round(a), round(b)); }} />
+            </>
           )}
           <button type="button" onClick={() => setManual((v) => !v)} className={cx("self-start text-xs text-muted hover:underline")}>
             {manual ? "Ocultar carga a mano" : "Cargar latitud y longitud a mano"}
@@ -150,7 +173,7 @@ export function LocationPicker({ lat, lon, onChange, disabled }: {
             </div>
           )}
           {error && <Alert tone="warn">{error}</Alert>}
-          <p className="text-[11px] text-muted">Búsqueda de lugares: © colaboradores de OpenStreetMap.</p>
+          <p className="text-[11px] text-muted">Búsqueda de lugares y mapa: © colaboradores de OpenStreetMap.</p>
         </>
       )}
     </div>
