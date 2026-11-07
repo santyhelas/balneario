@@ -108,6 +108,9 @@ begin
   -- Tarifas de la temporada pasada (más baratas: así se ve la diferencia al comparar temporadas)
   v_ps := make_date(extract(year from v_today)::int - case when extract(month from v_today) >= 7 then 1 else 2 end, 12, 1);
   v_pe := make_date(extract(year from v_ps)::int + 1, 3, 31);
+  -- La temporada pasada arranca el mismo día que la historia de esta, un año antes: así «Comparar temporadas»
+  -- tiene con qué comparar también los meses flojos del principio.
+  v_ps := least(v_ps, ((v_today - v_hist) - interval '1 year')::date);
   for v_kind in select unnest(array['carpa','sombrilla']) loop
     for v_m in select generate_series(v_ps, v_pe, interval '1 month')::date loop
       for v_half in 1..2 loop
@@ -276,7 +279,7 @@ begin
       exit when v_d > v_pe;
       -- Enero y la primera quincena de febrero, casi llenos; diciembre y marzo, flojos.
       v_p := case when extract(month from v_d) = 1 or (extract(month from v_d) = 2 and extract(day from v_d) <= 15) then 0.8
-                  when extract(month from v_d) = 2 then 0.45 else 0.22 end;
+                  when extract(month from v_d) = 2 then 0.45 when extract(month from v_d) in (10, 11) then 0.08 else 0.22 end;
       if random() > v_p then v_d := v_d + 1 + floor(random() * 6)::int; continue; end if;
       -- En plena temporada la mayoría alquila por quincena o por mes.
       v_len := (array[7,10,15,15,15,15,30,30])[1 + floor(random() * 8)::int];
