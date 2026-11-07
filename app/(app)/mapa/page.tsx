@@ -348,7 +348,7 @@ export default function MapaPage() {
 
       <div className="relative" data-tour="mapa">
         {editMode && (group.length > 1 || clipCount > 0) && (
-          <div className="absolute left-1/2 top-3 z-10 flex max-w-[calc(100%-7rem)] -translate-x-1/2 flex-wrap items-center justify-center gap-2 rounded-xl border border-line bg-surface/95 p-2 text-sm shadow-lg backdrop-blur print:hidden">
+          <div className="absolute left-1/2 top-3 z-10 flex w-max max-w-[calc(100%-7rem)] -translate-x-1/2 flex-wrap items-center justify-center gap-2 rounded-xl border border-line bg-surface/95 p-2 text-sm shadow-lg backdrop-blur print:hidden">
             {group.length > 1 && (
               <span className="px-1 font-medium">
                 {group.length} elegidas
