@@ -208,9 +208,13 @@ export function WeatherStrip({ className }: { className?: string }) {
           <span className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-sky-100 dark:bg-slate-700"><WeatherIcon kind={sym.icon} className="h-14 w-14" /></span>
           <div>
             <div className="tabular text-3xl font-extrabold leading-none">{d.temperatura == null ? "—" : formatTemperature(d.temperatura, tempUnit)}</div>
-            <div className="text-xs text-muted">{sym.text}{d.humedad != null ? ` · Humedad ${Math.round(d.humedad)}%` : ""}</div>
+            <div className="text-xs text-muted">{sym.text}</div>
           </div>
         </div>
+        <Metric label="Humedad">
+          <span className="tabular font-bold">{d.humedad != null ? `${Math.round(d.humedad)}%` : "—"}</span>
+          <span className="text-xs text-muted">{d.humedad == null ? "Sin dato" : d.humedad >= 85 ? "Muy húmedo" : d.humedad >= 65 ? "Húmedo" : d.humedad >= 35 ? "Normal" : "Seco"}</span>
+        </Metric>
         <Metric label="Viento">
           <span className="flex items-center gap-2">
             {d.viento_desde != null && (

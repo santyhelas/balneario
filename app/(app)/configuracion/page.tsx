@@ -56,7 +56,7 @@ export default function ConfiguracionPage() {
                 {!isGuest && role === "propietario" && (
                   <Button variant="secondary" onClick={() => startTour("guia")}>Ver la guía de nuevo</Button>
                 )}
-                {(isGuest || isAdmin) && <Button variant="secondary" onClick={() => startTour("novedades")}>Ver las novedades</Button>}
+                {isGuest && <Button variant="secondary" onClick={() => startTour("novedades")}>Ver las novedades</Button>}
               </div>
             </Card>
           </div>

@@ -36,21 +36,20 @@ const DEMO_STEPS: Step[] = [
 /** Guía de bienvenida: lo que hay que dejar listo antes de la primera reserva. */
 export const GUIDE_STEPS: Step[] = [
   { path: "/", sel: null, title: "¡Bienvenido a Mi Balneario!", text: "En un par de minutos te mostramos qué dejar listo para empezar a trabajar. Podés saltearla y volver a verla cuando quieras desde Configuración." },
-  { path: "/mapa", sel: "mapa", title: "1. Armá tu playa", text: "Tocá «Editar» y arrastrá las carpas y sombrillas hasta que el plano quede igual a tu balneario. Desde ahí también agregás, renombrás o desactivás espacios." },
-  { path: "/tarifas", sel: "tarifas", title: "2. Cargá tus precios", text: "El precio por día de cada quincena, para carpas y sombrillas. Con eso el sistema calcula solo el total de cada reserva. Se copian de un mes a otro." },
+  { path: "/mapa", sel: "mapa", title: "1. Armá tu playa", text: "Tocá «Editar» y arrastrá las carpas y sombrillas hasta que el plano quede igual a tu balneario. Para mover varias juntas, arrastrá sobre la arena y encerralas en un recuadro (o Ctrl + clic); con Ctrl + C y Ctrl + V las copiás. Desde ahí también agregás, renombrás o desactivás espacios." },
+  { path: "/tarifas", sel: "tarifas", title: "2. Cargá tus precios", text: "El precio por día de cada quincena, para carpas y sombrillas. Con eso el sistema calcula solo el total de cada reserva. Se copian de un mes a otro. En «Convenios y descuentos» elegís cómo se combinan los descuentos y un tope máximo." },
   { path: "/configuracion", sel: "config-balneario", title: "3. Tus datos y ubicación", text: "Nombre, logo y la ubicación de tu playa: con ella te mostramos el clima, el viento y el sol en el mapa." },
   { path: "/configuracion", sel: "config-extras", title: "4. Extras (opcional)", text: "Si cobrás reposeras, estacionamiento, heladera u otra cosa aparte, cargalos acá con su precio. Después los sumás a cada reserva con un toque." },
   { path: "/configuracion", sel: "config-usuarios", title: "5. Sumá a tu equipo", text: "Invitá a quienes trabajan con vos. Un operador reserva y cobra; un administrador además cambia precios y descuentos." },
-  { path: "/configuracion", sel: "config-mensajes", title: "6. Tus mensajes de WhatsApp", text: "Los recordatorios de deuda salen con este texto. Escribilo como le hablás a tus clientes." },
-  { path: "/caja", sel: "caja", title: "7. La caja de cada día", text: "Cada mañana abrís la caja con el efectivo inicial y a la noche la cerrás contando la plata. El sistema te dice si sobra o falta." },
+  { path: "/configuracion", sel: "config-mensajes", title: "6. Tus mensajes de WhatsApp y mail", text: "Los recordatorios de deuda salen con este texto, que puede llevar el total, la seña y otros datos del cliente. En la pestaña «Correo» armás el mail, que sale desde tu cuenta." },
+  { path: "/caja", sel: "caja", title: "7. La caja de cada día", text: "Cada mañana abrís la caja con el efectivo inicial y a la noche la cerrás contando la plata. El sistema te dice si sobra o falta. En Configuración podés poner un límite de efectivo: si se pasa, te avisa que hagas un depósito." },
   { path: "/", sel: "nueva-reserva", title: "8. Tu primera reserva", text: "Cuando tengas el plano y los precios, tocá acá: elegís cliente, fechas y carpa, y registrás el cobro o la seña." },
   { path: "/", sel: null, title: "¡Listo para arrancar!", text: "Si te trabás con algo, escribinos por WhatsApp. Para ver esta guía otra vez: Configuración → «Ver la guía de nuevo»." },
 ];
 
-/** Lo nuevo de esta versión (para quienes ya usaban el sistema). Cambiar NEWS_VERSION cuando haya otra tanda. */
-export const NEWS_VERSION = "2026-11";
+/** Lo nuevo de esta versión: se muestra solo en la demo, con el botón «Novedades». */
 export const NEWS_STEPS: Step[] = [
-  { path: "/", sel: null, title: "Novedades de Mi Balneario", text: "Sumamos varias cosas pedidas por balnearios. En un minuto te mostramos dónde está cada una. Podés saltearlo y verlo cuando quieras desde Configuración." },
+  { path: "/", sel: null, title: "Novedades de Mi Balneario", text: "Sumamos varias cosas pedidas por balnearios. En un minuto te mostramos dónde está cada una. Podés saltearlo y verlo cuando quieras con el botón «Novedades»." },
   { path: "/mapa", sel: "mapa-editar", title: "Plano: varias cosas a la vez", text: "Tocá «Editar plano». Ahora podés elegir varias carpas, sombrillas o elementos y moverlas juntas, copiarlas y pegarlas." },
   { path: "/mapa", sel: "mapa", title: "Cómo se eligen y se copian", text: "Arrastrá sobre la arena para encerrar varias en un recuadro, o usá Ctrl + clic para sumar o sacar una. Después arrastrá cualquiera y se mueven todas. Ctrl + C y Ctrl + V las copia: las carpas nuevas toman el número siguiente libre. Con el botón derecho recorrés el plano, y con «Agrandar» o «Achicar» le das lugar a un balneario más grande." },
   { path: "/convenios", sel: "convenios-modo", title: "Cómo se combinan los descuentos", text: "Vos decidís si los descuentos se aplican uno sobre otro (en cascada), se suman, o se usa solo el mayor. También podés poner un tope máximo de descuento. Los convenios ahora se pueden deshabilitar o eliminar sin tocar las reservas viejas." },
@@ -63,7 +62,7 @@ export const NEWS_STEPS: Step[] = [
   { path: "/gastos", sel: "gastos-excel", title: "Gastos en Excel", text: "Los gastos se ven como una planilla con el total abajo, y con «Descargar Excel» bajás el detalle y el total por categoría." },
   { path: "/reportes", sel: "temporadas", title: "Comparar temporadas", text: "Al final de Reportes elegís dos temporadas y ves mes por mes ocupación, lo contratado, lo cobrado, los gastos y las reservas. Al imprimir, los reportes salen en blanco y negro, sin recuadros y con tu logo, nombre, fecha y hora arriba." },
   { path: "/", sel: "nueva-reserva", title: "Números de reserva propios", text: "Las reservas de tu balneario se numeran desde el 1, sin saltos. Las que ya tenías se renumeraron en el orden en que se cargaron." },
-  { path: "/", sel: null, title: "¡Eso es todo!", text: "Si algo no te queda claro o se te ocurre una mejora, escribinos. Para ver estas novedades otra vez: Configuración → «Ver las novedades»." },
+  { path: "/", sel: null, title: "¡Eso es todo!", text: "Si algo no te queda claro o se te ocurre una mejora, escribinos. Para verlas otra vez, tocá «Novedades» en la barra de arriba." },
 ];
 
 const STEPS_BY_ID: Record<TourId, Step[]> = { demo: DEMO_STEPS, guia: GUIDE_STEPS, novedades: NEWS_STEPS };
@@ -73,16 +72,6 @@ const KEYS: Record<TourId, { step: string; done: string }> = {
   novedades: { step: "bal_novedades_paso", done: "bal_novedades_visto" },
 };
 
-/** Si ya vio las novedades de esta versión en este navegador (es solo una comodidad: a lo sumo se ofrecen otra vez). */
-const NEWS_KEY = `bal_novedades_${NEWS_VERSION}`;
-export function newsSeen(): boolean { try { return localStorage.getItem(NEWS_KEY) === "1"; } catch { return true; } }
-export function markNewsSeen() { try { localStorage.setItem(NEWS_KEY, "1"); } catch { /* sin almacenamiento */ } }
-/** true cuando falta ver las novedades en este navegador (se lee al montar: en el servidor no existe). */
-export function useNewsUnseen(): boolean {
-  const [unseen, setUnseen] = useState(false);
-  useEffect(() => { setUnseen(!newsSeen()); }, []);
-  return unseen;
-}
 const EVT = "tutorial-cambio";
 
 const ss = {

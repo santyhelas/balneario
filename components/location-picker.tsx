@@ -31,20 +31,51 @@ export function LocationPicker({ lat, lon, onChange, disabled }: {
     return () => { off = true; };
   }, [lat, lon]);
 
+  /** Si el navegador no puede ubicarse, se ofrece la ubicación aproximada de la conexión a internet. */
+  async function ipFallback(reason: string) {
+    try {
+      const r = await fetch("/api/lugar?ip=1");
+      const b = (await r.json()) as { lat: number | null; lon: number | null; ciudad: string | null };
+      if (b.lat != null && b.lon != null) {
+        setResults([{ lat: round(b.lat), lon: round(b.lon), label: `${b.ciudad ?? "Ubicación aproximada"} (según tu conexión a internet; revisá que sea el balneario)` }]);
+        setError(`${reason} Te mostramos abajo la ubicación aproximada de tu conexión: tocala solo si corresponde al balneario. Si no, buscalo por nombre.`);
+        return;
+      }
+    } catch { /* sin respaldo */ }
+    setError(`${reason} Buscá el balneario por nombre (por ejemplo «Villa Gesell») o cargá la latitud y longitud a mano.`);
+  }
+
   function useMyLocation() {
     setError(null);
-    if (!("geolocation" in navigator)) return setError("Este navegador no puede detectar la ubicación. Buscala por nombre.");
+    setResults(null);
+    if (!("geolocation" in navigator) || !window.isSecureContext) {
+      void ipFallback("Este navegador no puede detectar la ubicación.");
+      return;
+    }
     setBusy("gps");
-    navigator.geolocation.getCurrentPosition(
-      (p) => { setBusy(null); setResults(null); onChange(round(p.coords.latitude), round(p.coords.longitude)); },
-      (e) => {
-        setBusy(null);
-        setError(e.code === e.PERMISSION_DENIED
-          ? "No diste permiso para ver la ubicación. Habilitalo en el candado de la barra de direcciones, o buscala por nombre."
-          : "No se pudo detectar la ubicación. Probá de nuevo o buscala por nombre.");
-      },
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 },
-    );
+    const ok = (p: GeolocationPosition) => {
+      setBusy(null);
+      onChange(round(p.coords.latitude), round(p.coords.longitude));
+      // En una compu sin GPS la ubicación sale de la red y puede errar varios kilómetros.
+      if (p.coords.accuracy > 3000) {
+        setError(`Ubicación aproximada (puede errar unos ${Math.round(p.coords.accuracy / 1000)} km). Revisá con «Ver en el mapa» que sea el balneario; si no, buscalo por nombre.`);
+      }
+    };
+    const fail = (e: GeolocationPositionError) => {
+      setBusy(null);
+      if (e.code === e.PERMISSION_DENIED) {
+        setError("El navegador no tiene permiso para ver la ubicación. Tocá el candado de la barra de direcciones → Ubicación → Permitir, y probá de nuevo. También podés buscar el balneario por nombre.");
+      } else {
+        void ipFallback(e.code === e.TIMEOUT
+          ? "La compu tardó demasiado en ubicarse."
+          : "La compu no pudo ubicarse (en Windows, revisá Configuración → Privacidad → Ubicación).");
+      }
+    };
+    // Primero rápido (red o wifi); si falla por tiempo, una vez más con más precisión.
+    navigator.geolocation.getCurrentPosition(ok, (e) => {
+      if (e.code === e.PERMISSION_DENIED) return fail(e);
+      navigator.geolocation.getCurrentPosition(ok, fail, { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 });
+    }, { enableHighAccuracy: false, timeout: 10000, maximumAge: 300000 });
   }
 
   async function search() {

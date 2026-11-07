@@ -10,7 +10,7 @@ import { useUndo } from "@/components/undo";
 import { ConfirmDialog, cx } from "@/components/ui";
 import { DayNotes, usePendingNotes } from "@/components/day-notes";
 import { CloseCashModal, OpenCashModal, type CashSummary } from "@/components/cash";
-import { DemoTour, Tour, markNewsSeen, startTour, useNewsUnseen } from "@/components/demo-tour";
+import { DemoTour, Tour, startTour } from "@/components/demo-tour";
 import { PrintHeader } from "@/components/print-header";
 
 type NavItem = { href: string; label: string; icon: string };
@@ -79,7 +79,6 @@ function longDate(iso: string, timeZone: string) {
 
 export function Shell({ children }: { children: ReactNode }) {
   const { ws, email, theme, setTheme, role, profile, isGuest, guideDone, setGuideDone, isPlatformAdmin, adminAlerts } = useWorkspace();
-  const newsUnseen = useNewsUnseen();
   const status = useStatus();
   const pathname = usePathname();
   const [confirmLogout, setConfirmLogout] = useState(false);
@@ -297,10 +296,9 @@ export function Shell({ children }: { children: ReactNode }) {
         <main className="px-safe pb-tabbar w-full flex-1 pt-4 md:pt-6 print:p-0"><PrintHeader />{children}</main>
         <DemoTour enabled={isGuest} />
         <Tour id="guia" enabled={!isGuest && role === "propietario"} unseen={!guideDone} finalLabel="Empezar"
-          onFinish={() => { markNewsSeen(); if (!guideDone) setGuideDone(true).catch(() => undefined); }} />
-        {/* Novedades: arranca sola una vez para quienes ya venían usando el sistema (no para quien recién empieza). */}
-        <Tour id="novedades" enabled={isGuest || role === "propietario" || role === "administrador"} unseen={!isGuest && guideDone && newsUnseen}
-          onFinish={markNewsSeen} />
+          onFinish={() => { if (!guideDone) setGuideDone(true).catch(() => undefined); }} />
+        {/* Novedades: solo en la demo, y solo si se la pide con el botón. */}
+        <Tour id="novedades" enabled={isGuest} unseen={false} />
       </div>
 
       {/* ---------------- Barra inferior (celular) ---------------- */}

@@ -25,6 +25,16 @@ async function nominatim(path: string): Promise<unknown> {
 export async function GET(req: Request) {
   const p = new URL(req.url).searchParams;
   const q = p.get("q")?.trim() ?? "";
+  // Ubicación aproximada de la conexión (la da Vercel): para cuando el navegador no puede ubicarse.
+  if (p.get("ip") === "1") {
+    const h = req.headers;
+    const lat = Number(h.get("x-vercel-ip-latitude"));
+    const lon = Number(h.get("x-vercel-ip-longitude"));
+    if (!h.get("x-vercel-ip-latitude") || !Number.isFinite(lat) || !Number.isFinite(lon)) return json({ lat: null, lon: null, ciudad: null });
+    let ciudad: string | null = null;
+    try { ciudad = decodeURIComponent(h.get("x-vercel-ip-city") ?? "") || null; } catch { ciudad = null; }
+    return json({ lat, lon, ciudad });
+  }
   try {
     if (q) {
       if (q.length < 3 || q.length > 120) return json({ error: "Escribí al menos 3 letras." }, 400);
