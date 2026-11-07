@@ -690,6 +690,31 @@ select t.ok((select count(*) = 1 and bool_and(is_demo) from public.workspaces), 
 select t.ok((select count(*) from public.customers where workspace_id = t.uid('ws')) = 0, 'Invitado: no ve clientes reales');
 select t.ok((select count(*) from public.payments where workspace_id = t.uid('ws')) = 0, 'Invitado: no ve pagos reales');
 select t.ok((select count(*) from public.reservations) >= 10, 'Invitado: tiene reservas de demostración');
+select t.ok((select count(*) from public.customers) >= 200 and (select count(*) from public.reservations) >= 300, 'Demo: muchos clientes y reservas');
+select t.ok((select count(*) from public.cash_sessions where closed_at is not null) >= 25 and (select count(*) from public.cash_sessions where closed_at is null) = 1,
+  'Demo: un mes de cajas cerradas y la de hoy abierta');
+select t.ok((select count(distinct method) from public.payments where kind = 'cobro') = 3, 'Demo: cobros en efectivo, transferencia y tarjeta');
+select t.ok(exists (select 1 from public.payments where kind = 'devolucion') and exists (select 1 from public.payments where kind = 'anulacion')
+        and exists (select 1 from public.reservations where status = 'cancelada'), 'Demo: hay una devolución, una anulación y una cancelación');
+select t.ok((select count(distinct c.name) from public.expenses e join public.expense_categories c on c.id = e.category_id) = 6, 'Demo: gastos de todas las categorías');
+select t.ok((select count(distinct a.percent) from public.reservation_discounts d join public.agreements a on a.id = d.agreement_id where a.percent in (10, 15)) = 2,
+  'Demo: reservas con los convenios de 10% y 15%');
+select t.ok(exists (select 1 from public.reservations where is_courtesy) and exists (select 1 from public.reservation_extras)
+        and exists (select 1 from public.reservation_changes where kind = 'reubicacion') and exists (select 1 from public.maintenance_blocks),
+  'Demo: cortesías, extras, cambios de carpa y mantenimiento');
+select t.ok((select count(*) from public.reservations r where r.status = 'confirmada' and not r.is_courtesy
+             and r.total_amount > coalesce((select sum(signed_amount) from public.payments p where p.reservation_id = r.id), 0)) >= 5, 'Demo: hay deudores');
+select t.ok(not exists (select 1 from public.cash_sessions s where s.closed_at is not null and s.expected_cash <> s.opening_cash
+             + coalesce((select sum(case when m.direction = 'entrada' then m.amount else -m.amount end) from public.cash_movements m where m.cash_session_id = s.id and m.method = 'efectivo'), 0)),
+  'Demo: el efectivo esperado de cada caja cerrada coincide con sus movimientos');
+select t.ok(not exists (select 1 from public.reservations r where coalesce((select sum(signed_amount) from public.payments p where p.reservation_id = r.id), 0) > r.total_amount),
+  'Demo: ninguna reserva tiene cobrado más que su total');
+select t.ok((select count(distinct number) = count(*) and min(number) = 1 from public.reservations), 'Demo: números de reserva sin repetir, desde 1');
+select t.ok((select count(*) from public.reservations r where r.start_date < private.ws_today(r.workspace_id) - 180) >= 100
+        and (select (m ->> 'cobrado')::numeric > 0 from jsonb_array_elements(public.season_stats(t.uid('demo'),
+             extract(year from private.ws_today(t.uid('demo')))::int - case when extract(month from private.ws_today(t.uid('demo'))) >= 7 then 1 else 2 end) -> 'meses') m
+             where m ->> 'mes' like '%-01'),
+  'Demo: hay una temporada pasada completa para comparar');
 select t.ok((select count(*) from public.spaces) = (select count(*) from public.spaces where workspace_id = t.uid('demo')) and (select count(*) from public.spaces) > 50, 'Invitado: tiene el mismo plano (carpas)');
 select public.end_guest_session();
 reset role;
