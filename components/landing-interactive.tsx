@@ -109,8 +109,11 @@ export function HeroBeach() {
             <path d="M0 72 q35 -14 70 0 t70 0 t70 0 t70 0 t70 0 t70 0 t70 0 t70 0 t70 0 t70 0 t70 0 t70 0 t70 0 t70 0 V60 H0 Z" fill="var(--atl-3)" opacity="0.7" />
             <path d="M0 74 q35 -14 70 0 t70 0 t70 0 t70 0 t70 0 t70 0 t70 0 t70 0 t70 0 t70 0 t70 0 t70 0 t70 0 t70 0" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" opacity="0.9" />
           </g>
-          <rect x="0" y="226" width="490" height="18" fill="#efe2c4" />
-          <text x="245" y="239" textAnchor="middle" fontSize="9" fill="#a08a5a" fontWeight="600">pasarela</text>
+          {/* Pasarela de madera: tablones marrones */}
+          <rect x="0" y="226" width="490" height="18" fill="#9a6b3f" />
+          {Array.from({ length: 25 }, (_, i) => <line key={i} x1={i * 20 + 10} y1="226" x2={i * 20 + 10} y2="244" stroke="#7a5230" strokeWidth="1.5" />)}
+          <line x1="0" y1="226.75" x2="490" y2="226.75" stroke="#b9875a" strokeWidth="1.5" />
+          <line x1="0" y1="243.25" x2="490" y2="243.25" stroke="#6b4628" strokeWidth="1.5" />
           {/* Sol y viento */}
           <g transform="translate(458 28)">
             <g className="tb-sun-rays">
