@@ -8245,7 +8245,7 @@ declare
   v_cid uuid; v_i int; v_j int; v_d date; v_end date; v_len int; v_kind text; v_m date; v_price numeric; v_half int;
   v_sp record; v_r record; v_res jsonb; v_rid uuid; v_total numeric; v_paid numeric; v_amt numeric; v_amt2 numeric;
   v_opts jsonb; v_segs jsonb; v_book date; v_method text; v_p numeric; v_x numeric; v_gap int;
-  v_ag10 uuid; v_ag15 uuid; v_agPB uuid; v_ex record; v_exr uuid; v_exs uuid; v_exg uuid; v_exm uuid;
+  v_ag10 uuid; v_ag15 uuid; v_ex record; v_exr uuid; v_exs uuid; v_exg uuid; v_exm uuid;
   v_target uuid; v_ver int; v_sess uuid; v_exp numeric; v_diff numeric; v_pay uuid; v_cnt int;
   v_lens int[] := array[1,2,3,3,5,5,5,7,7,7,7,10,10,14,15,15,15,21,30];
   v_methods text[] := array['efectivo','efectivo','transferencia','transferencia','tarjeta'];
@@ -8291,8 +8291,8 @@ begin
     end loop;
   end loop;
 
-  -- Convenios (el de Parque Bonito ya viene cargado)
-  select id into v_agPB from public.agreements where workspace_id = p_ws and name = 'Parque Bonito';
+  -- Convenios: en la demo solo los dos inventados (el de Parque Bonito que trae todo balneario nuevo se saca).
+  update public.agreements set deleted_at = now(), active = false, version = version + 1 where workspace_id = p_ws and name = 'Parque Bonito';
   insert into public.agreements (workspace_id, name, percent) values (p_ws, 'Club Náutico Las Gaviotas', 10) returning id into v_ag10;
   insert into public.agreements (workspace_id, name, percent) values (p_ws, 'Mutual Docentes del Sur', 15) returning id into v_ag15;
 
@@ -8352,7 +8352,6 @@ begin
         when v_x < 0.03 then jsonb_build_object('courtesy', true, 'courtesy_beneficiary', (array['Hermana del dueño','Sobrinos del dueño','Padres del encargado'])[1 + floor(random() * 3)::int])
         when v_x < 0.14 then jsonb_build_object('agreement_id', v_ag10)
         when v_x < 0.21 then jsonb_build_object('agreement_id', v_ag15)
-        when v_x < 0.24 then jsonb_build_object('agreement_id', v_agPB)
         when v_x < 0.27 then jsonb_build_object('manual', jsonb_build_object('type', 'monto', 'value', 5000, 'reason', 'Cliente de muchos años'))
         when v_x < 0.50 then jsonb_build_object('cash', true)
         else '{}'::jsonb end;

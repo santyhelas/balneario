@@ -699,6 +699,7 @@ select t.ok(exists (select 1 from public.payments where kind = 'devolucion') and
 select t.ok((select count(distinct c.name) from public.expenses e join public.expense_categories c on c.id = e.category_id) = 6, 'Demo: gastos de todas las categorías');
 select t.ok((select count(distinct a.percent) from public.reservation_discounts d join public.agreements a on a.id = d.agreement_id where a.percent in (10, 15)) = 2,
   'Demo: reservas con los convenios de 10% y 15%');
+select t.ok(not exists (select 1 from public.agreements where name = 'Parque Bonito' and deleted_at is null), 'Demo: sin el convenio Parque Bonito');
 select t.ok(exists (select 1 from public.reservations where is_courtesy) and exists (select 1 from public.reservation_extras)
         and exists (select 1 from public.reservation_changes where kind = 'reubicacion') and exists (select 1 from public.maintenance_blocks),
   'Demo: cortesías, extras, cambios de carpa y mantenimiento');
