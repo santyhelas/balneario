@@ -381,7 +381,7 @@ for (const [view, opts] of Object.entries(VIEWS)) {
       await page.waitForTimeout(1500);
       await page.locator("button:visible", { hasText: /^Novedades$/ }).first().click();
       const dlg = page.locator('[role="dialog"][aria-labelledby="tour-titulo"]');
-      await dlg.waitFor({ timeout: 8000 });
+      await page.locator("#tour-titulo").waitFor({ timeout: 8000 }); // el contenedor no tiene tamaño propio
       const total = Number((await dlg.getByText(/Paso \d+ de \d+/).textContent()).match(/de (\d+)/)[1]);
       const sinMarca = [];
       for (let i = 0; i < total; i++) {
