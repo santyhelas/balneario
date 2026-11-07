@@ -113,6 +113,32 @@ for (const [view, opts] of Object.entries(VIEWS)) {
   for (const path of ["/", "/login", "/terminos", "/privacidad", "/mapa", "/caja", "/admin", "/no-existe-esta-pagina"]) {
     report.publico.push(await check(page, path, `publico${path === "/" ? "-inicio" : path}`, view, issues));
   }
+  // Portada con animaciones, como la ve una persona (sin la marca de navegador automático)
+  if (view === "pc") {
+    const ctx2 = await browser.newContext({ ...opts, locale: "es-AR" });
+    await ctx2.addInitScript(() => Object.defineProperty(Navigator.prototype, "webdriver", { get: () => false }));
+    const p2 = await ctx2.newPage();
+    const errs = [];
+    p2.on("pageerror", (e) => errs.push(String(e)));
+    try {
+      await p2.goto(BASE + "/", { waitUntil: "networkidle" });
+      await p2.waitForTimeout(400);
+      await p2.screenshot({ path: `${OUT}/capturas/anim-0-entrada.png` });
+      const hidden0 = await p2.locator("[data-reveal]:not(.is-in)").count();
+      const total = await p2.locator("[data-reveal]").count();
+      const H = await p2.evaluate(() => document.body.scrollHeight);
+      for (let y = 0, k = 1; y < H; y += 500, k++) {
+        await p2.mouse.wheel(0, 500);
+        await p2.waitForTimeout(350);
+        if (k === 4 || k === 8) await p2.screenshot({ path: `${OUT}/capturas/anim-${k}.png` });
+      }
+      await p2.waitForTimeout(1000);
+      const hidden1 = await p2.locator("[data-reveal]:not(.is-in)").count();
+      report.flujos.push({ flujo: "Portada: animaciones al bajar", pasos: [`elementos animados: ${total}`, `escondidos al entrar: ${hidden0}`, `escondidos al llegar abajo: ${hidden1}`, ...errs.map((e) => `error: ${e}`)],
+        resultado: total > 10 && hidden0 > 0 && hidden1 === 0 && !errs.length ? "OK" : "Revisar" });
+    } catch (e) { report.flujos.push({ flujo: "Portada: animaciones al bajar", pasos: [], resultado: `Se cortó: ${String(e).slice(0, 160)}` }); }
+    await ctx2.close();
+  }
   // Portada en modo oscuro (con el botón luna)
   try {
     await page.goto(BASE + "/", { waitUntil: "networkidle" });
