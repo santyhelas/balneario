@@ -110,7 +110,7 @@ html.tb-anim [data-reveal].is-in { opacity: 1; transform: none; }
 .tb-shine::after { content: ""; position: absolute; inset: 0; background: linear-gradient(110deg, transparent 35%, rgba(255,255,255,.45) 50%, transparent 65%); transform: translateX(-120%); animation: tb-shine 4.5s ease-in-out 1.5s infinite; pointer-events: none; }
 @keyframes tb-shine { 0%, 60% { transform: translateX(-120%); } 85%, 100% { transform: translateX(120%); } }
 /* WhatsApp flotante: onda */
-.tb-ping { position: relative; }
+/* .tb-ping va sobre un elemento ya posicionado (el botón flotante es fixed) */
 .tb-ping::before { content: ""; position: absolute; inset: 0; border-radius: 999px; background: #25d366; animation: tb-ping 2.4s cubic-bezier(0,0,.2,1) infinite; z-index: -1; }
 @keyframes tb-ping { 0% { transform: scale(1); opacity: .55; } 80%, 100% { transform: scale(1.9); opacity: 0; } }
 /* Tarjetas y botones que se levantan al pasar el mouse */
