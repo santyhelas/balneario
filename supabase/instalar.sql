@@ -8748,7 +8748,8 @@ alter table public.workspaces add column if not exists max_umbrellas integer che
 
 update public.workspaces w set
   max_tents = (select count(*) from public.spaces s where s.workspace_id = w.id and s.active and s.kind = 'carpa'),
-  max_umbrellas = (select count(*) from public.spaces s where s.workspace_id = w.id and s.active and s.kind = 'sombrilla')
+  max_umbrellas = (select count(*) from public.spaces s where s.workspace_id = w.id and s.active and s.kind = 'sombrilla'),
+  version = w.version + 1
 where not w.is_demo and w.max_tents is null and w.max_umbrellas is null;
 
 alter table private.signup_allowlist add column if not exists max_tents integer check (max_tents between 0 and 600);
