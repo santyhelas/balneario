@@ -22,7 +22,8 @@ export async function startDemo(): Promise<string | null> {
   const { error: e2 } = await sb.rpc("start_guest_session");
   if (e2) {
     await sb.auth.signOut();
-    return friendlyError(e2);
+    // 57014: el servidor cortó por tiempo (falta la actualización 0038, que le da más tiempo a la demo).
+    return e2.code === "57014" ? "La demo tardó demasiado en armarse. Probá de nuevo en un momento." : friendlyError(e2);
   }
   try { sessionStorage.setItem(GUEST_MARK, "1"); } catch { /* sin almacenamiento: igual funciona en esta pestaña */ }
   window.location.assign("/");
