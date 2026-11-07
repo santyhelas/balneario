@@ -223,6 +223,7 @@ export function WeatherStrip({ className }: { className?: string }) {
               </svg>
             )}
             <span className={cx("tabular font-bold", windy && "text-warn")}>{d.viento_kmh ?? "—"} km/h</span>
+            {d.viento_kmh != null && <span className="tabular text-xs text-muted" title="Muchas páginas del clima muestran el viento en metros por segundo">({Math.round(d.viento_kmh / 3.6)} m/s)</span>}
           </span>
           <span className="text-xs text-muted">
             {d.viento_desde != null ? `Sopla hacia el ${cardinalName((d.viento_desde + 180) % 360)} (viene del ${cardinal(d.viento_desde)})` : d.viento_kmh === 0 ? "Calma" : ""}
