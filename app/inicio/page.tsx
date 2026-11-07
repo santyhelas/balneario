@@ -1,10 +1,13 @@
 import type { Metadata } from "next";
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
+
+/** Retraso de una animación (para que las cosas entren de a una). */
+const dl = (ms: number) => ({ "--d": `${ms}ms` }) as CSSProperties;
 import "@fontsource-variable/bricolage-grotesque";
 import "@fontsource-variable/figtree";
 import { SITE_EMAIL, SITE_INSTAGRAM, SITE_INSTAGRAM_URL, SITE_URL, SITE_WHATSAPP_URL } from "@/lib/site";
 import { Analytics } from "@vercel/analytics/next";
-import { CopyEmailButton, DemoButton, DemoEndedNotice, LandingThemeToggle, LoginLink, MobileMenu, TB_THEME_SCRIPT } from "@/components/landing";
+import { CopyEmailButton, DemoButton, DemoEndedNotice, LandingThemeToggle, LoginLink, MobileMenu, ScrollReveal, TB_THEME_SCRIPT } from "@/components/landing";
 import { DayTimeline, HeroBeach, PhotoStrip, Slider, type DayStep } from "@/components/landing-interactive";
 import "./landing.css";
 
@@ -238,8 +241,8 @@ function GroupSlide({ g, n, total }: { g: (typeof GROUPS)[number]; n: number; to
       </div>
       <ul className="grid content-center gap-x-8 gap-y-8 p-8 sm:grid-cols-2 sm:p-10">
         {g.items.map((f) => (
-          <li key={f.title}>
-            <span className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl" style={{ background: `color-mix(in srgb, ${g.color} 13%, white)`, color: g.color }}><Icon d={f.icon} className="h-6 w-6" /></span>
+          <li key={f.title} className="tb-lift -m-3 rounded-2xl p-3">
+            <span className="tb-bob mb-3 flex h-12 w-12 items-center justify-center rounded-2xl" style={{ background: `color-mix(in srgb, ${g.color} 13%, white)`, color: g.color }}><Icon d={f.icon} className="h-6 w-6" /></span>
             <h4 className="text-lg font-bold">{f.title}</h4>
             <p className="mt-1 leading-relaxed text-[var(--gris)]">{f.text}</p>
           </li>
@@ -286,23 +289,23 @@ export default function InicioPage() {
         <section className="relative overflow-hidden">
           <div className="mx-auto grid max-w-6xl items-center gap-10 px-4 pb-14 pt-8 lg:grid-cols-[0.9fr_1.1fr] lg:pt-14">
             <div>
-              <h1 className="text-[2.5rem] font-extrabold leading-[1.03] sm:text-6xl">
+              <h1 className="tb-in text-[2.5rem] font-extrabold leading-[1.03] sm:text-6xl">
                 Tu balneario entero, en un mapa que sabe quién está en cada carpa.
               </h1>
-              <p className="mt-5 max-w-lg text-lg leading-relaxed text-[var(--gris)]">
+              <p className="tb-in mt-5 max-w-lg text-lg leading-relaxed text-[var(--gris)]" style={dl(150)}>
                 Mi Balneario es un sistema de gestión de balnearios para el alquiler de carpas y sombrillas.
                 Elegí un día y mirá qué está libre; tocá una carpa y ves quién la tiene, hasta cuándo y si pagó.
                 Reservas, cobros, deudas y caja, desde la compu o el celular.
               </p>
-              <div className="mt-8 flex flex-wrap items-start gap-3">
-                <DemoButton className="rounded-full bg-[var(--lona)] px-7 text-white shadow-[0_10px_25px_-10px_rgba(214,51,47,0.8)] hover:brightness-110" />
-                <a href="#planes" className="inline-flex items-center justify-center rounded-full border-2 border-[var(--atl)] px-7 py-3 text-base font-bold text-[var(--atl)] hover:bg-[var(--atl)] hover:text-white">
+              <div className="tb-in mt-8 flex flex-wrap items-start gap-3" style={dl(300)}>
+                <DemoButton className="tb-shine tb-press rounded-full bg-[var(--lona)] px-7 text-white shadow-[0_10px_25px_-10px_rgba(214,51,47,0.8)] hover:brightness-110" />
+                <a href="#planes" className="tb-press inline-flex items-center justify-center rounded-full border-2 border-[var(--atl)] px-7 py-3 text-base font-bold text-[var(--atl)] hover:bg-[var(--atl)] hover:text-white">
                   Pedí tu presupuesto
                 </a>
               </div>
-              <p className="mt-3 text-sm text-[var(--gris)]">La demo abre un balneario de prueba con datos inventados. No hace falta registrarse.</p>
+              <p className="tb-in mt-3 text-sm text-[var(--gris)]" style={dl(420)}>La demo abre un balneario de prueba con datos inventados. No hace falta registrarse.</p>
             </div>
-            <HeroBeach />
+            <div className="tb-in" style={dl(250)}><div className="tb-float"><HeroBeach /></div></div>
           </div>
         </section>
 
@@ -316,9 +319,9 @@ export default function InicioPage() {
         {/* Un día en el balneario */}
         <section id="un-dia" className="scroll-mt-16 bg-[var(--atl)] text-white">
           <div className="mx-auto max-w-6xl px-4 py-20">
-            <h2 className="max-w-2xl text-4xl font-extrabold leading-tight sm:text-5xl">Un día de enero, de la apertura al cierre.</h2>
-            <p className="mt-3 max-w-xl text-white/75">Así se usa Mi Balneario en una jornada normal de temporada.</p>
-            <div className="mt-12">
+            <h2 data-reveal className="max-w-2xl text-4xl font-extrabold leading-tight sm:text-5xl">Un día de enero, de la apertura al cierre.</h2>
+            <p data-reveal style={dl(120)} className="mt-3 max-w-xl text-white/75">Así se usa Mi Balneario en una jornada normal de temporada.</p>
+            <div data-reveal style={dl(220)} className="mt-12">
               <DayTimeline steps={STEPS} />
             </div>
           </div>
@@ -328,24 +331,24 @@ export default function InicioPage() {
         <section id="funciones" className="scroll-mt-16 overflow-hidden">
           <div className="mx-auto max-w-6xl px-4 py-20">
             <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
-              <h2 className="max-w-xl text-4xl font-extrabold leading-tight sm:text-5xl">Todo lo que hace, en cuatro partes.</h2>
-              <p className="max-w-sm text-[var(--gris)]">Pasá de a una con las flechas, las pestañas o deslizando. Todas se pueden probar en la demo.</p>
+              <h2 data-reveal className="max-w-xl text-4xl font-extrabold leading-tight sm:text-5xl">Todo lo que hace, en cuatro partes.</h2>
+              <p data-reveal="right" style={dl(150)} className="max-w-sm text-[var(--gris)]">Pasá de a una con las flechas, las pestañas o deslizando. Todas se pueden probar en la demo.</p>
             </div>
-            <Slider label="Funciones del sistema" slides={GROUPS.map((g, k) => ({ key: g.key, title: g.title, node: <GroupSlide g={g} n={k + 1} total={GROUPS.length} /> }))} />
+            <div data-reveal style={dl(200)}><Slider label="Funciones del sistema" slides={GROUPS.map((g, k) => ({ key: g.key, title: g.title, node: <GroupSlide g={g} n={k + 1} total={GROUPS.length} /> }))} /></div>
           </div>
         </section>
 
         {/* Cómo empezar: es un paso a paso real */}
         <section className="bg-[var(--sand)]">
           <div className="mx-auto max-w-6xl px-4 py-20">
-            <h2 className="text-4xl font-extrabold sm:text-5xl">Empezar lleva una tarde.</h2>
+            <h2 data-reveal className="text-4xl font-extrabold sm:text-5xl">Empezar lleva una tarde.</h2>
             <ol className="mt-10 grid gap-8 md:grid-cols-3">
               {[
                 ["Probá la demo", "Tocá todo en un balneario de prueba. No hace falta registrarse."],
                 ["Te habilitamos tu balneario", "Pedí tu presupuesto y te damos acceso. Ponés el nombre y cuántas carpas y sombrillas tenés: el mapa se arma solo y lo acomodás arrastrando."],
                 ["Cargá tus precios", "Ponés las tarifas de la temporada y ya podés reservar, cobrar y abrir la caja."],
               ].map(([t, x], k) => (
-                <li key={t} className="relative pl-14">
+                <li key={t} data-reveal style={dl(k * 160)} className="relative pl-14">
                   <span className="display absolute left-0 top-0 flex h-11 w-11 items-center justify-center rounded-full bg-[var(--atl)] text-lg font-extrabold text-white">{k + 1}</span>
                   <h3 className="text-xl font-bold">{t}</h3>
                   <p className="mt-1 text-[var(--gris)]">{x}</p>
@@ -358,7 +361,7 @@ export default function InicioPage() {
         {/* Presupuesto (el ancla #planes se mantiene porque la usan los avisos del sistema) */}
         <section id="planes" className="scroll-mt-16">
           <div className="mx-auto max-w-4xl px-4 py-20">
-            <div className="overflow-hidden rounded-[32px] bg-[var(--atl)] px-6 py-12 text-center text-white shadow-xl sm:px-12">
+            <div data-reveal="zoom" className="overflow-hidden rounded-[32px] bg-[var(--atl)] px-6 py-12 text-center text-white shadow-xl sm:px-12">
               <h2 className="text-4xl font-extrabold sm:text-5xl">Pedí tu presupuesto</h2>
               <p className="mx-auto mt-3 max-w-lg text-lg text-white/85">
                 Contanos cuántas carpas y sombrillas tenés y te armamos una propuesta para tu balneario.
@@ -367,12 +370,12 @@ export default function InicioPage() {
               <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
                 {SITE_WHATSAPP_URL && (
                   <a href={SITE_WHATSAPP_URL} target="_blank" rel="noopener noreferrer"
-                    className="inline-flex h-14 w-full items-center justify-center gap-2 rounded-full bg-[#25d366] px-6 text-base font-bold text-[#06210f] hover:brightness-105 sm:w-72">
+                    className="tb-press inline-flex h-14 w-full items-center justify-center gap-2 rounded-full bg-[#25d366] px-6 text-base font-bold text-[#06210f] hover:brightness-105 sm:w-72">
                     <WhatsAppIcon className="h-5 w-5" />Escribinos por WhatsApp
                   </a>
                 )}
                 <CopyEmailButton email={SITE_EMAIL}
-                  className="inline-flex h-14 w-full items-center justify-center gap-2 rounded-full bg-white px-6 text-base font-bold text-[var(--atl)] hover:bg-[var(--foam)] sm:w-72">
+                  className="tb-press inline-flex h-14 w-full items-center justify-center gap-2 rounded-full bg-white px-6 text-base font-bold text-[var(--atl)] hover:bg-[var(--foam)] sm:w-72">
                   <Icon d="M4 6h16v12H4zM4 7l8 6 8-6" />Escribinos por mail
                 </CopyEmailButton>
               </div>
@@ -384,10 +387,10 @@ export default function InicioPage() {
         {/* Preguntas */}
         <section id="preguntas" className="scroll-mt-16 bg-white">
           <div className="mx-auto max-w-3xl px-4 py-20">
-            <h2 className="text-4xl font-extrabold sm:text-5xl">Preguntas frecuentes</h2>
+            <h2 data-reveal className="text-4xl font-extrabold sm:text-5xl">Preguntas frecuentes</h2>
             <div className="mt-8 divide-y divide-[var(--sand-2)] border-y border-[var(--sand-2)]">
-              {FAQ.map((f) => (
-                <details key={f.q} className="group py-5">
+              {FAQ.map((f, k) => (
+                <details key={f.q} data-reveal style={dl(k * 70)} className="group py-5">
                   <summary className="flex cursor-pointer list-none items-center justify-between gap-4 text-lg font-bold">
                     {f.q}
                     <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--foam)] text-[var(--atl)] transition group-open:rotate-45" aria-hidden>+</span>
@@ -404,8 +407,16 @@ export default function InicioPage() {
           <svg viewBox="0 0 1200 60" preserveAspectRatio="none" className="absolute inset-x-0 top-0 h-10 w-full" aria-hidden>
             <path className="tb-fill-white" d="M0 0 H1200 V30 Q1100 60 1000 30 T800 30 T600 30 T400 30 T200 30 T0 30 Z" fill="#fff" />
           </svg>
+          {/* Gaviotas que cruzan */}
+          <div className="pointer-events-none absolute inset-x-0 top-14 h-24 overflow-hidden" aria-hidden>
+            {[{ top: 10, dur: 19, delay: 0, size: 30 }, { top: 46, dur: 26, delay: -9, size: 22 }, { top: 26, dur: 32, delay: -20, size: 18 }].map((b, i) => (
+              <span key={i} className="tb-bird" style={{ top: b.top, animationDuration: `${b.dur}s`, animationDelay: `${b.delay}s` }}>
+                <svg viewBox="0 0 40 16" width={b.size} height={b.size * 0.4}><path d="M2 12 Q11 1 20 10 Q29 1 38 12" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" opacity=".85" /></svg>
+              </span>
+            ))}
+          </div>
           <div className="mx-auto flex max-w-6xl flex-col items-start gap-6 px-4 pb-16 pt-24 md:flex-row md:items-end md:justify-between">
-            <div>
+            <div data-reveal="left">
               <h2 className="max-w-xl text-4xl font-extrabold leading-tight sm:text-5xl">¿Lo querés para tu balneario?</h2>
               <p className="mt-3 max-w-md text-white/80">Escribinos y te ayudamos a cargar tus carpas y tus tarifas.</p>
               <CopyEmailButton email={SITE_EMAIL} className="mt-5 inline-flex items-center gap-2 text-lg font-bold underline decoration-[var(--sol)] decoration-2 underline-offset-4">
@@ -415,7 +426,7 @@ export default function InicioPage() {
                 <InstagramIcon />@{SITE_INSTAGRAM}
               </a>
             </div>
-            <DemoButton className="rounded-full bg-[var(--sol)] px-8 text-[var(--tinta)] hover:brightness-105" />
+            <span data-reveal="right" style={dl(200)}><DemoButton className="tb-shine tb-press rounded-full bg-[var(--sol)] px-8 text-[#13252e] hover:brightness-105" /></span>
           </div>
         </section>
       </main>
@@ -436,10 +447,11 @@ export default function InicioPage() {
       {/* Botón flotante de WhatsApp (aparece cuando está cargado el número) */}
       {SITE_WHATSAPP_URL && (
         <a href={SITE_WHATSAPP_URL} target="_blank" rel="noopener noreferrer" aria-label="Escribinos por WhatsApp"
-          className="fixed bottom-5 right-5 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-[#25d366] text-white shadow-[0_10px_30px_-8px_rgba(0,0,0,.45)] transition hover:scale-105">
+          className="tb-ping fixed bottom-5 right-5 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-[#25d366] text-white shadow-[0_10px_30px_-8px_rgba(0,0,0,.45)] transition hover:scale-105">
           <WhatsAppIcon className="h-8 w-8" />
         </a>
       )}
+      <ScrollReveal />
       <Analytics />
     </div>
   );

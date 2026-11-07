@@ -113,8 +113,15 @@ export function HeroBeach() {
           <text x="245" y="239" textAnchor="middle" fontSize="9" fill="#a08a5a" fontWeight="600">pasarela</text>
           {/* Sol y viento */}
           <g transform="translate(458 28)">
-            <circle r="11" fill="var(--sol)" opacity="0.95" />
-            {[0, 45, 90, 135, 180, 225, 270, 315].map((a) => <line key={a} x1="0" y1="-15" x2="0" y2="-19" stroke="var(--sol)" strokeWidth="2" strokeLinecap="round" transform={`rotate(${a})`} />)}
+            <g className="tb-sun-rays">
+              <circle r="20" fill="none" />
+              {[0, 45, 90, 135, 180, 225, 270, 315].map((a) => <line key={a} x1="0" y1="-15" x2="0" y2="-19" stroke="var(--sol)" strokeWidth="2" strokeLinecap="round" transform={`rotate(${a})`} />)}
+            </g>
+            <circle className="tb-sun-core" r="11" fill="var(--sol)" opacity="0.95" />
+          </g>
+          {/* Nube que pasa */}
+          <g className="tb-cloud" opacity="0.85">
+            <path d="M330 30 a9 9 0 0 1 17 -3 a11 11 0 0 1 20 5 a7 7 0 0 1 -1 14 h-34 a8 8 0 0 1 -2 -16z" fill="#fff" />
           </g>
           {tents.map((n) => {
             const { x, y } = pos(n);

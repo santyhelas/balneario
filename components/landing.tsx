@@ -149,3 +149,31 @@ export function LandingThemeToggle() {
     </button>
   );
 }
+
+/**
+ * Animaciones al bajar: lo que tiene data-reveal aparece suave cuando entra en pantalla.
+ * Sin JavaScript, o con «reducir movimiento», todo se ve directo (no se oculta nada).
+ */
+export function ScrollReveal() {
+  useEffect(() => {
+    const els = Array.from(document.querySelectorAll<HTMLElement>("[data-reveal]"));
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    // Robots y capturas automáticas (navigator.webdriver) ven la página entera de una.
+    if (reduced || navigator.webdriver || !("IntersectionObserver" in window)) return;
+    const root = document.documentElement;
+    root.classList.add("tb-anim");
+    const io = new IntersectionObserver((entries) => {
+      for (const e of entries) {
+        if (e.isIntersecting) { e.target.classList.add("is-in"); io.unobserve(e.target); }
+      }
+    }, { rootMargin: "0px 0px -8% 0px", threshold: 0.08 });
+    for (const el of els) {
+      // Lo que ya está a la vista al cargar no se esconde.
+      const r = el.getBoundingClientRect();
+      if (r.top < window.innerHeight * 0.92) el.classList.add("is-in");
+      else io.observe(el);
+    }
+    return () => { io.disconnect(); root.classList.remove("tb-anim"); };
+  }, []);
+  return null;
+}
