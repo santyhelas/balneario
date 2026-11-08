@@ -433,15 +433,45 @@ export default function InicioPage() {
       </main>
 
       <footer className="bg-[var(--tinta)] text-white/70">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-6 text-sm">
-          <span className="flex items-center gap-2"><img src="/logo.png" alt="" className="h-6 w-6" /> Mi Balneario, hecho en Argentina</span>
-          <span className="flex flex-wrap gap-x-5 gap-y-2">
-            <LoginLink className="hover:text-white" />
-            <a href="/terminos" className="hover:text-white">Términos</a>
-            <a href="/privacidad" className="hover:text-white">Privacidad</a>
-            <CopyEmailButton email={SITE_EMAIL} className="hover:text-white">Contacto</CopyEmailButton>
-            <a href={SITE_INSTAGRAM_URL} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 hover:text-white"><InstagramIcon className="h-4 w-4" />Instagram</a>
-          </span>
+        <div className="mx-auto grid max-w-6xl gap-10 px-4 pb-8 pt-14 sm:grid-cols-2 lg:grid-cols-[1.4fr_1fr_1fr_1fr]">
+          <div>
+            <img src="/brand/mi-balneario-logo-blanco.svg" alt="Mi Balneario" className="h-10 w-auto" />
+            <p className="mt-4 max-w-xs text-sm leading-relaxed">
+              El sistema de gestión para balnearios: carpas y sombrillas, reservas, cobros y caja diaria, en un solo lugar.
+            </p>
+            <a href={SITE_INSTAGRAM_URL} target="_blank" rel="noopener noreferrer"
+              className="mt-5 inline-flex items-center gap-2 rounded-full border border-white/20 px-4 py-2 text-sm hover:border-white/50 hover:text-white">
+              <InstagramIcon className="h-4 w-4" />@{SITE_INSTAGRAM}
+            </a>
+          </div>
+          <nav aria-label="Producto">
+            <h2 className="text-xs font-bold uppercase tracking-[0.18em] text-white/90">Producto</h2>
+            <ul className="mt-4 flex flex-col gap-3 text-sm">
+              <li><a href="#un-dia" className="hover:text-white">Cómo se usa</a></li>
+              <li><a href="#funciones" className="hover:text-white">Funciones</a></li>
+              <li><a href="#planes" className="hover:text-white">Planes y presupuesto</a></li>
+              <li><a href="#preguntas" className="hover:text-white">Preguntas frecuentes</a></li>
+            </ul>
+          </nav>
+          <nav aria-label="Contacto">
+            <h2 className="text-xs font-bold uppercase tracking-[0.18em] text-white/90">Contacto</h2>
+            <ul className="mt-4 flex flex-col gap-3 text-sm">
+              {SITE_WHATSAPP_URL && <li><a href={SITE_WHATSAPP_URL} target="_blank" rel="noopener noreferrer" className="hover:text-white">WhatsApp</a></li>}
+              <li><CopyEmailButton email={SITE_EMAIL} className="text-left hover:text-white">{SITE_EMAIL}</CopyEmailButton></li>
+              <li><LoginLink className="hover:text-white" /></li>
+            </ul>
+          </nav>
+          <nav aria-label="Legal">
+            <h2 className="text-xs font-bold uppercase tracking-[0.18em] text-white/90">Legal</h2>
+            <ul className="mt-4 flex flex-col gap-3 text-sm">
+              <li><a href="/terminos" className="hover:text-white">Términos y condiciones</a></li>
+              <li><a href="/privacidad" className="hover:text-white">Política de privacidad</a></li>
+            </ul>
+          </nav>
+        </div>
+        <div className="mx-auto flex max-w-6xl flex-col gap-2 border-t border-white/10 px-4 py-6 text-sm sm:flex-row sm:items-center sm:justify-between">
+          <span>© {new Date().getFullYear()} Mi Balneario. Todos los derechos reservados.</span>
+          <span className="italic">Hecho con cuidado en Argentina.</span>
         </div>
       </footer>
 
