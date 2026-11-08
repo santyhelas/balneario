@@ -8,7 +8,22 @@ import { NextResponse, type NextRequest } from "next/server";
 // /api/cron: tareas automáticas de Vercel (no tienen sesión; cada una se protege sola).
 const PUBLIC_PATHS = ["/inicio", "/terminos", "/privacidad", "/robots.txt", "/sitemap.xml", "/login", "/auth/callback", "/auth/restablecer", "/auth/ingresar", "/auth/registrar", "/api/cron", "/api/mp/webhook"];
 
+// Dirección vieja del sitio: quien entra por ahí pasa a la nueva (cuando NEXT_PUBLIC_SITE_URL ya es la nueva).
+const OLD_HOSTS = ["balneario-beta.vercel.app"];
+
 export async function middleware(request: NextRequest) {
+  const site = process.env.NEXT_PUBLIC_SITE_URL;
+  const host = request.headers.get("host") ?? "";
+  if (site && OLD_HOSTS.includes(host) && (request.method === "GET" || request.method === "HEAD")) {
+    const target = new URL(site);
+    const p = request.nextUrl.pathname;
+    // Las tareas automáticas, los avisos de Mercado Pago y un ingreso a medio hacer siguen en la vieja.
+    if (target.host !== host && !p.startsWith("/api/") && !p.startsWith("/auth/")) {
+      const to = new URL(p + request.nextUrl.search, target);
+      return NextResponse.redirect(to, 308);
+    }
+  }
+
   let response = NextResponse.next({ request });
 
   const supabase = createServerClient(

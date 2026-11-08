@@ -5,7 +5,7 @@
 import { chromium } from "playwright";
 import { mkdirSync, writeFileSync } from "node:fs";
 
-const BASE = process.env.URL ?? "https://balneario-beta.vercel.app";
+const BASE = process.env.URL ?? "https://mibalneario.com.ar";
 // La demo se recorre en una copia del sitio armada en CI sin la casilla de Cloudflare (que, bien hecha, frena a los robots
 // como este), conectada a la misma base. Si no hay copia, se intenta en producción.
 const DEMO = process.env.DEMO_URL ?? BASE;
