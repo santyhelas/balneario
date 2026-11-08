@@ -132,6 +132,8 @@ for (const [view, opts] of Object.entries(VIEWS)) {
       p3.on("pageerror", (e) => errs.push(String(e)));
       await p3.goto(DEMO + "/admin", { waitUntil: "networkidle" });
       await p3.getByRole("tab", { name: /Balnearios/ }).waitFor({ timeout: 15000 });
+      // La caja del día pide abrirse: se deja para después.
+      await p3.getByRole("button", { name: "Ahora no" }).click({ timeout: 4000 }).catch(() => {});
       await p3.waitForTimeout(800);
       await p3.screenshot({ path: `${OUT}/capturas/admin-${view}.png`, fullPage: true });
       const cards = await p3.locator("h3").count();
