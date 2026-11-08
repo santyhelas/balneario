@@ -33,6 +33,9 @@ jobs:
           PGPASSWORD=postgres psql -h 127.0.0.1 -p 54322 -U postgres -d postgres -qc "select private.permitir_alta('e2e@prueba.com', 'Revisión automática')"
           TOKEN=$(curl -s "$API/auth/v1/signup" -H "apikey: $KEY" -H "Content-Type: application/json" -d '{"email":"e2e@prueba.com","password":"Prueba-e2e-123456"}' | python3 -c "import sys,json; print(json.load(sys.stdin).get('access_token',''))")
           curl -s -f "$API/rest/v1/rpc/create_workspace" -H "apikey: $KEY" -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{"p_name":"Balneario de Prueba","p_tents":30,"p_umbrellas":6}'
+          # Dueño de la plataforma (para revisar el panel del dueño) y una habilitación sin usar.
+          PGPASSWORD=postgres psql -h 127.0.0.1 -p 54322 -U postgres -d postgres -qc "select private.hacer_admin_plataforma('e2e@prueba.com')"
+          PGPASSWORD=postgres psql -h 127.0.0.1 -p 54322 -U postgres -d postgres -qc "insert into private.signup_allowlist (email, note, plan, price, max_tents, max_umbrellas) values ('nuevo@balneario.com', 'Balneario La Ola', 'temporada', 750000, 89, 9)"
           echo; echo "Base lista en $API"
       - run: npm install --no-audit --no-fund && npm install --no-save playwright@1.49.1
       - run: npx playwright install --with-deps chromium

@@ -113,6 +113,38 @@ for (const [view, opts] of Object.entries(VIEWS)) {
   for (const path of ["/", "/login", "/terminos", "/privacidad", "/mapa", "/caja", "/admin", "/no-existe-esta-pagina"]) {
     report.publico.push(await check(page, path, `publico${path === "/" ? "-inicio" : path}`, view, issues));
   }
+  // Panel del dueño (con la cuenta de prueba, que es dueña de la plataforma en la base local)
+  if (process.env.NEXT_PUBLIC_SUPABASE_URL) {
+    const f9 = { flujo: `Panel del dueño (${view})`, pasos: [] };
+    const ctx3 = await browser.newContext({ ...opts, locale: "es-AR" });
+    try {
+      const SB = process.env.NEXT_PUBLIC_SUPABASE_URL, KEY = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+      const r = await fetch(`${SB}/auth/v1/token?grant_type=password`, { method: "POST", headers: { apikey: KEY, "Content-Type": "application/json" }, body: JSON.stringify({ email: "e2e@prueba.com", password: "Prueba-e2e-123456" }) });
+      const session = await r.json();
+      const name = `sb-${new URL(SB).hostname.split(".")[0]}-auth-token`;
+      const value = "base64-" + Buffer.from(JSON.stringify(session)).toString("base64url");
+      const chunks = value.length <= 3180 ? [[name, value]] : value.match(/.{1,3180}/g).map((c, i) => [`${name}.${i}`, c]);
+      const host = new URL(DEMO).hostname;
+      await ctx3.addCookies(chunks.map(([n, v]) => ({ name: n, value: v, domain: host, path: "/" })));
+      const p3 = await ctx3.newPage();
+      const errs = [];
+      p3.on("pageerror", (e) => errs.push(String(e)));
+      await p3.goto(DEMO + "/admin", { waitUntil: "networkidle" });
+      await p3.getByRole("tab", { name: /Balnearios/ }).waitFor({ timeout: 15000 });
+      await p3.waitForTimeout(800);
+      await p3.screenshot({ path: `${OUT}/capturas/admin-${view}.png`, fullPage: true });
+      const cards = await p3.locator("h3").count();
+      // ¿Algo se sale de la pantalla?
+      const overflow = await p3.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 2);
+      await p3.getByRole("tab", { name: /Altas/ }).click();
+      await p3.waitForTimeout(500);
+      await p3.screenshot({ path: `${OUT}/capturas/admin-altas-${view}.png`, fullPage: true });
+      f9.pasos.push(`fichas: ${cards}`, overflow ? "se sale de la pantalla" : "entra en la pantalla", ...errs.map((e) => `error: ${e}`));
+      f9.resultado = cards > 0 && !overflow && !errs.length ? "OK" : "Revisar";
+    } catch (e) { f9.resultado = `Se cortó: ${String(e).slice(0, 160)}`; }
+    await ctx3.close();
+    report.flujos.push(f9);
+  }
   // Portada con animaciones, como la ve una persona (sin la marca de navegador automático)
   if (view === "pc") {
     const ctx2 = await browser.newContext({ ...opts, locale: "es-AR" });
