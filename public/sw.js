@@ -2,7 +2,7 @@
 // NO guarda datos del balneario: reservas, pagos y caja siempre se piden al servidor,
 // para no mostrar información vieja como si fuera la actual.
 // Solo guarda los íconos y la pantalla de "sin conexión".
-const CACHE = "balneario-v5";
+const CACHE = "balneario-v6";
 const STATIC = ["/offline.html", "/logo.png", "/icon-192.png", "/icon-512.png", "/apple-touch-icon.png"];
 
 self.addEventListener("install", (e) => {

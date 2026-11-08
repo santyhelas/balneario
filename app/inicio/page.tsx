@@ -268,9 +268,10 @@ export default function InicioPage() {
       <script dangerouslySetInnerHTML={{ __html: TB_THEME_SCRIPT }} />
       <header className="tb-header sticky top-0 z-40 bg-[#fbf7ee]/90 backdrop-blur">
         <div className="relative mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3">
-          <a href="#arriba" className="flex items-center gap-2.5">
-            <img src="/logo.png" alt="" className="h-12 w-12" />
-            <span className="display text-xl font-extrabold">Mi Balneario</span>
+          <a href="#arriba" className="flex items-center" aria-label="Mi Balneario">
+            {/* Logo de día y de noche (se cambia con el botón luna/sol) */}
+            <img src="/brand/mi-balneario-logo.svg" alt="Mi Balneario" className="tb-logo-dia h-10 w-auto sm:h-12" />
+            <img src="/brand/mi-balneario-logo-blanco.svg" alt="Mi Balneario" className="tb-logo-noche h-10 w-auto sm:h-12" />
           </a>
           <nav className="hidden items-center gap-7 text-[15px] font-semibold md:flex">
             {NAV.map((l) => <a key={l.href} href={l.href} className="text-[var(--gris)] hover:text-[var(--atl)]">{l.label}</a>)}

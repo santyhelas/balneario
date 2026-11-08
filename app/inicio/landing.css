@@ -136,3 +136,8 @@ html.tb-anim [data-reveal].is-in { opacity: 1; transform: none; }
   .tb-bird { display: none; }
   .tb-lift, .tb-press { transition: none; }
 }
+
+/* Logo del encabezado: el de color de día, el blanco de noche */
+.tb .tb-logo-noche { display: none; }
+html[data-tb="oscuro"] .tb .tb-logo-dia { display: none; }
+html[data-tb="oscuro"] .tb .tb-logo-noche { display: block; }
