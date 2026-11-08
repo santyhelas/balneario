@@ -144,10 +144,10 @@ export default function AdminPage() {
           )}
 
           {/* Pestañas: así nada queda apretado ni cortado */}
-          <div className="flex flex-wrap gap-1 border-b border-line" role="tablist">
+          <div className="-mx-1 flex gap-1 overflow-x-auto border-b border-line px-1" role="tablist">
             {([["balnearios", `Balnearios (${d.balnearios.length})`], ["altas", `Altas habilitadas (${d.habilitaciones.filter((h) => !h.usado).length} sin usar)`], ["precios", "Precios"]] as const).map(([k, l]) => (
               <button key={k} type="button" role="tab" aria-selected={tab === k} onClick={() => setTab(k)}
-                className={tab === k ? "-mb-px rounded-t-lg border border-b-0 border-line bg-surface px-4 py-2 text-sm font-semibold text-accent" : "px-4 py-2 text-sm text-muted hover:text-fg"}>
+                className={tab === k ? "-mb-px shrink-0 whitespace-nowrap rounded-t-lg border border-b-0 border-line bg-surface px-4 py-2 text-sm font-semibold text-accent" : "shrink-0 whitespace-nowrap px-4 py-2 text-sm text-muted hover:text-fg"}>
                 {l}
               </button>
             ))}
