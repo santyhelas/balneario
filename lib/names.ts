@@ -18,3 +18,24 @@ export function capitalizeName(text: string): string {
     })
     .join(" ");
 }
+
+/**
+ * Mientras se escribe: la primera palabra lleva mayúscula enseguida, y cada palabra siguiente
+ * apenas se termina (al poner el espacio), salvo «de», «la», «del»… Respeta los espacios
+ * y lo que ya tiene mayúsculas. Al salir del campo, capitalizeName termina de acomodar.
+ */
+export function capitalizeTyping(text: string): string {
+  const parts = text.split(/(\s+)/); // conserva los espacios tal cual
+  let wordIndex = 0;
+  return parts
+    .map((p, k) => {
+      if (!p || /^\s+$/.test(p)) return p;
+      const i = wordIndex++;
+      const finished = k < parts.length - 1; // le sigue un espacio
+      if (p !== p.toLocaleLowerCase("es-AR")) return p;
+      if (i === 0) return cap(p);
+      if (!finished || PARTICLES.has(p)) return p;
+      return cap(p);
+    })
+    .join("");
+}

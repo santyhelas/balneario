@@ -7,7 +7,7 @@ import { Alert, Button, Field, Modal, Textarea, TextField } from "@/components/u
 import { PhoneInput } from "@/components/phone-input";
 import { EMPTY_PHONE, formatPhone, parsePhone, phoneProblem, type PhoneParts } from "@/lib/phone";
 import { EMAIL_RE, emailSuggestion } from "@/lib/email";
-import { capitalizeName } from "@/lib/names";
+import { capitalizeName, capitalizeTyping } from "@/lib/names";
 
 export type Customer = {
   id: string;
@@ -147,8 +147,8 @@ export function CustomerForm({
     <Modal open={open} onClose={onClose} title={customer ? "Editar cliente" : "Nuevo cliente"} busy={busy}>
       <form onSubmit={submit} className="flex flex-col gap-3">
         <div className="grid grid-cols-2 gap-3">
-          <TextField label="Nombre" required maxLength={80} value={first} onChange={(e) => { setFirst(e.target.value); setConfirmedDup(false); setSimilar([]); }} onBlur={() => setFirst(capitalizeName(first))} />
-          <TextField label="Apellido" maxLength={80} value={last} onChange={(e) => { setLast(e.target.value); setConfirmedDup(false); setSimilar([]); }} onBlur={() => setLast(capitalizeName(last))} />
+          <TextField label="Nombre" required maxLength={80} value={first} autoCapitalize="words" onChange={(e) => { setFirst(capitalizeTyping(e.target.value)); setConfirmedDup(false); setSimilar([]); }} onBlur={() => setFirst(capitalizeName(first))} />
+          <TextField label="Apellido" maxLength={80} value={last} autoCapitalize="words" onChange={(e) => { setLast(capitalizeTyping(e.target.value)); setConfirmedDup(false); setSimilar([]); }} onBlur={() => setLast(capitalizeName(last))} />
         </div>
         <PhoneInput value={phoneParts} onChange={(p) => { setPhoneParts(p); setConfirmedDup(false); setSimilar([]); }} />
         {/* La localidad ya no se pide (se conserva la de clientes anteriores). */}
