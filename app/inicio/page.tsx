@@ -262,7 +262,7 @@ const POSTCARDS: { key: string; caption: string; node: ReactNode }[] = PHOTOS.ma
 
 export default function InicioPage() {
   return (
-    <div className="tb min-h-dvh">
+    <div id="arriba" className="tb min-h-dvh">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(JSON_LD) }} />
       {/* Tema de la página (claro u oscuro): se aplica antes de pintar para que no parpadee. */}
       <script dangerouslySetInnerHTML={{ __html: TB_THEME_SCRIPT }} />
@@ -285,7 +285,7 @@ export default function InicioPage() {
       </header>
       <DemoEndedNotice />
 
-      <main id="arriba">
+      <main>
         {/* Portada: el plano del balneario, que se puede tocar */}
         <section className="relative overflow-hidden">
           <div className="mx-auto grid max-w-6xl items-center gap-10 px-4 pb-14 pt-8 lg:grid-cols-[0.9fr_1.1fr] lg:pt-14">
