@@ -36,6 +36,7 @@ jobs:
           # Dueño de la plataforma (para revisar el panel del dueño) y una habilitación sin usar.
           PGPASSWORD=postgres psql -h 127.0.0.1 -p 54322 -U postgres -d postgres -qc "select private.hacer_admin_plataforma('e2e@prueba.com')"
           PGPASSWORD=postgres psql -h 127.0.0.1 -p 54322 -U postgres -d postgres -qc "insert into private.signup_allowlist (email, note, plan, price, max_tents, max_umbrellas) values ('nuevo@balneario.com', 'Balneario La Ola', 'temporada', 750000, 89, 9)"
+          PGPASSWORD=postgres psql -h 127.0.0.1 -p 54322 -U postgres -d postgres -qc "insert into public.user_preferences (user_id, guide_done) select id, true from auth.users where email = 'e2e@prueba.com' on conflict (user_id) do update set guide_done = true"
           echo; echo "Base lista en $API"
       - run: npm install --no-audit --no-fund && npm install --no-save playwright@1.49.1
       - run: npx playwright install --with-deps chromium
