@@ -121,6 +121,7 @@ for (const [view, opts] of Object.entries(VIEWS)) {
       const SB = process.env.NEXT_PUBLIC_SUPABASE_URL, KEY = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
       const r = await fetch(`${SB}/auth/v1/token?grant_type=password`, { method: "POST", headers: { apikey: KEY, "Content-Type": "application/json" }, body: JSON.stringify({ email: "e2e@prueba.com", password: "Prueba-e2e-123456" }) });
       const session = await r.json();
+      f9.pasos.push(`sesión: ${session.access_token ? "ok" : JSON.stringify(session).slice(0, 120)}`);
       const name = `sb-${new URL(SB).hostname.split(".")[0]}-auth-token`;
       const value = "base64-" + Buffer.from(JSON.stringify(session)).toString("base64url");
       const chunks = value.length <= 3180 ? [[name, value]] : value.match(/.{1,3180}/g).map((c, i) => [`${name}.${i}`, c]);
@@ -141,7 +142,11 @@ for (const [view, opts] of Object.entries(VIEWS)) {
       await p3.screenshot({ path: `${OUT}/capturas/admin-altas-${view}.png`, fullPage: true });
       f9.pasos.push(`fichas: ${cards}`, overflow ? "se sale de la pantalla" : "entra en la pantalla", ...errs.map((e) => `error: ${e}`));
       f9.resultado = cards > 0 && !overflow && !errs.length ? "OK" : "Revisar";
-    } catch (e) { f9.resultado = `Se cortó: ${String(e).slice(0, 160)}`; }
+    } catch (e) {
+      f9.resultado = `Se cortó: ${String(e).slice(0, 160)}`;
+      const pg = ctx3.pages()[0];
+      if (pg) { f9.pasos.push(`url: ${pg.url()}`); await pg.screenshot({ path: `${OUT}/capturas/admin-error-${view}.png` }).catch(() => {}); }
+    }
     await ctx3.close();
     report.flujos.push(f9);
   }
