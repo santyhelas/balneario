@@ -1,12 +1,12 @@
 "use client";
-import { useState, type FormEvent } from "react";
+import { useState, type FormEvent, type ReactNode } from "react";
 import { getSupabase } from "@/lib/supabase/client";
 import { unwrap, useLoader } from "@/lib/data";
 import { friendlyError } from "@/lib/errors";
 import { formatDate, formatDateTime, formatMoney, parseMoney } from "@/lib/format";
 import { useWorkspace } from "@/components/workspace";
 import { PageHeader, SyncNotice } from "@/components/shell";
-import { Alert, Badge, Button, Card, ConfirmDialog, EmptyState, Modal, Select, Spinner, TextField } from "@/components/ui";
+import { Alert, Badge, Button, Card, ConfirmDialog, EmptyState, Input, Modal, Select, Spinner, TextField, cx } from "@/components/ui";
 
 /** Panel del dueño de Mi Balneario: balnearios, planes y cobros, altas habilitadas y pausas. */
 
@@ -43,6 +43,20 @@ function planBadge(p: PlanInfo | null, hoy: string) {
   return <Badge tone="info">Pago manual</Badge>;
 }
 
+type FilterKey = "todos" | "atencion" | "al_dia" | "pausa" | "sin_plan";
+const needsAttention = (b: Balneario, hoy: string) => {
+  const p = b.plan;
+  if (!p || p.estado === "exenta") return false;
+  return p.vencido || p.ultimo_estado === "rechazado" || (!p.debito && !!p.pago_hasta && daysBetween(hoy, p.pago_hasta) <= 7);
+};
+const FILTERS: { key: FilterKey; label: string; test: (b: Balneario, hoy: string) => boolean }[] = [
+  { key: "todos", label: "Todos", test: () => true },
+  { key: "atencion", label: "Para atender", test: (b, hoy) => needsAttention(b, hoy) },
+  { key: "al_dia", label: "Al día", test: (b, hoy) => !!b.plan && !b.pausado && !needsAttention(b, hoy) },
+  { key: "pausa", label: "En pausa", test: (b) => !!b.pausado },
+  { key: "sin_plan", label: "Sin plan", test: (b) => !b.plan },
+];
+
 export default function AdminPage() {
   const { isPlatformAdmin, ws } = useWorkspace();
   const sb = getSupabase();
@@ -54,6 +68,9 @@ export default function AdminPage() {
   const [limitsFor, setLimitsFor] = useState<Balneario | null>(null);
   const [payFor, setPayFor] = useState<Balneario | null>(null);
   const [busy, setBusy] = useState(false);
+  const [tab, setTab] = useState<"balnearios" | "altas" | "precios">("balnearios");
+  const [filter, setFilter] = useState<FilterKey>("todos");
+  const [search, setSearch] = useState("");
   const [msg, setMsg] = useState<{ tone: "ok" | "danger"; text: string } | null>(null);
 
   if (!isPlatformAdmin && !q.data && q.error) {
@@ -126,78 +143,63 @@ export default function AdminPage() {
             </Card>
           )}
 
-          <Card title="Balnearios">
-            {d.balnearios.length === 0 ? <EmptyState>Todavía no hay balnearios.</EmptyState> : (
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[900px] text-sm">
-                  <thead>
-                    <tr className="border-b border-line text-left text-xs text-muted">
-                      <th className="py-2 font-medium">Balneario</th>
-                      <th className="py-2 font-medium">Plan</th>
-                      <th className="py-2 text-right font-medium">Espacios</th>
-                      <th className="py-2 text-right font-medium">Reservas</th>
-                      <th className="py-2 font-medium">Último uso</th>
-                      <th className="py-2"></th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-line">
-                    {d.balnearios.map((b) => {
-                      const ago = daysAgo(b.ultimo_uso);
-                      const p = b.plan;
-                      return (
-                        <tr key={b.id} className="align-top">
-                          <td className="py-2">
-                            <div className="font-medium">{b.nombre} {b.id === ws.id && <Badge tone="info">el tuyo</Badge>}</div>
-                            <div className="text-xs text-muted">{b.propietario ?? "—"} · desde {formatDate(b.creado.slice(0, 10))} · {b.usuarios} usuario{b.usuarios === 1 ? "" : "s"}</div>
-                            {b.pausado && <div className="mt-0.5"><Badge tone="danger">En pausa</Badge> <span className="text-xs text-muted">{b.motivo_pausa}</span></div>}
-                          </td>
-                          <td className="py-2">
-                            {planBadge(p, d.hoy)}
-                            {p && p.estado !== "exenta" && (
-                              <div className="mt-0.5 text-xs text-muted">
-                                {PLAN_LABEL[p.plan]} · {formatMoney(p.precio)}<br />
-                                {p.debito && p.proximo_debito ? `Próximo débito ${formatDate(p.proximo_debito)} · ` : ""}pago hasta {formatDate(p.pago_hasta)}
-                              </div>
-                            )}
-                          </td>
-                          <td className="py-2 text-right tabular">
-                            <button type="button" className="hover:underline" title="Cambiar la cantidad contratada" onClick={() => setLimitsFor(b)}>
-                              {b.carpas}{b.max_carpas != null ? `/${b.max_carpas}` : ""} + {b.sombrillas}{b.max_sombrillas != null ? `/${b.max_sombrillas}` : ""}
-                            </button>
-                            <div className="text-xs text-muted">{b.max_carpas == null && b.max_sombrillas == null ? "sin límite" : "activas / máximo"}</div>
-                          </td>
-                          <td className="py-2 text-right tabular">{b.reservas}<div className="text-xs text-muted">{b.reservas_30d} en 30 días</div></td>
-                          <td className="py-2 text-xs">{b.ultimo_uso ? <>{ago === 0 ? "Hoy" : ago === 1 ? "Ayer" : `Hace ${ago} días`}<div className="text-muted">{formatDateTime(b.ultimo_uso)}</div></> : "Nunca"}</td>
-                          <td className="py-2">
-                            <div className="flex flex-wrap justify-end gap-1">
-                              <Button variant="ghost" onClick={() => setPlanFor(b)}>{p ? "Cambiar plan" : "Asignar plan"}</Button>
-                              {p && p.estado !== "exenta" && <Button variant="ghost" onClick={() => setPayFor(b)}>Registrar pago</Button>}
-                              {b.id !== ws.id && (b.pausado
-                                ? <Button variant="secondary" onClick={() => setResuming(b)}>Reactivar</Button>
-                                : <Button variant="ghost" onClick={() => setPausing(b)}>Pausar</Button>)}
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
-            <p className="mt-2 text-xs text-muted">
-              Con el plan vencido (o en pausa) el balneario ve y descarga sus datos, pero no carga nada nuevo; no se borra nada.
-              Hay {d.precios.dias_gracia} días de gracia después del vencimiento. Demos abiertas ahora: {d.demos_abiertas}.
-            </p>
-          </Card>
+          {/* Pestañas: así nada queda apretado ni cortado */}
+          <div className="flex flex-wrap gap-1 border-b border-line" role="tablist">
+            {([["balnearios", `Balnearios (${d.balnearios.length})`], ["altas", `Altas habilitadas (${d.habilitaciones.filter((h) => !h.usado).length} sin usar)`], ["precios", "Precios"]] as const).map(([k, l]) => (
+              <button key={k} type="button" role="tab" aria-selected={tab === k} onClick={() => setTab(k)}
+                className={tab === k ? "-mb-px rounded-t-lg border border-b-0 border-line bg-surface px-4 py-2 text-sm font-semibold text-accent" : "px-4 py-2 text-sm text-muted hover:text-fg"}>
+                {l}
+              </button>
+            ))}
+          </div>
 
-          <div className="grid gap-4 lg:grid-cols-2">
+          {tab === "balnearios" && (
+            <>
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="w-full sm:w-72"><Input type="search" aria-label="Buscar balneario" placeholder="Buscar por nombre o correo…" value={search} onChange={(e) => setSearch(e.target.value)} /></div>
+                {FILTERS.map((f) => (
+                  <button key={f.key} type="button" onClick={() => setFilter(f.key)}
+                    className={filter === f.key ? "rounded-full border border-accent bg-accent-soft px-3 py-1 text-sm font-semibold text-accent" : "rounded-full border border-line px-3 py-1 text-sm hover:bg-surface-2"}>
+                    {f.label} <span className="tabular text-muted">{d.balnearios.filter((b) => f.test(b, d.hoy)).length}</span>
+                  </button>
+                ))}
+              </div>
+              {(() => {
+                const t = search.trim().toLowerCase();
+                const list = d.balnearios.filter((b) => FILTERS.find((f) => f.key === filter)!.test(b, d.hoy))
+                  .filter((b) => !t || b.nombre.toLowerCase().includes(t) || (b.propietario ?? "").toLowerCase().includes(t));
+                if (d.balnearios.length === 0) return <EmptyState>Todavía no hay balnearios.</EmptyState>;
+                if (list.length === 0) return <EmptyState>Ningún balneario con ese filtro.</EmptyState>;
+                return (
+                  <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
+                    {list.map((b) => (
+                      <BalnearioCard key={b.id} b={b} hoy={d.hoy} mine={b.id === ws.id}
+                        onPlan={() => setPlanFor(b)} onPay={() => setPayFor(b)} onLimits={() => setLimitsFor(b)}
+                        onPause={() => setPausing(b)} onResume={() => setResuming(b)} />
+                    ))}
+                  </div>
+                );
+              })()}
+              <p className="text-xs text-muted">
+                Con el plan vencido (o en pausa) el balneario ve y descarga sus datos, pero no carga nada nuevo; no se borra nada.
+                Hay {d.precios.dias_gracia} días de gracia después del vencimiento. Demos abiertas ahora: {d.demos_abiertas}.
+              </p>
+            </>
+          )}
+
+          {tab === "altas" && (
             <SignupsCard rows={d.habilitaciones} busy={busy} prices={d.precios}
               onAdd={(email, note, plan, price, tents, umbrellas) => run(() => sb.rpc("admin_allow_signup", { p_email: email, p_note: note || null, p_plan: plan, p_price: price, p_tents: tents, p_umbrellas: umbrellas }),
                 `Listo: ${email} ya puede crear su balneario (con usuario o con Google).`)}
               onRevoke={setRevoking} />
-            <PricesCard prices={d.precios} busy={busy}
-              onSave={(m, t) => run(() => sb.rpc("admin_set_prices", { p_mensual: m, p_temporada: t }), "Precios guardados. Se usan para los clientes nuevos.")} />
-          </div>
+          )}
+
+          {tab === "precios" && (
+            <div className="max-w-xl">
+              <PricesCard prices={d.precios} busy={busy}
+                onSave={(m, t) => run(() => sb.rpc("admin_set_prices", { p_mensual: m, p_temporada: t }), "Precios guardados. Se usan para los clientes nuevos.")} />
+            </div>
+          )}
         </div>
       )}
 
@@ -269,7 +271,8 @@ function SignupsCard({ rows, busy, prices, onAdd, onRevoke }: {
   return (
     <Card title="Altas habilitadas">
       <p className="mb-3 text-sm text-muted">Cuando alguien contrata, poné su correo (el de Google o el que va a usar) y su plan. Solo esas cuentas pueden crear un balneario. Al crearlo tiene {prices.dias_gracia} días para activar el débito.</p>
-      <form onSubmit={submit} className="mb-4 flex flex-col gap-2">
+      <div className="grid gap-6 lg:grid-cols-2">
+      <form onSubmit={submit} className="flex flex-col gap-2">
         <TextField label="Correo" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="cliente@gmail.com" />
         <PlanFields plan={plan} setPlan={(v) => { setPlan(v); setPrice(String((v === "mensual" ? prices.mensual : prices.temporada) || "")); }} price={price} setPrice={setPrice} />
         <div className="grid grid-cols-2 gap-2">
@@ -282,7 +285,7 @@ function SignupsCard({ rows, busy, prices, onAdd, onRevoke }: {
         <Button type="submit" loading={busy}>Habilitar</Button>
       </form>
       {rows.length === 0 ? <EmptyState>No hay correos habilitados.</EmptyState> : (
-        <ul className="divide-y divide-line text-sm">
+        <ul className="divide-y divide-line self-start text-sm">
           {rows.map((h) => (
             <li key={h.correo} className="flex flex-wrap items-center justify-between gap-2 py-2">
               <div className="min-w-0">
@@ -298,6 +301,7 @@ function SignupsCard({ rows, busy, prices, onAdd, onRevoke }: {
           ))}
         </ul>
       )}
+      </div>
     </Card>
   );
 }
@@ -408,5 +412,70 @@ function LimitsModal({ b, busy, onClose, onSave }: { b: Balneario; busy: boolean
         </div>
       </form>
     </Modal>
+  );
+}
+
+/** Ficha de un balneario: todo a la vista en filas con su nombre, y las acciones abajo. */
+function BalnearioCard({ b, hoy, mine, onPlan, onPay, onLimits, onPause, onResume }: {
+  b: Balneario; hoy: string; mine: boolean; onPlan: () => void; onPay: () => void; onLimits: () => void; onPause: () => void; onResume: () => void;
+}) {
+  const p = b.plan;
+  const ago = daysAgo(b.ultimo_uso);
+  const used = b.ultimo_uso ? (ago === 0 ? "Hoy" : ago === 1 ? "Ayer" : `Hace ${ago} días`) : "Nunca";
+  const Row = ({ k, children }: { k: string; children: ReactNode }) => (
+    <div className="flex items-baseline justify-between gap-3 py-1.5">
+      <dt className="shrink-0 text-xs text-muted">{k}</dt>
+      <dd className="min-w-0 text-right text-sm">{children}</dd>
+    </div>
+  );
+  const bar = (n: number, max: number | null | undefined) => max ? (
+    <span className="ml-2 inline-block h-1.5 w-16 overflow-hidden rounded-full bg-surface-2 align-middle">
+      <span className={n >= max ? "block h-full bg-warn" : "block h-full bg-accent"} style={{ width: `${Math.min(100, (n / max) * 100)}%` }} />
+    </span>
+  ) : null;
+  return (
+    <div className={cx("flex flex-col rounded-2xl border bg-surface p-4", b.pausado ? "border-danger/40" : needsAttention(b, hoy) ? "border-warn/50" : "border-line")}>
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <h3 className="truncate text-base font-semibold" title={b.nombre}>{b.nombre}</h3>
+          <p className="truncate text-xs text-muted" title={b.propietario ?? ""}>{b.propietario ?? "Sin propietario"}</p>
+        </div>
+        <div className="flex shrink-0 flex-col items-end gap-1">
+          {planBadge(p, hoy)}
+          {mine && <Badge tone="info">El tuyo</Badge>}
+          {b.pausado && <Badge tone="danger">En pausa</Badge>}
+        </div>
+      </div>
+      {b.pausado && b.motivo_pausa && <p className="mt-2 rounded-lg bg-danger-soft px-2 py-1 text-xs">{b.motivo_pausa}</p>}
+      <dl className="mt-3 divide-y divide-line border-y border-line">
+        <Row k="Plan">{p && p.estado !== "exenta" ? <>{PLAN_LABEL[p.plan]} · <b className="tabular">{formatMoney(p.precio)}</b></> : p ? "Sin vencimiento" : "—"}</Row>
+        {p && p.estado !== "exenta" && (
+          <Row k={p.debito ? "Próximo débito" : "Pagado hasta"}>
+            <span className="tabular">{formatDate(p.debito && p.proximo_debito ? p.proximo_debito : p.pago_hasta)}</span>
+          </Row>
+        )}
+        <Row k="Carpas">
+          <button type="button" onClick={onLimits} className="tabular hover:underline" title="Cambiar la cantidad contratada">
+            {b.carpas}{b.max_carpas != null ? ` de ${b.max_carpas}` : ""}
+          </button>{bar(b.carpas, b.max_carpas)}
+        </Row>
+        <Row k="Sombrillas">
+          <button type="button" onClick={onLimits} className="tabular hover:underline" title="Cambiar la cantidad contratada">
+            {b.sombrillas}{b.max_sombrillas != null ? ` de ${b.max_sombrillas}` : ""}
+          </button>{bar(b.sombrillas, b.max_sombrillas)}
+        </Row>
+        <Row k="Reservas"><span className="tabular">{b.reservas}</span> <span className="text-xs text-muted">({b.reservas_30d} en 30 días)</span></Row>
+        <Row k="Último uso"><span title={b.ultimo_uso ? formatDateTime(b.ultimo_uso) : undefined}>{used}</span></Row>
+        <Row k="Usuarios · alta"><span className="tabular">{b.usuarios}</span> · {formatDate(b.creado.slice(0, 10))}</Row>
+      </dl>
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        <Button variant="secondary" onClick={onPlan}>{p ? "Cambiar plan" : "Asignar plan"}</Button>
+        {p && p.estado !== "exenta" ? <Button variant="secondary" onClick={onPay}>Registrar pago</Button> : <Button variant="secondary" onClick={onLimits}>Cantidad de carpas</Button>}
+        {p && p.estado !== "exenta" && <Button variant="ghost" onClick={onLimits}>Cantidad de carpas</Button>}
+        {!mine && (b.pausado
+          ? <Button variant="primary" onClick={onResume}>Reactivar</Button>
+          : <Button variant="ghost" className="text-danger" onClick={onPause}>Pausar</Button>)}
+      </div>
+    </div>
   );
 }
