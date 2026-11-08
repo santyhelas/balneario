@@ -108,7 +108,7 @@ export function CustomerForm({
       }
       if (!customer && !confirmedDup) {
         const { data, error } = await sb.rpc("find_similar_customers", {
-          p_workspace_id: ws.id, p_first_name: first, p_last_name: last, p_phone: phone || null,
+          p_workspace_id: ws.id, p_first_name: capitalizeName(first), p_last_name: capitalizeName(last), p_phone: phone || null,
         });
         if (error) throw error;
         if (data && (data as Similar[]).length > 0) {
