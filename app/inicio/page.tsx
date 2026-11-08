@@ -33,7 +33,16 @@ export const metadata: Metadata = {
 };
 
 /** Datos estructurados para Google: qué es la página. */
-const JSON_LD = {
+const JSON_LD = [{
+  "@context": "https://schema.org",
+  "@type": "Organization",
+  name: "Mi Balneario",
+  alternateName: ["MiBalneario", "mibalneario"],
+  url: SITE_URL,
+  logo: `${SITE_URL}/icon-512.png`,
+  email: SITE_EMAIL,
+  sameAs: [SITE_INSTAGRAM_URL],
+}, {
   "@context": "https://schema.org",
   "@type": "SoftwareApplication",
   name: "Mi Balneario",
@@ -44,7 +53,7 @@ const JSON_LD = {
   url: SITE_URL,
   email: SITE_EMAIL,
   sameAs: [SITE_INSTAGRAM_URL],
-};
+}];
 
 const NAV = [
   { href: "#un-dia", label: "Cómo se usa" },
