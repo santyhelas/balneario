@@ -312,8 +312,8 @@ for (const [view, opts] of Object.entries(VIEWS)) {
       // c) Extras: cargar uno en Configuración y sumarlo a la reserva recién creada
       const f3 = { flujo: "Extras: crear «Reposera» y agregarla a la reserva", pasos: [] };
       try {
-        await page.goto(DEMO + "/configuracion#extras", { waitUntil: "networkidle" });
-        await page.getByRole("button", { name: "Agregar extra" }).first().click();
+        await page.goto(DEMO + "/reservas/nueva", { waitUntil: "networkidle" });
+        await page.getByRole("button", { name: "+ Nuevo extra" }).first().click();
         const d = page.getByRole("dialog");
         await d.getByLabel("Nombre").fill("Reposera de prueba");
         await d.getByLabel("Precio").fill("2000");

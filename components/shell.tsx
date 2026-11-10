@@ -11,7 +11,7 @@ import { useUndo } from "@/components/undo";
 import { ConfirmDialog, cx } from "@/components/ui";
 import { DayNotes, usePendingNotes } from "@/components/day-notes";
 import { CloseCashModal, OpenCashModal, type CashSummary } from "@/components/cash";
-import { DemoTour, Tour, startTour } from "@/components/demo-tour";
+import { DemoTour, Tour, startTour, useTourActive } from "@/components/demo-tour";
 import { PrintHeader } from "@/components/print-header";
 
 type NavItem = { href: string; label: string; icon: string };
@@ -33,6 +33,27 @@ export const NAV: NavItem[] = [
   { href: "/historial", label: "Historial", icon: "M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5M12 7v5l3 2" },
   { href: "/copias", label: "Copias de seguridad", icon: "M4 6c0-1.7 3.6-3 8-3s8 1.3 8 3-3.6 3-8 3-8-1.3-8-3zM4 6v6c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6" },
   { href: "/configuracion", label: "Configuración", icon: "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" },
+];
+
+/** Íconos de los apartados de Configuración (en la página y en el menú). */
+export const CONFIG_ICONS = {
+  perfil: "M20 21a8 8 0 0 0-16 0M12 13a5 5 0 1 0 0-10 5 5 0 0 0 0 10z",
+  balneario: "M3 21h18M5 21V8l7-5 7 5v13M9 21v-6h6v6",
+  mensajes: "M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z",
+  reglas: "M3 7h18v12H3zM3 11h18M7 15h3",
+  cuentas: "M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1",
+  usuarios: "M16 19v-1a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v1M9.5 10a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM21 19v-1a4 4 0 0 0-3-3.9M16 3.1a3.5 3.5 0 0 1 0 6.8",
+  plan: "M12 3v18M16.5 7.5c0-1.7-2-3-4.5-3s-4.5 1.3-4.5 3 2 2.5 4.5 3 4.5 1.3 4.5 3-2 3-4.5 3-4.5-1.3-4.5-3",
+} as const;
+/** Apartados de Configuración, en el orden de la página. */
+export const CONFIG_SECTIONS: { id: keyof typeof CONFIG_ICONS; label: string; owners?: boolean }[] = [
+  { id: "perfil", label: "Mi perfil" },
+  { id: "balneario", label: "Datos del balneario" },
+  { id: "mensajes", label: "Mensajes a clientes" },
+  { id: "reglas", label: "Caja y descuentos" },
+  { id: "cuentas", label: "Cuentas vinculadas", owners: true },
+  { id: "usuarios", label: "Usuarios", owners: true },
+  { id: "plan", label: "Mi plan", owners: true },
 ];
 
 const byHref = (h: string) => NAV.find((n) => n.href === h)!;
@@ -82,6 +103,7 @@ function longDate(iso: string, timeZone: string) {
 
 export function Shell({ children }: { children: ReactNode }) {
   const [supportOpen, setSupportOpen] = useState(false);
+  const [configOpen, setConfigOpen] = useState(false);
   const { ws, email, theme, setTheme, role, profile, isGuest, guideDone, setGuideDone, isPlatformAdmin, adminAlerts } = useWorkspace();
   const status = useStatus();
   const pathname = usePathname();
@@ -177,6 +199,32 @@ export function Shell({ children }: { children: ReactNode }) {
         <nav className="flex-1 overflow-y-auto px-2 pb-2" aria-label="Secciones">
           {NAV.map((item, i) => {
             const active = isActive(item.href);
+            if (item.href === "/configuracion") {
+              return (
+                <div key={item.href}>
+                  <button type="button" onClick={() => setConfigOpen((v) => !v)} aria-expanded={configOpen}
+                    className={cx("mb-0.5 flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-medium",
+                      active ? "bg-accent text-accent-fg" : "text-fg hover:bg-surface-2")}>
+                    <Icon d={item.icon} className="h-[18px] w-[18px]" />
+                    <span className="flex-1 truncate">{i + 1}. {item.label}</span>
+                    <Icon d="M6 9l6 6 6-6" className={cx("h-4 w-4 transition-transform duration-200", configOpen && "rotate-180")} />
+                  </button>
+                  <div className={cx("grid transition-[grid-template-rows] duration-200 ease-out", configOpen ? "grid-rows-[1fr]" : "grid-rows-[0fr]")}>
+                    <div className="overflow-hidden">
+                      <div className="mb-1 ml-5 border-l border-line pl-2">
+                        {CONFIG_SECTIONS.filter((c) => !c.owners || !isGuest).map((c) => (
+                          <Link key={c.id} href={`/configuracion#${c.id}`} onClick={() => setDrawerOpen(false)} tabIndex={configOpen ? 0 : -1}
+                            className="flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-sm text-fg/90 hover:bg-surface-2">
+                            <Icon d={CONFIG_ICONS[c.id]} className="h-4 w-4 text-muted" />
+                            {c.label}
+                          </Link>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            }
             return (
               <Link
                 key={item.href}
@@ -300,7 +348,7 @@ export function Shell({ children }: { children: ReactNode }) {
         <PlanBanner />
         <InstallBanner />
         {undo.message && <div className="px-safe pt-3">{undo.message}</div>}
-        <main className="px-safe pb-tabbar w-full flex-1 pt-4 md:pt-6 print:p-0"><PrintHeader />{children}</main>
+        <main className="px-safe pb-tabbar w-full flex-1 pt-4 md:pt-6 print:p-0"><PrintHeader /><div key={pathname} className="mb-page">{children}</div></main>
         <DemoTour enabled={isGuest} />
         <Tour id="guia" enabled={!isGuest && role === "propietario"} unseen={!guideDone} finalLabel="Empezar"
           onFinish={() => { if (!guideDone) setGuideDone(true).catch(() => undefined); }} />
@@ -424,10 +472,12 @@ export function Shell({ children }: { children: ReactNode }) {
  * - al cerrar sesión, si se elige "Cerrar la caja y salir", muestra el cierre.
  */
 function CashGuard({ closeRequest, onClosedForLogout, onCancelClose }: { closeRequest: boolean; onClosedForLogout: () => void; onCancelClose: () => void }) {
-  const { ws, isGuest } = useWorkspace();
+  const { ws, isGuest, role, guideDone } = useWorkspace();
   const st = useStatus();
   const sb = getSupabase();
   const [openNew, setOpenNew] = useState(false);
+  // Con la guía de bienvenida en curso no se pide la caja: se pide al terminarla.
+  const touring = useTourActive(!isGuest && role === "propietario", "guia", !guideDone);
   const [closing, setClosing] = useState<{ summary: CashSummary; forLogout: boolean } | null>(null);
   const s = st.summary;
 
@@ -436,7 +486,7 @@ function CashGuard({ closeRequest, onClosedForLogout, onCancelClose }: { closeRe
 
   // Inicio del día: primero cerrar la caja que quedó abierta; después abrir la de hoy.
   useEffect(() => {
-    if (!s || isGuest) return;
+    if (!s || isGuest || touring) return;
     if (s.caja_anterior_sin_cerrar) {
       const k = `cerrar:${s.caja_anterior_sin_cerrar.session_id}`;
       if (asked(k)) return;
@@ -450,7 +500,7 @@ function CashGuard({ closeRequest, onClosedForLogout, onCancelClose }: { closeRe
       mark(k);
       setOpenNew(true);
     }
-  }, [s?.fecha, s?.caja.estado, s?.caja_anterior_sin_cerrar?.session_id, isGuest]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [s?.fecha, s?.caja.estado, s?.caja_anterior_sin_cerrar?.session_id, isGuest, touring]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Cerrar la pestaña con la caja abierta: el navegador pregunta si salir.
   useEffect(() => {
@@ -529,7 +579,7 @@ function NotesButton({ compact = false }: { compact?: boolean }) {
         {pending > 0 && <span className={cx("rounded-full bg-amber-500 px-1.5 text-[10px] font-bold leading-4 text-white", compact && "absolute -right-1 -top-1")}>{pending}</span>}
       </button>
       {open && (
-        <div className="fixed inset-x-3 top-16 z-50 max-h-[75dvh] overflow-y-auto rounded-2xl shadow-xl md:absolute md:inset-x-auto md:left-0 md:top-12 md:w-[26rem]">
+        <div className="mb-drop fixed inset-x-3 top-16 z-50 max-h-[75dvh] overflow-y-auto rounded-2xl shadow-xl md:absolute md:inset-x-auto md:left-0 md:top-12 md:w-[26rem]">
           <DayNotes />
         </div>
       )}
@@ -590,7 +640,7 @@ function NoticesBell({ notices, count }: { notices: Notice[]; count: number }) {
         {count > 0 && <span className="absolute right-0.5 top-0.5 min-w-4 rounded-full bg-danger px-1 text-center text-[10px] font-bold leading-4 text-bg">{count}</span>}
       </button>
       {open && (
-        <div className="fixed inset-x-3 top-16 z-50 max-h-[70dvh] overflow-y-auto rounded-xl border border-line bg-surface p-3 shadow-xl md:absolute md:inset-x-auto md:right-0 md:top-12 md:w-96">
+        <div className="mb-drop fixed inset-x-3 top-16 z-50 max-h-[70dvh] overflow-y-auto rounded-xl border border-line bg-surface p-3 shadow-xl md:absolute md:inset-x-auto md:right-0 md:top-12 md:w-96">
           <div className="mb-2 flex items-center justify-between gap-2">
             <strong className="text-sm">Avisos <span className="font-normal text-muted">({notices.length})</span></strong>
             {notices.length > 0 && (

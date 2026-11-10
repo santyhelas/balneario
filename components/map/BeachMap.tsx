@@ -508,7 +508,8 @@ export function BeachMap({
   const saving = (id: string) => savingIds.has(id);
 
   return (
-    <div className="relative" ref={wrapRef}>
+    // El plano entero entra en la pantalla (también los balnearios grandes y largos): el ancho se ajusta al alto disponible.
+    <div className="relative mx-auto" ref={wrapRef} style={{ width: `min(100%, calc((100dvh - 8rem) * ${width} / ${height}), calc(${width}px * 4))`, minWidth: "min(100%, 320px)" }}>
       <svg
         ref={svgRef}
         viewBox={`${view.x} ${view.y} ${view.w} ${view.h}`}

@@ -26,7 +26,7 @@ export function Button({
       {...rest}
       disabled={disabled || loading}
       className={cx(
-        "inline-flex items-center justify-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-50",
+        "inline-flex items-center justify-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium transition active:scale-[.97] disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100",
         variants[variant],
         className,
       )}
@@ -174,7 +174,7 @@ export function Modal({
   if (!open) return null;
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-0 sm:items-center sm:p-4"
+      className="mb-fade fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-0 sm:items-center sm:p-4"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget && !busy) onClose();
       }}
@@ -185,7 +185,7 @@ export function Modal({
         aria-modal="true"
         aria-label={title}
         className={cx(
-          "max-h-[92dvh] w-full overflow-y-auto overscroll-contain rounded-t-2xl border border-line bg-surface p-5 pb-safe-5 shadow-xl sm:rounded-2xl sm:pb-5",
+          "mb-pop max-h-[92dvh] w-full overflow-y-auto overscroll-contain rounded-t-2xl border border-line bg-surface p-5 pb-safe-5 shadow-xl sm:rounded-2xl sm:pb-5",
           wide ? "sm:max-w-3xl" : "sm:max-w-md",
         )}
       >

@@ -36,7 +36,6 @@ export default function DashboardPage() {
   const touring = demoTour || guideTour || newsTour;
   const [cash, setCash] = useState<CashSummary | null>(null);
   const [openCash, setOpenCash] = useState(false);
-  const [askedToday, setAskedToday] = useState(false);
   const [closing, setClosing] = useState<CashSummary | null>(null);
   const [supportOpen, setSupportOpen] = useState(false);
 
@@ -62,14 +61,16 @@ export default function DashboardPage() {
     getSupabase().rpc("cash_session_summary", { p_session_id: sessionId }).then(({ data: d }) => setCash((d as CashSummary) ?? null));
   }, [sessionId, st.updatedAt]);
 
-  // Al iniciar un día sin caja abierta, la pide una sola vez (no insiste si se cierra la ventana).
+  // En la demo, la caja se pide acá al terminar el tutorial. En los balnearios reales lo hace el menú general
+  // (una sola vez por día y después de la guía de bienvenida), para no abrir dos ventanas.
+  const [askedToday, setAskedToday] = useState(false);
   useEffect(() => {
-    if (touring) return;
+    if (!isGuest || touring) return;
     if (data && data.caja.estado === "sin_abrir" && !data.caja_anterior_sin_cerrar && !askedToday) {
       setOpenCash(true);
       setAskedToday(true);
     }
-  }, [data, askedToday, touring]);
+  }, [data, askedToday, touring, isGuest]);
 
   async function startClosePrevious() {
     if (!data?.caja_anterior_sin_cerrar) return;
@@ -151,7 +152,7 @@ export default function DashboardPage() {
       {/* Accesos rápidos: lo que no está en la barra de arriba */}
       <section className="rounded-2xl border border-line bg-surface p-4">
         <h2 className="mb-3 text-xs font-bold uppercase tracking-widest text-muted">Accesos rápidos</h2>
-        <div className="grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-6">
+        <div className="mb-stagger grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-6">
           <Shortcut href="/disponibilidad" tone="orange" icon="M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM21 21l-4.3-4.3" title="Disponibilidad" sub="Qué hay libre y cuándo" />
           <Shortcut href="/reservas" tone="violet" icon="M5 12h14M13 6l6 6-6 6" title="Cambiar de carpa" sub="Elegí la reserva" />
           <Shortcut href="/clientes" tone="accent" icon={icon("/clientes")} title="Buscar cliente" sub="Historial y contacto" />
@@ -212,7 +213,7 @@ function StatGroup({ title, children }: { title: string; children: ReactNode }) 
   return (
     <section>
       <h2 className="mb-2 text-xs font-bold uppercase tracking-widest text-muted">{title}</h2>
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">{children}</div>
+      <div className="mb-stagger grid grid-cols-2 gap-3 md:grid-cols-4">{children}</div>
     </section>
   );
 }

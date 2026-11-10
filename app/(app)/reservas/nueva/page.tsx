@@ -15,6 +15,7 @@ import { Alert, Badge, Button, Card, Field, Input, Modal, Select, Spinner, Texta
 import { CustomerForm, searchCustomers, type Customer } from "@/components/customers";
 import { whatsappLink } from "@/lib/reservations";
 import { quoteMessage } from "@/lib/whatsapp-messages";
+import { ExtrasPicker, useExtrasTotal, type ExtraPick } from "@/components/extras";
 
 type Agreement = { id: string; name: string; percent: number; valid_from: string | null; valid_to: string | null };
 type Quote = {
@@ -252,7 +253,11 @@ export default function NuevaReservaPage() {
   const [method, setMethod] = useState("efectivo");
   const [deposit, setDeposit] = useState("");
   const [usd, setUsd] = useState<DollarValue>({ usd: null, rate: null, ars: null });
-  const total = quote?.ok ? Number(quote.total) : null;
+  // Extras elegidos (reposeras, estacionamiento…): se suman al total y al cobro.
+  const [extras, setExtras] = useState<ExtraPick[]>([]);
+  const extrasForStay = courtesy ? [] : extras.map((x) => ({ ...x, days: Math.min(x.days, Math.max(1, nDays)) }));
+  const extrasTotal = useExtrasTotal(extrasForStay);
+  const total = quote?.ok ? Number(quote.total) + extrasTotal : null;
   const paidNow = courtesy || payMode === "despues" ? 0
     : method === "dolares" ? Math.min(usd.ars ?? 0, total ?? 0)
     : payMode === "pagada" ? total ?? 0 : parseMoney(deposit) ?? 0;
@@ -299,7 +304,8 @@ export default function NuevaReservaPage() {
         ? { amount: paidNow, method, idempotency_key: paymentKey, usd_amount: usd.usd, exchange_rate: usd.rate }
         : { amount: paidNow, method, idempotency_key: paymentKey }
       : null;
-    const { data, error } = await sb.rpc("create_reservation_v2", {
+    const withExtras = extrasForStay.length > 0;
+    const { data, error } = await sb.rpc(withExtras ? "create_reservation_v3" : "create_reservation_v2", {
       p_workspace_id: ws.id,
       p_request_id: requestId,
       p_customer_id: customer.id,
@@ -309,9 +315,11 @@ export default function NuevaReservaPage() {
       p_options: options,
       p_notes: notes.trim() || null,
       p_payment: payment,
+      ...(withExtras ? { p_extras: extrasForStay } : {}),
     });
     setSaving(false);
     if (error) {
+      if (withExtras && error.code === "PGRST202") { setSaveError("Para guardar extras al reservar hay que aplicar la actualización 0042 de la base de datos. Mientras tanto, sacá los extras y sumalos desde la reserva."); return; }
       setSaveError(friendlyError(error));
       if (error.hint === "CONFLICTO_DISPONIBILIDAD") loadGrid();
       return;
@@ -324,6 +332,7 @@ export default function NuevaReservaPage() {
 
   function reset() {
     setDone(null);
+    setExtras([]);
     setCustomer(null);
     setCustQuery("");
     setSpaceId(null);
@@ -350,8 +359,8 @@ export default function NuevaReservaPage() {
       ? `${kind === "carpa" ? "Carpa" : "Sombrilla"} ${spaces.find((x) => x.space_id === segments[0].space_id)?.code ?? ""}`
       : segments.map((sg) => `${kind === "carpa" ? "Carpa" : "Sombrilla"} ${spaces.find((x) => x.space_id === sg.space_id)?.code ?? ""} (${formatDate(sg.start_date).slice(0, 5)} al ${formatDate(sg.end_date).slice(0, 5)})`).join(", "),
     start, end,
-    total: Number(quote.total),
-    cashTotal,
+    total: Number(quote.total) + extrasTotal,
+    cashTotal: cashTotal !== null ? cashTotal + extrasTotal : null,
     discounts: quote.discounts.map((d) => clientDiscountLabel(d, agreements)),
   }) : null;
 
@@ -622,6 +631,9 @@ export default function NuevaReservaPage() {
                 {useManualBase && <TextField label="Precio acordado (antes de descuentos)" inputMode="decimal" value={manualBase} onChange={(e) => setManualBase(e.target.value)} />}
               </div>
             )}
+            <div className="mt-3 border-t border-line pt-3" data-tour="nr-extras">
+              <ExtrasPicker stayDays={Math.max(1, nDays)} value={extras} onChange={setExtras} disabled={courtesy} />
+            </div>
             <div className="mt-3">
               <Field label="Observaciones"><Textarea value={notes} onChange={(e) => setNotes(e.target.value)} maxLength={2000} /></Field>
             </div>
@@ -663,9 +675,10 @@ export default function NuevaReservaPage() {
                   </div>
                 )}
                 {courtesy && <div className="flex justify-between gap-3 text-ok"><span>Cortesía familiar</span><span className="tabular">− {formatMoney(quote.precio_base)}</span></div>}
-                <div className="mt-1 flex justify-between gap-3 border-t border-line pt-2 text-base font-semibold"><span>Total</span><span className="tabular">{formatMoney(quote.total)}</span></div>
+                {!courtesy && extrasTotal > 0 && <div className="flex justify-between gap-3"><span>Extras</span><span className="tabular">+ {formatMoney(extrasTotal)}</span></div>}
+                <div className="mt-1 flex justify-between gap-3 border-t border-line pt-2 text-base font-semibold"><span>Total</span><span className="tabular">{formatMoney(total)}</span></div>
                 {cashTotal !== null && cashTotal < Number(quote.total) && (
-                  <div className="flex justify-between gap-3 text-xs text-muted"><span>Pagando en efectivo</span><span className="tabular">{formatMoney(cashTotal)}</span></div>
+                  <div className="flex justify-between gap-3 text-xs text-muted"><span>Pagando en efectivo</span><span className="tabular">{formatMoney(cashTotal + (courtesy ? 0 : extrasTotal))}</span></div>
                 )}
                 {!courtesy && quoteText && (
                   <div className="mt-3 border-t border-line pt-3">
@@ -746,7 +759,7 @@ export default function NuevaReservaPage() {
           <div className="min-w-0 text-sm">
             <div className="text-xs text-muted">{courtesy ? "Cortesía" : "Total"}</div>
             <div className="tabular truncate text-base font-semibold">
-              {quoteLoading ? "Calculando…" : quote?.ok ? formatMoney(quote.total) : "—"}
+              {quoteLoading ? "Calculando…" : quote?.ok ? formatMoney(total) : "—"}
               {!courtesy && quote?.ok && debt !== null && debt > 0 && <span className="ml-2 text-xs font-normal text-danger">debe {formatMoney(debt)}</span>}
             </div>
             {!canSave && problems[0] && <div className="truncate text-xs text-muted">{problems[0]}</div>}
@@ -784,7 +797,7 @@ export default function NuevaReservaPage() {
             <dt className="text-muted">Estadía</dt><dd>{formatDate(start)} al {formatDate(end)} ({nDays} días)</dd>
             <dt className="text-muted">Lugar</dt>
             <dd>{segments.map((s) => `${spaces.find((x) => x.space_id === s.space_id)?.code} (${formatDate(s.start_date)}–${formatDate(s.end_date)})`).join(" → ")}</dd>
-            <dt className="text-muted">Total</dt><dd className="font-semibold tabular">{formatMoney(quote.total)}{courtesy ? ` · Cortesía para ${beneficiary}` : ""}</dd>
+            <dt className="text-muted">Total</dt><dd className="font-semibold tabular">{formatMoney(total)}{!courtesy && extrasTotal > 0 ? ` (con ${formatMoney(extrasTotal)} de extras)` : ""}{courtesy ? ` · Cortesía para ${beneficiary}` : ""}</dd>
             {!courtesy && (
               <>
                 <dt className="text-muted">Pago</dt>

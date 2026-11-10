@@ -1187,6 +1187,26 @@ select t.throws(format($$update public.cash_sessions set close_notes = 'tocado',
   'Reabrir caja: una caja cerrada sigue sin poder editarse a mano (ni desde la base)');
 set role authenticated;
 
+-- 43. Nueva reserva con extras y cobro en una sola operación
+select public.reopen_cash_session(t.uid('session'), (select version from public.cash_sessions where id = t.uid('session')), 'Prueba de extras');
+select t.set('rq3', gen_random_uuid()::text);
+select t.set('r3', (public.create_reservation_v3(t.uid('ws'), t.uid('rq3'), t.uid('juan'), '2027-04-01', '2027-04-03',
+  jsonb_build_array(jsonb_build_object('space_id', t.space('62'), 'start_date', '2027-04-01', 'end_date', '2027-04-03')),
+  '{"manual_base": 30000}'::jsonb, null, jsonb_build_object('amount', 36000, 'method', 'efectivo', 'idempotency_key', gen_random_uuid()),
+  jsonb_build_array(jsonb_build_object('extra_id', t.get('xRep'), 'quantity', 1, 'days', 3))) ->> 'reservation_id'));
+select t.ok((select total_amount = 36000 from public.reservations where id = t.uid('r3')), 'Reserva con extras: el total suma la reposera (30.000 + 3 × 2.000)');
+select t.ok((select due_amount = 0 from public.reservation_balances where reservation_id = t.uid('r3')), 'Reserva con extras: «Pagada» cubre carpa y extras (saldo 0)');
+select t.ok((public.create_reservation_v3(t.uid('ws'), t.uid('rq3'), t.uid('juan'), '2027-04-01', '2027-04-03',
+  jsonb_build_array(jsonb_build_object('space_id', t.space('62'), 'start_date', '2027-04-01', 'end_date', '2027-04-03')),
+  '{"manual_base": 30000}'::jsonb, null, null, '[]'::jsonb) ->> 'repetida')::boolean, 'Reserva con extras: reintentar no la duplica');
+select t.ok((select count(*) = 1 from public.payments where reservation_id = t.uid('r3')), 'Reserva con extras: un solo cobro');
+select t.throws(format($$select public.create_reservation_v3(%L, gen_random_uuid(), %L, '2027-04-10', '2027-04-11',
+  jsonb_build_array(jsonb_build_object('space_id', %L, 'start_date', '2027-04-10', 'end_date', '2027-04-11')), '{"manual_base": 1000}'::jsonb, null, null,
+  jsonb_build_array(jsonb_build_object('extra_id', gen_random_uuid(), 'quantity', 1)))$$, t.get('ws'), t.get('juan'), t.space('62')), 'no existe',
+  'Reserva con extras: un extra inválido no deja la reserva a medias');
+select t.ok(not exists (select 1 from public.reservations where workspace_id = t.uid('ws') and start_date = '2027-04-10'), 'Reserva con extras: tras el error no quedó nada guardado');
+select public.close_cash_session(t.uid('session'), 0, (select version from public.cash_sessions where id = t.uid('session')), null);
+
 reset role;
 \o
 -- Resultado ----------------------------------------------------------

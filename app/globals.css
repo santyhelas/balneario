@@ -186,3 +186,30 @@ label {
   body:has(.own-print-header) .print-header { display: none !important; }
   .own-print-header img { display: block; }
 }
+
+/* ------------------------------------------------------------------ */
+/* Movimiento del sistema: corto, solo opacidad y desplazamiento       */
+/* (lo más liviano para la compu), y nada si se pidió menos movimiento. */
+/* ------------------------------------------------------------------ */
+@keyframes mb-fade-up { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes mb-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes mb-pop { from { opacity: 0; transform: translateY(10px) scale(.97); } to { opacity: 1; transform: none; } }
+@keyframes mb-drop { from { opacity: 0; transform: translateY(-6px) scale(.98); } to { opacity: 1; transform: none; } }
+
+.mb-page { animation: mb-fade-up .28s cubic-bezier(.2,.7,.2,1) both; }
+.mb-fade { animation: mb-fade .18s ease-out both; }
+.mb-pop { animation: mb-pop .22s cubic-bezier(.2,.8,.2,1) both; }
+.mb-drop { animation: mb-drop .16s ease-out both; transform-origin: top right; }
+/* Elementos que entran uno detrás del otro (indicadores del panel). */
+.mb-stagger > * { animation: mb-fade-up .35s cubic-bezier(.2,.7,.2,1) both; }
+.mb-stagger > *:nth-child(2) { animation-delay: .04s; }
+.mb-stagger > *:nth-child(3) { animation-delay: .08s; }
+.mb-stagger > *:nth-child(4) { animation-delay: .12s; }
+.mb-stagger > *:nth-child(5) { animation-delay: .16s; }
+.mb-stagger > *:nth-child(6) { animation-delay: .2s; }
+/* Apartados plegables: el contenido aparece suave al abrir. */
+details[open] > :not(summary) { animation: mb-fade-up .22s ease-out both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .mb-page, .mb-fade, .mb-pop, .mb-drop, .mb-stagger > *, details[open] > :not(summary) { animation: none !important; }
+}

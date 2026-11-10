@@ -11,6 +11,7 @@ import { Alert, Badge, Button, Card, ConfirmDialog, Field, Input, Modal, Select,
 import { BeachMap, FEATURE_KIND_LABEL, type MapFeature, type MapItem, type MapItemPos, type MapSpace, type Selection } from "@/components/map/BeachMap";
 import { WeatherStrip, WindCompass, type CompassLayout } from "@/components/weather";
 import { RelocateModal } from "@/components/relocate";
+import { QuickAddExtra } from "@/components/extras";
 import { loadReservation, type Full } from "@/lib/reservations";
 import { DEFAULT_TENT_STYLE, normalizeTentStyle, STATE_COLOR, STATE_LABEL, type SpaceState, type TentStyle } from "@/components/map/icons";
 import { TentDesigner } from "@/components/map/TentDesigner";
@@ -754,6 +755,7 @@ function SpaceModal({ space, spaces, day, today, isAdmin, onChanged, onCheckDate
   onChanged: () => void; onCheckDate: (d: string) => void; onClose: () => void; onMoved: (t: string) => void;
 }) {
   const [maint, setMaint] = useState(false);
+  const [addingExtra, setAddingExtra] = useState(false);
   const [picking, setPicking] = useState(false);
   const [moving, setMoving] = useState<{ full: Full; target?: string } | null>(null);
   const [loadingRes, setLoadingRes] = useState<string | null>(null);
@@ -778,6 +780,11 @@ function SpaceModal({ space, spaces, day, today, isAdmin, onChanged, onCheckDate
     setLoadingRes(null);
   }
 
+  if (addingExtra && space.reservation_id && space.reservation_start && space.reservation_end) {
+    const stay = Math.round((Date.parse(space.reservation_end) - Date.parse(space.reservation_start)) / 86400000) + 1;
+    return <QuickAddExtra reservationId={space.reservation_id} stayDays={stay} onClose={() => setAddingExtra(false)}
+      onDone={() => { setAddingExtra(false); onClose(); onMoved("Listo: se sumó el extra a la reserva (queda como saldo hasta que lo cobres)."); }} />;
+  }
   if (moving) {
     return (
       <RelocateModal open full={moving.full} today={today} initialDay={day} initialTarget={moving.target}
@@ -816,6 +823,9 @@ function SpaceModal({ space, spaces, day, today, isAdmin, onChanged, onCheckDate
             {space.reservation_id && <Link href={`/reservas/${space.reservation_id}`}><Button>Ver reserva #{space.reservation_number}</Button></Link>}
             {space.reservation_id && !pastDay && (
               <Button variant="secondary" loading={loadingRes === space.reservation_id} onClick={() => openMove(space.reservation_id!)}>Cambiar de lugar</Button>
+            )}
+            {space.reservation_id && space.state === "ocupada" && (
+              <Button variant="secondary" onClick={() => setAddingExtra(true)}>Agregar extra</Button>
             )}
             {free && !pastDay && (
               <Link href={`/reservas/nueva?espacio=${space.space_id}&desde=${day}`}><Button>Reservar desde el {formatDate(day)}</Button></Link>

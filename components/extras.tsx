@@ -5,7 +5,7 @@ import { unwrap, useLoader } from "@/lib/data";
 import { friendlyError, isVersionConflict } from "@/lib/errors";
 import { formatDateTime, formatMoney, parseMoney } from "@/lib/format";
 import { useWorkspace } from "@/components/workspace";
-import { Alert, Badge, Button, Card, EmptyState, Modal, Select, Spinner, TextField } from "@/components/ui";
+import { Alert, Badge, Button, Card, CardBareContext, EmptyState, Modal, Select, Spinner, TextField, cx } from "@/components/ui";
 
 /**
  * Extras: cosas que se cobran aparte de la carpa (reposeras, estacionamiento, heladera…).
@@ -136,7 +136,7 @@ export function ReservationExtras({ reservationId, stayDays, editable, onChanged
   if (q.data.catalog.length === 0 && q.data.lines.length === 0) {
     return (
       <Card title="Extras">
-        <p className="text-sm text-muted">Si cobrás reposeras, estacionamiento u otra cosa aparte, cargalos en <a href="/configuracion#extras" className="font-medium text-accent hover:underline">Configuración → Extras</a> y después los sumás acá.</p>
+        <p className="text-sm text-muted">Si cobrás reposeras, estacionamiento u otra cosa aparte, creá el extra desde «Nueva reserva» (paso 4, Extras) y después lo sumás acá.</p>
       </Card>
     );
   }
@@ -242,4 +242,111 @@ function VoidExtraModal({ line, onClose, onDone }: { line: ReservationExtra; onC
       {error && <Alert tone="danger">{error}</Alert>}
     </Modal>
   );
+}
+
+export type ExtraPick = { extra_id: string; quantity: number; days: number };
+
+/**
+ * Extras al crear una reserva: se eligen del catálogo con su cantidad (y días, si se cobran por día).
+ * Un administrador puede crear un extra nuevo o editar la lista desde acá mismo.
+ */
+export function ExtrasPicker({ stayDays, value, onChange, disabled }: {
+  stayDays: number; value: ExtraPick[]; onChange: (v: ExtraPick[]) => void; disabled?: boolean;
+}) {
+  const { ws, isAdmin } = useWorkspace();
+  const q = useLoader(async () => {
+    const res = await getSupabase().from("extras").select("id, name, price, per_day, active, version").eq("workspace_id", ws.id).eq("active", true).order("name");
+    if (res.error && (res.error.code === "42P01" || res.error.code === "PGRST205")) return { missing: true, rows: [] as Extra[] };
+    return { missing: false, rows: unwrap(res) as Extra[] };
+  }, [ws.id], 0);
+  const [creating, setCreating] = useState(false);
+  const [managing, setManaging] = useState(false);
+  if (q.data?.missing) return null;
+  const catalog = q.data?.rows ?? [];
+  const get = (id: string) => value.find((v) => v.extra_id === id);
+  function set(id: string, qty: number) {
+    const rest = value.filter((v) => v.extra_id !== id);
+    onChange(qty > 0 ? [...rest, { extra_id: id, quantity: Math.min(99, qty), days: get(id)?.days ?? stayDays }] : rest);
+  }
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-sm font-medium">Extras (opcional)</span>
+        {isAdmin && (
+          <span className="flex gap-1">
+            <Button type="button" variant="ghost" className="px-2 py-1 text-xs" onClick={() => setCreating(true)}>+ Nuevo extra</Button>
+            {catalog.length > 0 && <Button type="button" variant="ghost" className="px-2 py-1 text-xs" onClick={() => setManaging(true)}>Editar lista</Button>}
+          </span>
+        )}
+      </div>
+      {!q.data ? <span className="flex items-center gap-2 text-xs text-muted"><Spinner small /> Cargando extras…</span>
+        : catalog.length === 0 ? <p className="text-xs text-muted">Reposeras, estacionamiento o lo que cobres aparte.{isAdmin ? " Tocá «+ Nuevo extra» para cargar el primero." : " Pedile a un administrador que los cargue."}</p>
+        : (
+          <ul className={cx("flex flex-col gap-1.5", disabled && "pointer-events-none opacity-50")}>
+            {catalog.map((x) => {
+              const v = get(x.id);
+              const n = v?.quantity ?? 0;
+              return (
+                <li key={x.id} className={cx("flex items-center justify-between gap-2 rounded-lg border px-2.5 py-1.5 text-sm", n ? "border-accent/50 bg-accent-soft" : "border-line")}>
+                  <span className="min-w-0">
+                    <span className="block truncate font-medium">{x.name}</span>
+                    <span className="block text-xs text-muted">{extraPriceLabel(x)}{n && x.per_day ? ` × ${v!.days} días` : ""}{n ? ` = ${formatMoney(extraAmount(Number(x.price), n, v!.days, x.per_day))}` : ""}</span>
+                  </span>
+                  <span className="flex shrink-0 items-center gap-1">
+                    <button type="button" className="h-7 w-7 rounded-md border border-line font-bold hover:bg-surface-2 disabled:opacity-40" disabled={!n} onClick={() => set(x.id, n - 1)} aria-label={`Quitar un ${x.name}`}>−</button>
+                    <span className="w-6 text-center tabular font-semibold">{n}</span>
+                    <button type="button" className="h-7 w-7 rounded-md border border-line font-bold hover:bg-surface-2" onClick={() => set(x.id, n + 1)} aria-label={`Sumar un ${x.name}`}>+</button>
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      {disabled && value.length > 0 && <p className="text-xs text-warn">Una cortesía no lleva extras con cargo.</p>}
+      {creating && <ExtraForm extra={null} onClose={() => setCreating(false)} onSaved={() => { setCreating(false); q.reload(); }} />}
+      {managing && (
+        <Modal open onClose={() => { setManaging(false); q.reload(); }} title="Lista de extras" wide
+          footer={<Button variant="secondary" onClick={() => { setManaging(false); q.reload(); }}>Listo</Button>}>
+          <CardBareContext.Provider value={true}><ExtrasCard /></CardBareContext.Provider>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+/** Total de los extras elegidos (con el catálogo a mano). */
+export function useExtrasTotal(value: ExtraPick[]): number {
+  const { ws } = useWorkspace();
+  const q = useLoader(async () => {
+    const res = await getSupabase().from("extras").select("id, price, per_day").eq("workspace_id", ws.id);
+    return res.error ? [] : (res.data as { id: string; price: number; per_day: boolean }[]);
+  }, [ws.id, value.length], 0);
+  return value.reduce((sum, v) => {
+    const x = q.data?.find((c) => c.id === v.extra_id);
+    return x ? sum + extraAmount(Number(x.price), v.quantity, v.days, x.per_day) : sum;
+  }, 0);
+}
+
+/** Desde el mapa: sumar un extra a la reserva de esa carpa. */
+export function QuickAddExtra({ reservationId, stayDays, onClose, onDone }: { reservationId: string; stayDays: number; onClose: () => void; onDone: () => void }) {
+  const { ws, isAdmin } = useWorkspace();
+  const q = useLoader(async () => {
+    const res = await getSupabase().from("extras").select("id, name, price, per_day, active, version").eq("workspace_id", ws.id).eq("active", true).order("name");
+    if (res.error && (res.error.code === "42P01" || res.error.code === "PGRST205")) return { missing: true, rows: [] as Extra[] };
+    return { missing: false, rows: unwrap(res) as Extra[] };
+  }, [ws.id], 0);
+  const [creating, setCreating] = useState(false);
+  if (!q.data) return <Modal open onClose={onClose} title="Agregar extra"><span className="flex items-center gap-2 text-sm text-muted"><Spinner small /> Cargando…</span></Modal>;
+  if (creating || (isAdmin && !q.data.missing && q.data.rows.length === 0)) {
+    // Sin extras cargados: un administrador crea el primero y después lo suma.
+    return <ExtraForm extra={null} onClose={onClose} onSaved={() => { setCreating(false); q.reload(); }} />;
+  }
+  if (q.data.missing || q.data.rows.length === 0) {
+    return (
+      <Modal open onClose={onClose} title="Agregar extra" footer={<Button variant="secondary" onClick={onClose}>Cerrar</Button>}>
+        <p className="text-sm text-muted">{q.data.missing ? "Para usar extras hay que aplicar la actualización 0029 de la base de datos." : "Todavía no hay extras cargados. Pedile a un administrador que los cargue."}</p>
+      </Modal>
+    );
+  }
+  return <AddExtraModal reservationId={reservationId} catalog={q.data.rows} stayDays={stayDays} onClose={onClose} onDone={onDone} />;
 }
