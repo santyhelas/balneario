@@ -788,7 +788,7 @@ function SpaceModal({ space, spaces, day, today, isAdmin, onChanged, onCheckDate
 
   return (
     <>
-    <Modal open={!maint} onClose={onClose} title={`${kindLabel} ${space.code}`}>
+    <Modal open={!maint} onClose={onClose} title={`${kindLabel} ${space.code}`} footer={<Button variant="secondary" onClick={onClose}>Cerrar</Button>}>
       <div>
         <SpaceInfo space={space} day={day} onCheckDate={(d) => { onCheckDate(d); onClose(); }} />
         {error && <Alert tone="danger" className="mb-3">{error}</Alert>}
