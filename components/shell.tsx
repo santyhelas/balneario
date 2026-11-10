@@ -11,7 +11,7 @@ import { useUndo } from "@/components/undo";
 import { ConfirmDialog, cx } from "@/components/ui";
 import { DayNotes, usePendingNotes } from "@/components/day-notes";
 import { CloseCashModal, OpenCashModal, type CashSummary } from "@/components/cash";
-import { DemoTour, Tour, startTour, useTourActive } from "@/components/demo-tour";
+import { DemoTour, TOUR_MENU_EVENT, Tour, startTour, useTourActive } from "@/components/demo-tour";
 import { PrintHeader } from "@/components/print-header";
 
 type NavItem = { href: string; label: string; icon: string };
@@ -111,6 +111,12 @@ export function Shell({ children }: { children: ReactNode }) {
   // Menú lateral: cerrado por defecto (pantalla limpia); se abre con el botón de tres rayas.
   const [drawerOpen, setDrawerOpen] = useState(false);
   useEffect(() => setDrawerOpen(false), [pathname]);
+  // El tutorial abre el menú para señalar dónde está cada sección.
+  useEffect(() => {
+    const on = (e: Event) => setDrawerOpen(!!(e as CustomEvent<boolean>).detail);
+    window.addEventListener(TOUR_MENU_EVENT, on);
+    return () => window.removeEventListener(TOUR_MENU_EVENT, on);
+  }, []);
   useEffect(() => {
     if (!drawerOpen) return;
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setDrawerOpen(false); };
@@ -229,6 +235,7 @@ export function Shell({ children }: { children: ReactNode }) {
               <Link
                 key={item.href}
                 href={item.href}
+                data-tour={`nav-${item.href}`}
                 className={cx(
                   "mb-0.5 flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium",
                   active ? "bg-accent text-accent-fg" : "text-fg hover:bg-surface-2",
@@ -290,7 +297,7 @@ export function Shell({ children }: { children: ReactNode }) {
           <Link data-tour="nueva-reserva" href="/reservas/nueva" className="flex items-center gap-1.5 rounded-lg bg-accent px-3 py-2 text-sm font-semibold text-accent-fg hover:opacity-90" title="Nueva reserva">
             <Icon d="M12 5v14M5 12h14" className="h-4 w-4" /><span className="hidden xl:inline">Nueva reserva</span>
           </Link>
-          <Link href="/gastos?nuevo=1" className="flex items-center gap-1.5 rounded-lg border border-danger/40 bg-danger-soft px-3 py-2 text-sm font-semibold text-danger hover:opacity-90" title="Nuevo gasto">
+          <Link data-tour="nuevo-gasto" href="/gastos?nuevo=1" className="flex items-center gap-1.5 rounded-lg border border-danger/40 bg-danger-soft px-3 py-2 text-sm font-semibold text-danger hover:opacity-90" title="Nuevo gasto">
             <Icon d="M5 12h14" className="h-4 w-4" /><span className="hidden xl:inline">Nuevo gasto</span>
           </Link>
           <button data-tour="deshacer" onClick={undo.start} className="rounded-lg p-2 text-muted hover:bg-surface-2 hover:text-fg" title="Deshacer último cambio" aria-label="Deshacer último cambio">
@@ -634,7 +641,7 @@ function NoticesBell({ notices, count }: { notices: Notice[]; count: number }) {
     return () => { document.removeEventListener("mousedown", onDown); document.removeEventListener("keydown", onKey); };
   }, [open]);
   return (
-    <div className="relative" ref={ref}>
+    <div className="relative" ref={ref} data-tour="avisos">
       <button onClick={() => setOpen((v) => !v)} className="relative rounded-lg p-2 hover:bg-surface-2" aria-label={count ? `Avisos (${count} nuevos)` : "Avisos"} aria-expanded={open}>
         <Icon d={ICON_BELL} />
         {count > 0 && <span className="absolute right-0.5 top-0.5 min-w-4 rounded-full bg-danger px-1 text-center text-[10px] font-bold leading-4 text-bg">{count}</span>}

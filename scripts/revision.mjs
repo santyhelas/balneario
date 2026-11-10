@@ -506,6 +506,31 @@ for (const [view, opts] of Object.entries(VIEWS)) {
     } catch (e) { f6b.resultado = `Se cortó: ${String(e).slice(0, 200)}`; }
     report.flujos.push(f6b);
 
+    // g0) Tutorial de la demo (un día de trabajo): cada paso encuentra lo que explica, y el menú se abre donde corresponde
+    const f7b = { flujo: "Tutorial de la demo (un día)", pasos: [] };
+    try {
+      await page.goto(DEMO + "/", { waitUntil: "networkidle" });
+      await page.waitForTimeout(1500);
+      await page.locator("button:visible", { hasText: /^Ver tutorial$/ }).first().click();
+      const dlg = page.locator('[role="dialog"][aria-labelledby="tour-titulo"]');
+      await page.locator("#tour-titulo").waitFor({ timeout: 8000 });
+      const total = Number((await dlg.getByText(/Paso \d+ de \d+/).textContent()).match(/de (\d+)/)[1]);
+      const sinMarca = [];
+      for (let i = 0; i < total; i++) {
+        await page.waitForTimeout(2200);
+        const title = (await page.locator("#tour-titulo").textContent())?.trim();
+        const marked = await dlg.locator(".ring-4").count();
+        f7b.pasos.push(`${i + 1}. ${title}${marked ? "" : " (sin resaltar)"}`);
+        if (!marked) sinMarca.push(title);
+        if (i === 4 || i === 6) await page.screenshot({ path: `${OUT}/capturas/tutorial-demo-${i + 1}.png` });
+        if (i < total - 1) await dlg.getByRole("button", { name: "Siguiente" }).click();
+        else await dlg.getByRole("button", { name: /Terminar|Empezar/ }).click();
+      }
+      const esperado = sinMarca.filter((t) => !/^Un día en el balneario/.test(t));
+      f7b.resultado = esperado.length ? `Revisar: ${esperado.join(", ")}` : "OK";
+    } catch (e) { f7b.resultado = `Se cortó: ${String(e).slice(0, 200)}`; await page.screenshot({ path: `${OUT}/capturas/tutorial-demo-error.png` }); }
+    report.flujos.push(f7b);
+
     // g) Tutorial de novedades: cada paso encuentra lo que explica
     const f7 = { flujo: "Tutorial de novedades", pasos: [] };
     try {

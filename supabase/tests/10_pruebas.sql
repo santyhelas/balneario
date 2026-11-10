@@ -715,6 +715,12 @@ select t.ok((select count(distinct c.name) from public.expenses e join public.ex
 select t.ok((select count(distinct a.percent) from public.reservation_discounts d join public.agreements a on a.id = d.agreement_id where a.percent in (10, 15)) = 2,
   'Demo: reservas con los convenios de 10% y 15%');
 select t.ok(not exists (select 1 from public.agreements where name = 'Parque Bonito' and deleted_at is null), 'Demo: sin el convenio Parque Bonito');
+select t.ok((select latitude = -38.0055 and longitude = -57.5426 from public.workspaces where id = t.uid('demo')), 'Demo: ubicada en Mar del Plata (para el clima)');
+select t.ok(not exists (select 1 from public.map_features where workspace_id = t.uid('demo') and label ilike 'Normas%'), 'Demo: sin el cartel de normas');
+select t.ok(not exists (select 1 from public.map_features f join public.spaces s on s.workspace_id = f.workspace_id
+             where f.workspace_id = t.uid('demo') and f.kind = 'camino' and s.kind = 'carpa'
+               and abs(s.x - f.x) < f.width / 2 + 43 and abs(s.y - f.y) < f.height / 2 + 44), 'Demo: ningún camino pisa una carpa');
+select t.ok((select bool_and(layer < 0) from public.map_features where workspace_id = t.uid('demo') and kind = 'camino'), 'Demo: los caminos pasan por debajo del parador');
 select t.ok(exists (select 1 from public.reservations where is_courtesy) and exists (select 1 from public.reservation_extras)
         and exists (select 1 from public.reservation_changes where kind = 'reubicacion') and exists (select 1 from public.maintenance_blocks),
   'Demo: cortesías, extras, cambios de carpa y mantenimiento');

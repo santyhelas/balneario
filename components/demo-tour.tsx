@@ -9,28 +9,43 @@ import { cx } from "@/components/ui";
  * - "guia": la guía de bienvenida para el propietario de un balneario nuevo.
  */
 
-export type Step = { path: string; sel: string | null; title: string; text: string };
+/**
+ * Un paso del recorrido. Con `menu`, el paso abre el menú de las tres rayas y señala esa sección
+ * (así se aprende dónde está cada cosa); el paso siguiente entra a la pantalla y la explica.
+ */
+export type Step = { path: string; sel: string | null; title: string; text: string; menu?: string };
 export type TourId = "demo" | "guia" | "novedades";
 
+/** Abre o cierra el menú lateral desde el recorrido (lo escucha el menú general). */
+export const TOUR_MENU_EVENT = "tutorial-menu";
+const openMenu = (open: boolean) => window.dispatchEvent(new CustomEvent<boolean>(TOUR_MENU_EVENT, { detail: open }));
+
+/** La demo, como un día de trabajo: de la apertura a la mañana hasta el cierre de la noche. */
 const DEMO_STEPS: Step[] = [
-  { path: "/", sel: null, title: "Bienvenido a la demo", text: "Es un balneario de prueba con clientes y reservas inventados. Te mostramos para qué sirve cada parte; después podés tocar todo lo que quieras." },
-  { path: "/", sel: "panel-stats", title: "Panel del día", text: "Lo primero que ves al entrar: carpas libres y ocupadas hoy, quién llega, quién se va, lo cobrado y lo gastado. Cada recuadro te lleva a su pantalla." },
-  { path: "/", sel: "semana", title: "Mañana y la semana", text: "Quién llega, quién se va o cambia de carpa mañana, y la ocupación de los próximos 7 días con el pronóstico. Desde acá le mandás el WhatsApp a quien se va debiendo." },
-  { path: "/", sel: "nueva-reserva", title: "Nueva reserva", text: "El botón más usado. Elegís cliente, fechas y carpa, el sistema calcula el precio y registrás el cobro o la seña." },
-  { path: "/", sel: "notas", title: "Notas del día", text: "Avisos para el personal, como «hoy viene el proveedor de hielo». Se ven en todas las computadoras y celulares y se tildan cuando están hechas." },
-  { path: "/", sel: "caja-chip", title: "Estado de la caja", text: "Te muestra si la caja del día está abierta. Tocándolo vas a la caja." },
-  { path: "/mapa", sel: "mapa", title: "Mapa del balneario", text: "La playa vista desde arriba. Rojo es ocupada (con el apellido), verde libre y amarillo llega mañana. Tocá una carpa para ver quién la tiene o reservarla. Con «Editar» las movés arrastrando." },
-  { path: "/disponibilidad", sel: "disp-filtros", title: "Disponibilidad", text: "Todas las carpas y sombrillas, día por día. Elegí desde y hasta, filtrá por tipo o buscá por apellido. Tocá un día libre y arrancás una reserva desde ahí." },
-  { path: "/reservas/nueva", sel: "nr-espacio", title: "Elegir la carpa", text: "Verde: libre todos los días. Ámbar: libre solo algunos. Si la que pide está ocupada unos días, te ofrece pasarlo a otra esos días o acortar la estadía. Vos decidís." },
-  { path: "/reservas/nueva", sel: "nr-resumen", title: "Precio y presupuesto", text: "El total exacto con descuentos. Si el cliente solo pregunta, tocá «Presupuesto por WhatsApp» y se lo mandás sin reservar nada." },
-  { path: "/cobros", sel: "cobros", title: "Cobros y deudas", text: "Quién debe y cuánto, primero los que terminan antes. Cobrás en efectivo, transferencia, tarjeta, Mercado Pago o dólares, y le mandás el recordatorio por WhatsApp." },
-  { path: "/caja", sel: "caja", title: "Caja diaria", text: "Abrís con el efectivo inicial, registrás gastos y al cerrar contás la plata: el sistema te dice si sobra o falta. También imprimís el cierre de tarjetas." },
-  { path: "/clientes", sel: "clientes", title: "Clientes", text: "Cada cliente con su historial de temporadas, carpas, pagos y deudas. Se puede descargar todo en Excel." },
-  { path: "/tarifas", sel: "tarifas", title: "Tarifario", text: "Los precios por día de cada quincena, para carpas y sombrillas. Se copian de un mes a otro o de una temporada a la otra." },
-  { path: "/renovacion", sel: "renovacion", title: "Renovación de temporada", text: "Los clientes del año pasado con su carpa de siempre, para ofrecérsela primero por WhatsApp. Te avisa si ya reservaron o si su lugar está tomado." },
-  { path: "/reportes", sel: "reportes", title: "Reportes", text: "Ocupación, lo contratado y lo cobrado, deudas, gastos y cierres de caja, entre las fechas que elijas. Todo se descarga." },
-  { path: "/historial", sel: "historial", title: "Historial", text: "Quién hizo cada cambio y cuándo. Nada se borra a escondidas, y muchos cambios se pueden deshacer." },
-  { path: "/", sel: "demo", title: "¡Listo! Ahora probalo vos", text: "Hacé reservas, cobrá, abrí la caja, mové carpas. Todo se borra al salir de la demo. Podés volver a ver este tutorial con «Ver tutorial»." },
+  { path: "/", sel: null, title: "Un día en el balneario", text: "Te acompañamos en un día de trabajo, de la mañana a la noche. Vas viendo cada pantalla en el momento en que se usa. Después podés tocar todo: nada de lo que hagas se guarda." },
+  { path: "/", sel: "panel-stats", title: "8:00 · Llegás y mirás el día", text: "Apenas entrás ves cómo está la playa hoy (libres, ocupadas, quién llega y quién se va) y la plata del día. Cada recuadro te lleva a su pantalla." },
+  { path: "/", sel: "avisos", title: "8:05 · Los avisos", text: "La campanita junta lo que hay que atender hoy: quién se va debiendo, quién llega, si quedó una caja sin cerrar. Al abrirla se apaga el número; cada aviso se puede quitar." },
+  { path: "/", sel: "caja-chip", title: "8:10 · Abrís la caja", text: "Lo primero del día: abrir la caja con el efectivo que hay. Desde acá ves si está abierta y entrás a la caja." },
+  { path: "/", sel: "nav-/mapa", menu: "/mapa", title: "8:30 · El menú", text: "Todas las secciones están en este menú (las tres rayas, arriba a la izquierda). Vamos al mapa para ver cómo amaneció la playa." },
+  { path: "/mapa", sel: "mapa", title: "El mapa de la playa", text: "Rojo: ocupada (con el apellido). Verde: libre. Amarillo: llega mañana. Gris: en mantenimiento. Tocá una carpa y se abre su ficha: ahí cambiás al cliente de lugar, traés a alguien de otra carpa o le sumás un extra." },
+  { path: "/mapa", sel: "clima", title: "El clima en la playa", text: "Temperatura, lluvia, humedad y viento de Mar del Plata, con la brújula sobre el plano: te dice de dónde viene el viento y dónde da el sol, para ubicar a quien pide reparo." },
+  { path: "/mapa", sel: "nueva-reserva", title: "10:00 · Llega un cliente nuevo", text: "Con «Nueva reserva» lo anotás en el momento: cliente, fechas y carpa." },
+  { path: "/reservas/nueva", sel: "nr-espacio", title: "Elegís la carpa", text: "Verde: libre todos los días. Ámbar: libre solo algunos. Si la que pide está ocupada unos días, te ofrece otra carpa para esos días dentro de la misma reserva." },
+  { path: "/reservas/nueva", sel: "nr-extras", title: "Reposeras y otros extras", text: "Si alquila reposeras o estacionamiento, lo sumás acá y entra en el total." },
+  { path: "/reservas/nueva", sel: "nr-resumen", title: "Precio y cobro", text: "El total exacto con descuentos. Elegís si pagó todo, dejó seña o paga después. Si solo pregunta, le mandás el presupuesto por WhatsApp sin reservar." },
+  { path: "/reservas/nueva", sel: "nav-/disponibilidad", menu: "/disponibilidad", title: "11:00 · Te preguntan por otra fecha", text: "Alguien llama: «¿tenés carpa para la semana que viene?». Vamos a Disponibilidad." },
+  { path: "/disponibilidad", sel: "disp-filtros", title: "Disponibilidad", text: "Todas las carpas día por día. Elegí las fechas o buscá por apellido; tocando un día libre arrancás la reserva desde ahí." },
+  { path: "/disponibilidad", sel: "notas", title: "12:00 · Notas para el equipo", text: "«Hoy viene el proveedor de hielo», «revisar la carpa 12». Se ven en todas las computadoras y celulares y se tildan al hacerlas." },
+  { path: "/disponibilidad", sel: "nav-/cobros", menu: "/cobros", title: "15:00 · Cobrar lo pendiente", text: "A la tarde, un repaso de quién debe. Vamos a Cobros y señas." },
+  { path: "/cobros", sel: "cobros", title: "Cobros y deudas", text: "Quién debe y cuánto, primero los que se van antes. Cobrás en efectivo, transferencia, tarjeta o dólares, y le mandás el recordatorio por WhatsApp o mail." },
+  { path: "/cobros", sel: "nuevo-gasto", title: "17:00 · Pagás un gasto", text: "Le pagaste al del hielo: «Nuevo gasto» lo descuenta de la caja si fue en efectivo." },
+  { path: "/cobros", sel: "nav-/clientes", menu: "/clientes", title: "18:00 · Tus clientes", text: "Cada persona que alquiló, con su historial." },
+  { path: "/clientes", sel: "clientes", title: "Clientes", text: "Teléfono, carpas de cada temporada, pagos y deudas. Desde acá le escribís por WhatsApp o mail, y bajás todo en Excel." },
+  { path: "/clientes", sel: "nav-/caja", menu: "/caja", title: "20:00 · Cierre del día", text: "Termina el día: volvemos a la caja para cerrarla." },
+  { path: "/caja", sel: "caja", title: "Cerrar la caja", text: "Contás la plata y el sistema te dice si sobra o falta. Lo de tarjeta y transferencia va aparte, e imprimís el cierre de tarjetas para comparar con el posnet." },
+  { path: "/caja", sel: "nav-/reportes", menu: "/reportes", title: "Y cuando quieras ver números", text: "Reportes junta todo: ocupación, lo contratado y lo cobrado, gastos y cierres. En el menú también están el Tarifario, la Renovación de temporada y el Historial de cambios." },
+  { path: "/reportes", sel: "reportes", title: "Reportes", text: "Elegís las fechas y ves cómo te fue. Todo se descarga o se imprime." },
+  { path: "/", sel: "demo", title: "¡Listo! Ahora probalo vos", text: "Hacé reservas, cobrá, mové carpas, cerrá la caja. Todo se borra al salir de la demo. Este recorrido se vuelve a ver con «Ver tutorial»." },
 ];
 
 /** Guía de bienvenida: lo que hay que dejar listo antes de la primera reserva. */
@@ -153,6 +168,7 @@ export function Tour({ id, enabled, unseen = true, onFinish, finalLabel = "Termi
   }, [enabled, unseen, KEY_STEP, KEY_DONE, STEPS.length]);
 
   const finish = useCallback(() => {
+    openMenu(false);
     ss.del(KEY_STEP);
     ss.set(KEY_DONE, "1");
     setStep(null);
@@ -168,19 +184,22 @@ export function Tour({ id, enabled, unseen = true, onFinish, finalLabel = "Termi
     setStep(n);
   }, [finish, STEPS.length, KEY_STEP]);
 
-  // Lleva a la pantalla del paso y busca la parte a mostrar.
+  // Lleva a la pantalla del paso, abre el menú si el paso lo señala, y busca la parte a mostrar.
   useEffect(() => {
     if (step === null) return;
     const s = STEPS[step];
-    if (pathname !== s.path) { router.push(s.path); return; }
+    if (pathname !== s.path) { openMenu(false); router.push(s.path); return; }
+    openMenu(!!s.menu);
     target.current = null;
     setRect(null);
     if (!s.sel) { setSearching(false); return; }
     setSearching(true);
     let tries = 0;
     const id = setInterval(() => {
-      const el = findVisible(s.sel!);
       tries += 1;
+      // El menú entra deslizándose: se espera a que termine para marcar la sección en su lugar.
+      if (s.menu && tries < 4) return;
+      const el = findVisible(s.sel!);
       if (el || tries > 40) {
         clearInterval(id);
         setSearching(false);

@@ -491,7 +491,7 @@ export default function MapaPage() {
       />
       <SyncNotice error={error} stale={stale} updatedAt={updatedAt} onRetry={reload} />
 
-      <WeatherStrip className="mb-3" />
+      <div data-tour="clima" className="mb-3"><WeatherStrip /></div>
 
       <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
         <div className="flex flex-wrap items-end gap-2">
