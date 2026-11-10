@@ -422,7 +422,14 @@ for (const [view, opts] of Object.entries(VIEWS)) {
       await page.getByRole("button", { name: "Editar plano" }).click();
       const svg = page.locator('svg[aria-label="Plano del balneario"]');
       const tents = svg.locator('g[role="button"]');
-      const pos = async (i) => { const b = await tents.nth(i).boundingBox(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 }; };
+      // Dos carpas vecinas (las más cercanas entre las primeras 30), para que el recuadro no agarre otras cosas.
+      const nTents = Math.min(30, await tents.count());
+      const boxes = [];
+      for (let i = 0; i < nTents; i++) { const b = await tents.nth(i).boundingBox(); if (b) boxes.push({ i, x: b.x + b.width / 2, y: b.y + b.height / 2 }); }
+      let pair = [0, 1], best = Infinity;
+      for (const a of boxes) for (const b of boxes) if (a.i < b.i) { const d = Math.hypot(a.x - b.x, a.y - b.y); if (d < best) { best = d; pair = [a.i, b.i]; } }
+      const [I0, I1] = pair;
+      const pos = async (i) => { const b = await tents.nth(i === 0 ? I0 : i === 1 ? I1 : i).boundingBox(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 }; };
       const a0 = await pos(0), a1 = await pos(1);
       // Recuadro que encierra las dos primeras (empezando sobre la arena, un poco afuera).
       const x0 = Math.min(a0.x, a1.x) - 30, y0 = Math.min(a0.y, a1.y) - 30, x1 = Math.max(a0.x, a1.x) + 30, y1 = Math.max(a0.y, a1.y) + 30;
@@ -432,7 +439,7 @@ for (const [view, opts] of Object.entries(VIEWS)) {
       // Mover el grupo (se mide de nuevo: el plano pudo correrse)
       await page.waitForTimeout(500);
       const before = await pos(0);
-      const t0 = await tents.nth(0).getAttribute("transform");
+      const t0 = await tents.nth(I0).getAttribute("transform");
       const b0 = before;
       await page.mouse.move(b0.x, b0.y); await page.mouse.down(); await page.mouse.move(b0.x + 20, b0.y + 20, { steps: 6 }); await page.mouse.move(b0.x + 40, b0.y + 25, { steps: 6 }); await page.mouse.up();
       await page.waitForTimeout(2500);
@@ -457,7 +464,7 @@ for (const [view, opts] of Object.entries(VIEWS)) {
       await page.getByRole("dialog").getByRole("button", { name: "Dejar como estaba" }).click();
       await page.getByText("quedó como estaba").waitFor({ timeout: 20000 }).catch(() => {});
       await page.waitForTimeout(1500);
-      const t1 = await tents.nth(0).getAttribute("transform");
+      const t1 = await tents.nth(I0).getAttribute("transform");
       const restored = t0 === t1;
       f6.pasos.push(restored ? "deshacer: volvió a su lugar" : `deshacer: NO volvió (${t0} → ${t1})`);
       await page.getByRole("button", { name: "Terminar edición" }).click();
