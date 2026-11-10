@@ -63,6 +63,7 @@ export default function AdminPage() {
   const q = useLoader(async () => unwrap(await sb.rpc("admin_overview")) as Overview, [], 60_000);
   const [pausing, setPausing] = useState<Balneario | null>(null);
   const [resuming, setResuming] = useState<Balneario | null>(null);
+  const [deleting, setDeleting] = useState<Balneario | null>(null);
   const [revoking, setRevoking] = useState<Habilitacion | null>(null);
   const [planFor, setPlanFor] = useState<Balneario | null>(null);
   const [limitsFor, setLimitsFor] = useState<Balneario | null>(null);
@@ -194,7 +195,7 @@ export default function AdminPage() {
                     {list.map((b) => (
                       <BalnearioCard key={b.id} b={b} hoy={d.hoy} mine={b.id === ws.id}
                         onPlan={() => setPlanFor(b)} onPay={() => setPayFor(b)} onLimits={() => setLimitsFor(b)}
-                        onPause={() => setPausing(b)} onResume={() => setResuming(b)} />
+                        onPause={() => setPausing(b)} onResume={() => setResuming(b)} onDelete={() => setDeleting(b)} />
                     ))}
                   </div>
                 );
@@ -229,6 +230,11 @@ export default function AdminPage() {
 
       {limitsFor && <LimitsModal b={limitsFor} busy={busy} onClose={() => setLimitsFor(null)}
         onSave={async (t, u) => { if (await run(() => sb.rpc("admin_set_space_limits", { p_workspace_id: limitsFor.id, p_tents: t, p_umbrellas: u }), `Cantidad de ${limitsFor.nombre} guardada.`)) setLimitsFor(null); }} />}
+      {deleting && <DeleteModal b={deleting} busy={busy} onClose={() => setDeleting(null)}
+        onConfirm={async (name) => {
+          const ok = await run(() => sb.rpc("admin_delete_workspace", { p_workspace_id: deleting.id, p_confirm_name: name }), `${deleting.nombre} se eliminó. Quedó guardada una copia por si hay que recuperarlo.`);
+          if (ok) setDeleting(null);
+        }} />}
       {pausing && <PauseModal b={pausing} busy={busy} onClose={() => setPausing(null)}
         onConfirm={async (reason) => { if (await run(() => sb.rpc("admin_set_paused", { p_workspace_id: pausing.id, p_paused: true, p_reason: reason }), `${pausing.nombre} quedó en pausa.`)) setPausing(null); }} />}
       {planFor && d && <PlanModal b={planFor} prices={d.precios} busy={busy} onClose={() => setPlanFor(null)}
@@ -441,8 +447,26 @@ function LimitsModal({ b, busy, onClose, onSave }: { b: Balneario; busy: boolean
 }
 
 /** Ficha de un balneario: todo a la vista en filas con su nombre, y las acciones abajo. */
-function BalnearioCard({ b, hoy, mine, onPlan, onPay, onLimits, onPause, onResume }: {
-  b: Balneario; hoy: string; mine: boolean; onPlan: () => void; onPay: () => void; onLimits: () => void; onPause: () => void; onResume: () => void;
+/** Eliminar un balneario con todos sus datos: hay que escribir su nombre para confirmar. */
+function DeleteModal({ b, busy, onClose, onConfirm }: { b: Balneario; busy: boolean; onClose: () => void; onConfirm: (name: string) => void }) {
+  const [name, setName] = useState("");
+  const ok = name.trim() === b.nombre.trim();
+  return (
+    <Modal open onClose={onClose} busy={busy} title={`Eliminar ${b.nombre}`}
+      footer={<><Button variant="secondary" onClick={onClose} disabled={busy}>Cancelar</Button>
+        <Button variant="danger" loading={busy} disabled={!ok} onClick={() => onConfirm(name)}>Eliminar para siempre</Button></>}>
+      <Alert tone="danger">
+        Se borran el balneario, sus usuarios, clientes, reservas, pagos, caja y todo su historial. Ellos dejan de poder entrar.
+        {b.pausado ? "" : " Si solo querés frenarlo (por ejemplo, por falta de pago), usá «Pausar»: se puede reactivar."}
+      </Alert>
+      <p className="text-sm text-muted">Se guarda una copia completa en la base por si hay que recuperarlo.</p>
+      <TextField label={`Para confirmar, escribí: ${b.nombre}`} value={name} onChange={(e) => setName(e.target.value)} autoComplete="off" />
+    </Modal>
+  );
+}
+
+function BalnearioCard({ b, hoy, mine, onPlan, onPay, onLimits, onPause, onResume, onDelete }: {
+  b: Balneario; hoy: string; mine: boolean; onPlan: () => void; onPay: () => void; onLimits: () => void; onPause: () => void; onResume: () => void; onDelete: () => void;
 }) {
   const p = b.plan;
   const ago = daysAgo(b.ultimo_uso);
@@ -500,6 +524,7 @@ function BalnearioCard({ b, hoy, mine, onPlan, onPay, onLimits, onPause, onResum
         {!mine && (b.pausado
           ? <Button variant="primary" onClick={onResume}>Reactivar</Button>
           : <Button variant="ghost" className="text-danger" onClick={onPause}>Pausar</Button>)}
+        {!mine && <Button variant="ghost" className="text-danger" onClick={onDelete}>Eliminar</Button>}
       </div>
     </div>
   );

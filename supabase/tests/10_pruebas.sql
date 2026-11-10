@@ -1207,6 +1207,26 @@ select t.throws(format($$select public.create_reservation_v3(%L, gen_random_uuid
 select t.ok(not exists (select 1 from public.reservations where workspace_id = t.uid('ws') and start_date = '2027-04-10'), 'Reserva con extras: tras el error no quedó nada guardado');
 select public.close_cash_session(t.uid('session'), 0, (select version from public.cash_sessions where id = t.uid('session')), null);
 
+-- 44. Achicar corriendo el plano a lo largo de la costa, y borrar un balneario desde el panel del dueño
+select set_config('request.jwt.claims', '{"sub":"99999999-9999-9999-9999-999999999999","email":"cliente@test.com"}', false);
+select t.set('wsv', (select version::text || ',' || map_width || ',' || map_height || ',' || sea_side from public.workspaces where id = t.uid('wsC')));
+select t.set('sx', (select min(x)::text from public.spaces where workspace_id = t.uid('wsC') and active));
+select public.resize_map_at(t.uid('wsC'), split_part(t.get('wsv'), ',', 2)::int + 200, split_part(t.get('wsv'), ',', 3)::int + 200, split_part(t.get('wsv'), ',', 1)::int, 0);
+select t.ok(case when split_part(t.get('wsv'), ',', 4) in ('top','bottom') then (select min(x) from public.spaces where workspace_id = t.uid('wsC') and active) = t.get('sx')::numeric else true end,
+  'Achicar/agrandar: con corrimiento 0 las carpas no se mueven a lo largo de la costa');
+select set_config('request.jwt.claims', '{"sub":"11111111-1111-1111-1111-111111111111","email":"duenio@test.com"}', false);
+select t.throws(format($$select public.admin_delete_workspace(%L, 'Otro nombre')$$, t.get('wsC')), 'nombre exacto', 'Borrar balneario: pide el nombre exacto');
+select set_config('request.jwt.claims', '{"sub":"99999999-9999-9999-9999-999999999999","email":"cliente@test.com"}', false);
+select t.throws(format($$select public.admin_delete_workspace(%L, 'La Ola')$$, t.get('wsC')), 'permiso', 'Borrar balneario: un balneario no puede borrarse a sí mismo desde acá');
+select set_config('request.jwt.claims', '{"sub":"11111111-1111-1111-1111-111111111111","email":"duenio@test.com"}', false);
+select public.admin_delete_workspace(t.uid('wsC'), 'La Ola');
+reset role;
+select t.ok(not exists (select 1 from public.workspaces where id = t.uid('wsC')) and not exists (select 1 from public.spaces where workspace_id = t.uid('wsC'))
+            and not exists (select 1 from public.reservations where workspace_id = t.uid('wsC')), 'Borrar balneario: se borra con todos sus datos');
+select t.ok(exists (select 1 from private.deleted_workspaces where id = t.uid('wsC') and snapshot ? 'reservations'), 'Borrar balneario: queda una copia completa por si hay que recuperarlo');
+select t.ok(exists (select 1 from public.workspaces where id = t.uid('ws')), 'Borrar balneario: los demás balnearios siguen intactos');
+set role authenticated;
+
 reset role;
 \o
 -- Resultado ----------------------------------------------------------

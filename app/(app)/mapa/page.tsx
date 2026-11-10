@@ -13,7 +13,7 @@ import { WeatherStrip, WindCompass, type CompassLayout } from "@/components/weat
 import { RelocateModal } from "@/components/relocate";
 import { QuickAddExtra } from "@/components/extras";
 import { loadReservation, type Full } from "@/lib/reservations";
-import { DEFAULT_TENT_STYLE, normalizeTentStyle, STATE_COLOR, STATE_LABEL, type SpaceState, type TentStyle } from "@/components/map/icons";
+import { DEFAULT_TENT_STYLE, normalizeTentStyle, STATE_COLOR, STATE_LABEL, TENT_H, TENT_W, UMBRELLA_R, type SpaceState, type TentStyle } from "@/components/map/icons";
 import { TentDesigner } from "@/components/map/TentDesigner";
 
 type DayStatus = MapSpace & {
@@ -111,16 +111,27 @@ export default function MapaPage() {
   const [showLimit, setShowLimit] = useState(false);
   const [hoverShrink, setHoverShrink] = useState(false);
   /** Agranda o achica el plano: lo que está cerca del mar queda cerca del mar; el lugar nuevo va del lado de tierra. */
-  async function resize(factor: number) {
-    const w = Math.round(Math.min(20000, Math.max(400, ws.map_width * factor)));
-    const h = Math.round(Math.min(20000, Math.max(400, ws.map_height * factor)));
-    if (w === ws.map_width && h === ws.map_height) return;
+  async function resize(factor: number, target?: { w: number; h: number; shift: number }) {
+    const w = target ? target.w : Math.round(Math.min(20000, Math.max(400, ws.map_width * factor)));
+    const h = target ? target.h : Math.round(Math.min(20000, Math.max(400, ws.map_height * factor)));
+    if (w === ws.map_width && h === ws.map_height) {
+      setMessage({ tone: "danger", text: "No se puede achicar más: las carpas y elementos ya ocupan todo el plano." });
+      return;
+    }
     setResizing(true);
     setMessage(null);
-    const { error } = await getSupabase().rpc("resize_map", { p_workspace_id: ws.id, p_width: w, p_height: h, p_expected_version: ws.version });
+    const sb2 = getSupabase();
+    // Versión al día (la brújula o el diseño pudieron cambiarla recién).
+    const cur = await sb2.from("workspaces").select("version").eq("id", ws.id).single();
+    const version = cur.error ? ws.version : (cur.data as { version: number }).version;
+    let { error } = target
+      ? await sb2.rpc("resize_map_at", { p_workspace_id: ws.id, p_width: w, p_height: h, p_expected_version: version, p_shift: target.shift })
+      : await sb2.rpc("resize_map", { p_workspace_id: ws.id, p_width: w, p_height: h, p_expected_version: version });
+    // Sin la actualización 0043: se achica como antes (centrado).
+    if (error?.code === "PGRST202" && target) ({ error } = await sb2.rpc("resize_map", { p_workspace_id: ws.id, p_width: w, p_height: h, p_expected_version: version }));
     setResizing(false);
     if (error) {
-      setMessage({ tone: "danger", text: error.code === "PGRST202" ? "Para cambiar el tamaño del plano hay que aplicar la actualización 0033." : `${friendlyError(error)} La línea roja punteada marca hasta dónde llegaría el plano; lo marcado en rojo queda afuera.` });
+      setMessage({ tone: "danger", text: error.code === "PGRST202" ? "Para cambiar el tamaño del plano hay que aplicar la actualización 0033." : friendlyError(error) });
       if (factor < 1) setShowLimit(true);
       return;
     }
@@ -377,16 +388,41 @@ export default function MapaPage() {
   }, [spaces]);
 
   // Hasta dónde llegaría el plano si se achica (mismo cálculo que la base: el lado del mar queda fijo).
+  /**
+   * Cómo queda el plano al achicarlo: se recorta lo vacío sin cortar ninguna carpa ni elemento.
+   * El lado del mar queda fijo (nada se acerca ni se aleja del agua); a lo largo de la costa
+   * se corre lo justo para que todo entre. «fit» = lo más chico posible (ajustado a lo que hay).
+   */
   const shrink = useMemo(() => {
-    const W = ws.map_width, H = ws.map_height;
-    const w = Math.round(Math.max(400, W * 0.8)), h = Math.round(Math.max(400, H * 0.8));
-    const dx = ws.sea_side === "left" ? 0 : ws.sea_side === "right" ? w - W : Math.round((w - W) / 2);
-    const dy = ws.sea_side === "top" ? 0 : ws.sea_side === "bottom" ? h - H : Math.round((h - H) / 2);
-    const rect = { x: -dx, y: -dy, w, h };
-    const inside = (x: number, y: number) => x >= rect.x && x <= rect.x + w && y >= rect.y && y <= rect.y + h;
-    const outSpaces = new Set((data ?? []).filter((x) => x.active && !inside(Number(x.x), Number(x.y))).map((x) => x.space_id));
-    const outFeatures = (featuresQ.data ?? []).filter((f) => !inside(Number(f.x), Number(f.y))).length;
-    return { rect, outSpaces, outFeatures, possible: w < W || h < H };
+    const W = ws.map_width, H = ws.map_height, M = 40;
+    const items = [
+      ...(data ?? []).filter((x) => x.active).map((x) => {
+        const r = x.kind === "carpa" ? Math.max(TENT_W, TENT_H) / 2 + 10 : UMBRELLA_R + 6;
+        return { x: Number(x.x), y: Number(x.y), r };
+      }),
+      ...(featuresQ.data ?? []).map((f) => ({ x: Number(f.x), y: Number(f.y), r: Math.max(Number(f.width), Number(f.height)) / 2 })),
+    ];
+    if (!items.length) return null;
+    const minX = Math.min(...items.map((i) => i.x - i.r)) - M, maxX = Math.max(...items.map((i) => i.x + i.r)) + M;
+    const minY = Math.min(...items.map((i) => i.y - i.r)) - M, maxY = Math.max(...items.map((i) => i.y + i.r)) + M;
+    const horizCoast = ws.sea_side === "top" || ws.sea_side === "bottom";
+    // Lo mínimo que tiene que medir cada lado para que todo entre.
+    const seaNeed = (lo: number, hi: number, size: number, seaAtStart: boolean) => (seaAtStart ? hi : size - lo);
+    const minW = Math.max(400, Math.ceil(horizCoast ? maxX - minX : seaNeed(minX, maxX, W, ws.sea_side === "left")));
+    const minH = Math.max(400, Math.ceil(horizCoast ? seaNeed(minY, maxY, H, ws.sea_side === "top") : maxY - minY));
+    const plan = (w: number, h: number) => {
+      w = Math.min(W, Math.max(minW, Math.round(w)));
+      h = Math.min(H, Math.max(minH, Math.round(h)));
+      const clamp = (v: number, lo: number, hi: number) => Math.min(Math.max(v, lo), Math.max(lo, hi));
+      // Corrimiento a lo largo de la costa: centrado si se puede, si no lo justo para no cortar nada.
+      const shift = horizCoast
+        ? clamp(Math.round((w - W) / 2), Math.ceil(-Math.max(0, minX)), Math.floor(w - Math.min(W, maxX)))
+        : clamp(Math.round((h - H) / 2), Math.ceil(-Math.max(0, minY)), Math.floor(h - Math.min(H, maxY)));
+      const dx = horizCoast ? shift : ws.sea_side === "left" ? 0 : w - W;
+      const dy = horizCoast ? (ws.sea_side === "top" ? 0 : h - H) : shift;
+      return { w, h, shift, rect: { x: -dx, y: -dy, w, h }, possible: w < W || h < H };
+    };
+    return { step: plan(W * 0.8, H * 0.8), fit: plan(minW, minH) };
   }, [ws.map_width, ws.map_height, ws.sea_side, data, featuresQ.data]);
   const limitVisible = editMode && (showLimit || hoverShrink);
 
@@ -495,20 +531,22 @@ export default function MapaPage() {
             </Button>
           )}
           <span className="text-xs text-muted">Tocá un elemento para editarlo; arrastralo para moverlo. La brújula también se arrastra y se agranda o achica.</span>
-          {limitVisible && (
+          {limitVisible && shrink && (
             <span className="basis-full text-xs font-medium text-danger">
-              {shrink.outSpaces.size || shrink.outFeatures
-                ? `Para achicar, mové hacia adentro de la línea roja: ${shrink.outSpaces.size ? `${shrink.outSpaces.size} ${shrink.outSpaces.size === 1 ? "carpa o sombrilla" : "carpas o sombrillas"} (marcadas en rojo)` : ""}${shrink.outSpaces.size && shrink.outFeatures ? " y " : ""}${shrink.outFeatures ? `${shrink.outFeatures} ${shrink.outFeatures === 1 ? "elemento" : "elementos"}` : ""}.`
-                : "Todo entra: al achicar, el plano queda hasta la línea roja."}
+              {shrink.step.possible
+                ? "La línea roja muestra cómo queda el plano al achicar: se recorta lo vacío y ninguna carpa queda afuera."
+                : "No se puede achicar más: las carpas y elementos ya ocupan todo el plano. Juntalas o mové las de los bordes."}
             </span>
           )}
           {isAdmin && (
             <span className="ml-auto flex items-center gap-1.5">
               <span className="text-xs text-muted">Tamaño del plano:</span>
               <span onMouseEnter={() => setHoverShrink(true)} onMouseLeave={() => setHoverShrink(false)}>
-                <Button variant="secondary" className="py-1.5" disabled={resizing || !shrink.possible} onClick={() => resize(0.8)}
-                  title="Achicar el plano: la línea roja muestra hasta dónde llegaría">Achicar</Button>
+                <Button variant="secondary" className="py-1.5" disabled={resizing || !shrink?.step.possible} onClick={() => shrink && resize(0.8, shrink.step)}
+                  title="Achicar el plano: la línea roja muestra cómo queda">Achicar</Button>
               </span>
+              <Button variant="secondary" className="py-1.5" disabled={resizing || !shrink?.fit.possible} onClick={() => shrink && resize(0.8, shrink.fit)}
+                title="Achica el plano lo justo para que entre todo lo que hay">Ajustar a las carpas</Button>
               <Button variant="ghost" className="py-1.5 text-xs" onClick={() => setShowLimit((v) => !v)} aria-pressed={showLimit}>
                 {showLimit ? "Ocultar límite" : "Ver límite"}
               </Button>
@@ -551,8 +589,7 @@ export default function MapaPage() {
             onMoveMany={moveMany}
             overlay={<WindCompass seaSide={ws.sea_side} layout={compass} editable={editMode && isAdmin && compassReady} onLayoutChange={(l) => void saveCompass(l)} />}
             design={design}
-            guide={limitVisible && shrink.possible ? { ...shrink.rect, label: "Límite si achicás" } : null}
-            flagged={limitVisible ? shrink.outSpaces : undefined}
+            guide={limitVisible && shrink?.step.possible ? { ...shrink.step.rect, label: "Así queda si achicás" } : null}
           />
         ) : (
           <div className="flex aspect-[4/3] items-center justify-center rounded-2xl bg-surface-2 text-muted">

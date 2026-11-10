@@ -108,6 +108,16 @@ export function BeachMap({
   const setSaving = (id: string | null) => setSavingIds(id ? new Set([id]) : new Set());
   const [marquee, setMarquee] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
   const drag = useRef<Drag>(null);
+  const [fullscreen, setFullscreen] = useState(false);
+  // En pantalla completa: Esc sale (si no se está arrastrando) y la página de atrás no se desplaza.
+  useEffect(() => {
+    if (!fullscreen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape" && !drag.current && !document.querySelector("[role=dialog]")) setFullscreen(false); };
+    window.addEventListener("keydown", onKey);
+    return () => { document.body.style.overflow = prev; window.removeEventListener("keydown", onKey); };
+  }, [fullscreen]);
   const pointers = useRef(new Map<number, { x: number; y: number }>());
   const zoomed = view.w < width - 1;
 
@@ -201,7 +211,8 @@ export function BeachMap({
     return () => el.removeEventListener("wheel", onWheel);
   }, [toSvg, zoomAt]);
 
-  const unitsPerPx = (v: View) => v.w / svgRef.current!.getBoundingClientRect().width;
+  // Con el plano centrado en la pantalla completa, manda el lado que se ajusta (como «meet»).
+  const unitsPerPx = (v: View) => { const r = svgRef.current!.getBoundingClientRect(); return Math.max(v.w / r.width, v.h / r.height); };
   const pinchInfo = () => {
     const [a, b] = [...pointers.current.values()];
     return { dist: Math.hypot(a.x - b.x, a.y - b.y), mid: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 } };
@@ -508,13 +519,15 @@ export function BeachMap({
   const saving = (id: string) => savingIds.has(id);
 
   return (
-    // El plano entero entra en la pantalla (también los balnearios grandes y largos): el ancho se ajusta al alto disponible.
-    <div className="relative mx-auto" ref={wrapRef} style={{ width: `min(100%, calc((100dvh - 8rem) * ${width} / ${height}), calc(${width}px * 4))`, minWidth: "min(100%, 320px)" }}>
+    // Pantalla completa: el plano ocupa toda la pantalla y se ve entero (con todas las carpas).
+    <div className={cx(fullscreen ? "fixed inset-0 z-40 flex items-center justify-center bg-[var(--sand)] p-2 sm:p-4" : "relative")} ref={wrapRef}>
+      <div className={cx("relative", fullscreen ? "h-full w-full" : "w-full")}>
       <svg
         ref={svgRef}
         viewBox={`${view.x} ${view.y} ${view.w} ${view.h}`}
-        style={{ aspectRatio: `${width} / ${height}`, touchAction: zoomed || editMode ? "none" : "pan-y" }}
-        className={cx("block w-full select-none rounded-2xl", zoomed && "cursor-grab")}
+        preserveAspectRatio="xMidYMid meet"
+        style={fullscreen ? { touchAction: "none" } : { aspectRatio: `${width} / ${height}`, touchAction: zoomed || editMode ? "none" : "pan-y" }}
+        className={cx("block select-none rounded-2xl", fullscreen ? "h-full w-full" : "w-full", zoomed && "cursor-grab")}
         onPointerDownCapture={onPointerDownCapture}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
@@ -618,10 +631,13 @@ export function BeachMap({
 
       {overlay}
 
-      <div className="absolute right-3 top-3 flex gap-1 print:hidden">
+      <div className="absolute right-3 top-3 z-[2] flex gap-1 print:hidden">
         <MapBtn label="Acercar" onClick={() => zoomAt(view.x + view.w / 2, view.y + view.h / 2, 0.75)}>+</MapBtn>
         <MapBtn label="Alejar" onClick={() => zoomAt(view.x + view.w / 2, view.y + view.h / 2, 1 / 0.75)} disabled={!zoomed}>−</MapBtn>
         {zoomed && <MapBtn label="Ver todo el plano" onClick={() => setView(full)}>⤢</MapBtn>}
+        <MapBtn label={fullscreen ? "Salir de pantalla completa (Esc)" : "Pantalla completa"} onClick={() => { setFullscreen((v) => !v); setView(full); }}>
+          {fullscreen ? "✕" : "⛶"}
+        </MapBtn>
       </div>
       {zoomed && !editMode && (
         <p className="pointer-events-none absolute bottom-3 left-3 rounded-lg bg-surface/90 px-2 py-1 text-[11px] text-muted print:hidden">
@@ -629,6 +645,7 @@ export function BeachMap({
         </p>
       )}
       {editMode && <Shortcuts />}
+      </div>
     </div>
   );
 }
