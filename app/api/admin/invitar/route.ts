@@ -4,8 +4,8 @@ import { SERVER_KEY_MISSING, json } from "@/lib/auth-server";
 import { SITE_URL } from "@/lib/site";
 
 // Panel del dueño: le manda al cliente habilitado un mail para que elija su usuario y contraseña.
-// Si la cuenta todavía no existe se usa la invitación de Supabase; si ya existe (por ejemplo,
-// entró antes con Google), un mail para elegir contraseña. En los dos casos el enlace vuelve a
+// Si la cuenta todavía no existe se usa la invitación de Supabase (plantilla «Invite user»); si ya existe
+// (por ejemplo, entró antes con Google), un enlace de acceso (plantilla «Magic Link»). En los dos casos el enlace vuelve a
 // /auth/bienvenida, que deja la sesión iniciada y pide usuario y contraseña.
 export async function POST(req: Request) {
   const sb = await getServerSupabase();
@@ -28,9 +28,11 @@ export async function POST(req: Request) {
   const inv = await admin.auth.admin.inviteUserByEmail(email, { redirectTo });
   if (!inv.error) return json({ ok: true, tipo: "invitacion" });
   if (/already|registered|exists/i.test(inv.error.message)) {
-    const rec = await admin.auth.resetPasswordForEmail(email, { redirectTo });
-    if (!rec.error) return json({ ok: true, tipo: "ya_tenia_cuenta" });
-    return json({ error: mailProblem(rec.error.message) }, 502);
+    // Ya tenía cuenta: se manda un enlace de acceso (plantilla «Magic Link» de Supabase, que en
+    // Mi Balneario solo se usa para esto) en vez del mail de «restablecer contraseña».
+    const otp = await admin.auth.signInWithOtp({ email, options: { shouldCreateUser: false, emailRedirectTo: redirectTo } });
+    if (!otp.error) return json({ ok: true, tipo: "ya_tenia_cuenta" });
+    return json({ error: mailProblem(otp.error.message) }, 502);
   }
   return json({ error: mailProblem(inv.error.message) }, 502);
 }
