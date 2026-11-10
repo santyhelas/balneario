@@ -567,14 +567,13 @@ for (const [view, opts] of Object.entries(VIEWS)) {
   const p2 = await ctx2.newPage();
   const f12 = { flujo: "Ingreso: aviso tras 3 contraseñas incorrectas", pasos: [] };
   try {
-    await p2.goto(BASE + "/login", { waitUntil: "networkidle" });
+    await p2.goto(DEMO + "/login", { waitUntil: "networkidle" });
     for (let i = 0; i < 3; i++) {
       await p2.getByLabel("Usuario").fill("nadie-de-prueba");
       await p2.locator("#pw").fill("incorrecta" + i);
-      await p2.waitForFunction(() => !document.querySelector('form button[type="submit"]')?.disabled, null, { timeout: 40000 });
-      await p2.getByRole("button", { name: "Ingresar" }).click();
-      await p2.waitForTimeout(1500);
-      await p2.waitForFunction(() => !document.querySelector('form button[type="submit"]')?.disabled, null, { timeout: 40000 });
+      await p2.getByRole("button", { name: /Ingresar/ }).first().click({ timeout: 40000 });
+      await passCaptcha(p2, 20000);
+      await p2.waitForTimeout(4000);
     }
     const shown = await p2.getByText("¿Te olvidaste la contraseña?").isVisible().catch(() => false);
     f12.pasos.push(shown ? "aviso visible" : `sin aviso: ${(await p2.locator('[role="alert"]').allInnerTexts()).join(" | ").slice(0, 160)}`);
@@ -585,7 +584,7 @@ for (const [view, opts] of Object.entries(VIEWS)) {
   // m) Página de bienvenida sin enlace válido: muestra el error, no se rompe
   const f13 = { flujo: "Bienvenida sin invitación válida", pasos: [] };
   try {
-    await p2.goto(BASE + "/auth/bienvenida", { waitUntil: "networkidle" });
+    await p2.goto(DEMO + "/auth/bienvenida", { waitUntil: "networkidle" });
     await p2.waitForTimeout(1500);
     const t = await p2.locator("main").innerText();
     f13.pasos.push(t.replace(/\s+/g, " ").slice(0, 120));
