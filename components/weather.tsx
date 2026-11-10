@@ -1,5 +1,5 @@
 "use client";
-import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type PointerEvent as RPointerEvent, type ReactNode } from "react";
 import { cardinal, cardinalName, sunPosition, sunTimes } from "@/lib/sun";
 import { formatTemperature } from "@/lib/format";
 import { useWorkspace } from "@/components/workspace";
@@ -289,9 +289,60 @@ function Metric({ label, children }: { label: string; children: ReactNode }) {
  * Brújula sobre el plano, con el Norte arriba (igual que la flecha del pronóstico):
  * solo los puntos cardinales, el sol donde está ahora y la flecha de hacia dónde va el viento.
  */
-export function WindCompass({ seaSide }: { seaSide: "top" | "bottom" | "left" | "right" }) {
+export type CompassLayout = { x: number; y: number; scale: number };
+
+export function WindCompass({ seaSide, layout = null, editable = false, onLayoutChange }: {
+  seaSide: "top" | "bottom" | "left" | "right";
+  /** Dónde va (centro, en % del plano) y su tamaño; null = abajo a la derecha, tamaño normal. */
+  layout?: CompassLayout | null;
+  /** En la edición del plano: se arrastra para moverla y se agranda o achica con los botones. */
+  editable?: boolean;
+  onLayoutChange?: (l: CompassLayout | null) => void;
+}) {
   const { ws } = useWorkspace();
   const w = useWeather();
+  const boxRef = useRef<HTMLDivElement>(null);
+  const [live, setLive] = useState<CompassLayout | null>(layout);
+  useEffect(() => setLive(layout), [layout]);
+  const dragRef = useRef<{ px: number; py: number; start: CompassLayout; rect: DOMRect; moved: boolean } | null>(null);
+
+  function current(): CompassLayout {
+    if (live) return live;
+    const el = boxRef.current;
+    const parent = el?.parentElement;
+    if (!el || !parent) return { x: 85, y: 85, scale: 1 };
+    const r = el.getBoundingClientRect();
+    const p = parent.getBoundingClientRect();
+    return { x: ((r.left + r.width / 2 - p.left) / p.width) * 100, y: ((r.top + r.height / 2 - p.top) / p.height) * 100, scale: 1 };
+  }
+  function onDown(e: RPointerEvent<HTMLDivElement>) {
+    if (!editable || (e.target as HTMLElement).closest("button")) return;
+    const parent = boxRef.current?.parentElement;
+    if (!parent) return;
+    e.preventDefault();
+    e.stopPropagation();
+    (e.currentTarget as HTMLDivElement).setPointerCapture(e.pointerId);
+    dragRef.current = { px: e.clientX, py: e.clientY, start: current(), rect: parent.getBoundingClientRect(), moved: false };
+  }
+  function onMove(e: RPointerEvent<HTMLDivElement>) {
+    const d = dragRef.current;
+    if (!d) return;
+    const dx = ((e.clientX - d.px) / d.rect.width) * 100;
+    const dy = ((e.clientY - d.py) / d.rect.height) * 100;
+    if (Math.abs(dx) + Math.abs(dy) > 0.3) d.moved = true;
+    setLive({ ...d.start, x: Math.min(97, Math.max(3, d.start.x + dx)), y: Math.min(97, Math.max(3, d.start.y + dy)) });
+  }
+  function onUp() {
+    const d = dragRef.current;
+    dragRef.current = null;
+    if (d?.moved && live) onLayoutChange?.(live);
+  }
+  function rescale(f: number) {
+    const c = current();
+    const next = { ...c, scale: Math.round(Math.min(2.2, Math.max(0.5, c.scale * f)) * 100) / 100 };
+    setLive(next);
+    onLayoutChange?.(next);
+  }
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
     const id = window.setInterval(() => setNow(new Date()), 60_000);
@@ -303,9 +354,24 @@ export function WindCompass({ seaSide }: { seaSide: "top" | "bottom" | "left" | 
   const toward = w.data?.viento_desde != null ? (w.data.viento_desde + 180) % 360 : null;
   const sun = ws.latitude != null && ws.longitude != null ? sunPosition(now, Number(ws.latitude), Number(ws.longitude)) : null;
 
-  if (w.noLocation) return null;
+  if (w.noLocation && !editable) return null;
+  const placed = live
+    ? { left: `${live.x}%`, top: `${live.y}%`, transform: `translate(-50%, -50%) scale(${live.scale})`, transformOrigin: "center" }
+    : undefined;
   return (
-    <div className="pointer-events-none absolute bottom-2 right-2 flex items-center gap-1.5 rounded-xl bg-surface/90 p-1.5 shadow-md backdrop-blur sm:bottom-3 sm:right-3 sm:gap-3 sm:rounded-2xl sm:p-3 print:hidden" aria-label="Orientación, viento y sol">
+    <div ref={boxRef} style={placed}
+      onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp}
+      className={cx("absolute flex items-center gap-1.5 rounded-xl bg-surface/90 p-1.5 shadow-md backdrop-blur sm:gap-3 sm:rounded-2xl sm:p-3 print:hidden",
+        !live && "bottom-2 right-2 sm:bottom-3 sm:right-3",
+        editable ? "cursor-move touch-none ring-2 ring-accent/60" : "pointer-events-none")}
+      aria-label="Orientación, viento y sol">
+      {editable && (
+        <div className="absolute -top-3 left-1/2 flex -translate-x-1/2 gap-1 rounded-full border border-line bg-surface px-1 py-0.5 text-xs shadow">
+          <button type="button" className="h-6 w-6 rounded-full font-bold hover:bg-surface-2" onClick={() => rescale(1 / 1.15)} title="Achicar la brújula" aria-label="Achicar la brújula">−</button>
+          <button type="button" className="h-6 w-6 rounded-full font-bold hover:bg-surface-2" onClick={() => rescale(1.15)} title="Agrandar la brújula" aria-label="Agrandar la brújula">+</button>
+          {live && <button type="button" className="h-6 rounded-full px-1.5 hover:bg-surface-2" onClick={() => { setLive(null); onLayoutChange?.(null); }} title="Volver a su lugar y tamaño de siempre">↺</button>}
+        </div>
+      )}
       <svg viewBox="-50 -50 100 100" className="h-12 w-12 sm:h-28 sm:w-28 lg:h-40 lg:w-40">
         <circle r="46" fill="none" stroke="var(--line)" strokeWidth="2" />
 
@@ -342,7 +408,7 @@ export function WindCompass({ seaSide }: { seaSide: "top" | "bottom" | "left" | 
           <div className="hidden text-[11px] text-muted sm:block">{windSourceText(w.data.viento_fuente, ws.timezone)}</div>
         )}
         {sun && <div className="hidden sm:block">{sun.elevation > 0
-          ? <div className="mt-1.5"><span className="text-[#e0a020]">●</span> <strong>Sol del {cardinal(sun.azimuth)}</strong><div className="text-muted">{Math.round(sun.elevation)}° de altura</div></div>
+          ? <div className="mt-1.5"><span className="text-[#e0a020]">●</span> <strong>Sol del {cardinal(sun.azimuth)}</strong></div>
           : <div className="mt-1.5 text-muted">El sol ya se puso</div>}</div>}
       </div>
     </div>

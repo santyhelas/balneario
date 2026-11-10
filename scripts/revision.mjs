@@ -438,17 +438,63 @@ for (const [view, opts] of Object.entries(VIEWS)) {
       const after = await pos(0);
       const moved1 = Math.abs((await pos(1)).x - a1.x) > 5;
       f6.pasos.push(Math.abs(after.x - before.x) > 5 ? `se movió la primera${moved1 ? " y la segunda junto con ella" : " (la segunda NO)"}` : "no se movió");
-      // Copiar y pegar
+      // Copiar y pegar: las carpas NO se duplican (solo se mueven)
       const n0 = await tents.count();
       await page.keyboard.press("Control+c");
       await page.keyboard.press("Control+v");
-      await page.waitForTimeout(3000);
+      await page.waitForTimeout(2500);
       const n1 = await tents.count();
-      f6.pasos.push(`pegar: ${n0} → ${n1} espacios`);
+      f6.pasos.push(`Ctrl+C/V con carpas: ${n0} → ${n1} espacios`);
+      // Límite para achicar
+      await page.getByRole("button", { name: "Ver límite" }).click().catch(() => {});
+      await page.waitForTimeout(600);
       await page.screenshot({ path: `${OUT}/capturas/flujo-plano-varias.png`, fullPage: true });
-      f6.resultado = chosen && Math.abs(after.x - before.x) > 5 && moved1 && n1 > n0 ? "OK" : "Revisar";
+      const lim = await svg.getByText("Límite si achicás").count();
+      f6.pasos.push(lim ? "límite visible" : "sin límite");
+      // Deshacer todo lo editado: la primera vuelve a su lugar
+      await page.getByRole("button", { name: "Deshacer todo lo editado" }).click();
+      await page.getByRole("dialog").getByRole("button", { name: "Dejar como estaba" }).click();
+      await page.getByText("quedó como estaba").waitFor({ timeout: 20000 }).catch(() => {});
+      await page.waitForTimeout(1500);
+      const back = await pos(0);
+      const restored = Math.abs(back.x - before.x) < 6 && Math.abs(back.y - before.y) < 6;
+      f6.pasos.push(restored ? "deshacer: volvió a su lugar" : `deshacer: NO volvió (${Math.round(back.x - before.x)}, ${Math.round(back.y - before.y)})`);
+      await page.getByRole("button", { name: "Terminar edición" }).click();
+      f6.resultado = chosen && Math.abs(after.x - before.x) > 5 && moved1 && n1 === n0 && lim && restored ? "OK" : "Revisar";
     } catch (e) { f6.resultado = `Se cortó: ${String(e).slice(0, 200)}`; }
     report.flujos.push(f6);
+
+    // f2) Tocar una carpa: ventana en el medio; cambiar de lugar y traer a alguien a una libre
+    const f6b = { flujo: "Mapa: ficha centrada, cambiar de lugar y traer a alguien", pasos: [] };
+    try {
+      await page.goto(DEMO + "/mapa", { waitUntil: "networkidle" });
+      const svg = page.locator('svg[aria-label="Plano del balneario"]');
+      await svg.locator('g[data-state="ocupada"]').first().click();
+      const dlg = page.getByRole("dialog");
+      await dlg.waitFor({ timeout: 8000 });
+      const bb = await dlg.boundingBox();
+      const vw = page.viewportSize();
+      const centered = bb && Math.abs(bb.x + bb.width / 2 - vw.width / 2) < 40;
+      f6b.pasos.push(centered ? "ventana centrada" : "ventana NO centrada");
+      const hasMove = await dlg.getByRole("button", { name: "Cambiar de lugar" }).isVisible();
+      const noRotate = !(await dlg.getByRole("button", { name: "Girar 90°" }).count());
+      f6b.pasos.push(`cambiar de lugar: ${hasMove ? "sí" : "no"} · girar fuera de edición: ${noRotate ? "no está" : "SIGUE"}`);
+      await page.screenshot({ path: `${OUT}/capturas/mapa-ficha-centrada.png` });
+      await page.keyboard.press("Escape");
+      await page.waitForTimeout(400);
+      await svg.locator('g[data-state="disponible"]').first().click();
+      await dlg.getByRole("button", { name: "Traer a alguien de otra carpa" }).click();
+      await dlg.locator("ul button").first().click();
+      await page.getByRole("dialog", { name: "Cambiar de carpa" }).waitFor({ timeout: 15000 });
+      const preset = await page.getByRole("dialog", { name: "Cambiar de carpa" }).locator("button.bg-accent").count();
+      f6b.pasos.push(preset ? "destino ya elegido" : "destino sin elegir");
+      await page.screenshot({ path: `${OUT}/capturas/mapa-traer-cliente.png` });
+      await page.getByRole("dialog", { name: "Cambiar de carpa" }).getByRole("button", { name: "Confirmar cambio" }).click();
+      const okMsg = await page.getByText(/Cambio por el|Cambio desde/).first().waitFor({ timeout: 15000 }).then(() => true).catch(() => false);
+      f6b.pasos.push(okMsg ? "cambio registrado" : "sin confirmación");
+      f6b.resultado = centered && hasMove && noRotate && preset && okMsg ? "OK" : "Revisar";
+    } catch (e) { f6b.resultado = `Se cortó: ${String(e).slice(0, 200)}`; }
+    report.flujos.push(f6b);
 
     // g) Tutorial de novedades: cada paso encuentra lo que explica
     const f7 = { flujo: "Tutorial de novedades", pasos: [] };
@@ -557,6 +603,26 @@ for (const [view, opts] of Object.entries(VIEWS)) {
       f11.resultado = n >= 5 && tema ? "OK" : "Revisar";
     } catch (e) { f11.resultado = `Se cortó: ${String(e).slice(0, 200)}`; }
     report.flujos.push(f11);
+
+    // k2) Caja: cerrarla y reabrirla (por si se cerró por error)
+    const f14 = { flujo: "Caja: cerrar y reabrir", pasos: [] };
+    try {
+      await page.goto(DEMO + "/caja", { waitUntil: "networkidle" });
+      await page.getByRole("button", { name: "Cerrar caja" }).first().click();
+      const d = page.getByRole("dialog");
+      await d.getByLabel("Efectivo contado").fill("1000");
+      await d.getByRole("button", { name: /Cerrar caja|Confirmar/ }).last().click();
+      await page.getByText("La caja de hoy ya está cerrada").waitFor({ timeout: 15000 });
+      f14.pasos.push("cerrada");
+      await page.getByRole("button", { name: "Reabrir caja" }).click();
+      await page.getByRole("dialog").getByLabel("Motivo").fill("La cerré por error");
+      await page.getByRole("dialog").getByRole("button", { name: "Reabrir caja" }).click();
+      const reopened = await page.getByRole("button", { name: "Cerrar caja" }).first().waitFor({ timeout: 15000 }).then(() => true).catch(() => false);
+      f14.pasos.push(reopened ? "reabierta" : "no se reabrió");
+      await page.screenshot({ path: `${OUT}/capturas/caja-reabierta.png`, fullPage: true });
+      f14.resultado = reopened ? "OK" : "Revisar";
+    } catch (e) { f14.resultado = `Se cortó: ${String(e).slice(0, 200)}`; }
+    report.flujos.push(f14);
   }
   await ctx.close();
 }

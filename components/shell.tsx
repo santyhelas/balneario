@@ -402,7 +402,7 @@ export function Shell({ children }: { children: ReactNode }) {
         message={isGuest ? "Se borra todo lo que cargaste en la demostración." : cashOpen ? (
           <div className="flex flex-col gap-3">
             <p>La <strong>caja de hoy sigue abierta</strong>. ¿Querés cerrarla antes de salir?</p>
-            <p className="text-xs text-muted">Cerrala solo si terminó el día: una vez cerrada, hoy no se puede volver a abrir. Si vas a seguir trabajando más tarde, salí sin cerrarla.</p>
+            <p className="text-xs text-muted">Cerrala solo si terminó el día. Si vas a seguir trabajando más tarde, salí sin cerrarla (si la cerrás por error, un administrador la puede reabrir desde Caja).</p>
             <button type="button" onClick={() => { setConfirmLogout(false); setCloseForLogout(true); }}
               className="rounded-lg border border-accent bg-accent-soft px-3 py-2 text-sm font-semibold text-accent hover:opacity-90">Cerrar la caja y salir</button>
           </div>

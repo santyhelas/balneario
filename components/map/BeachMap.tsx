@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as RPointerEvent, type ReactNode } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as RPointerEvent, type ReactNode } from "react";
 import { designForState, SpaceNumber, SpaceSurname, STATE_COLOR, TENT_H, TENT_W, TentIcon, UMBRELLA_R, UmbrellaIcon, type SpaceState, type TentStyle } from "./icons";
 import { cx } from "@/components/ui";
 
@@ -72,7 +72,13 @@ export function BeachMap({
   onMoveMany,
   overlay,
   design = null,
+  guide = null,
+  flagged,
 }: {
+  /** Recuadro punteado sobre el plano (por ejemplo, hasta dónde llega el plano si se achica). */
+  guide?: { x: number; y: number; w: number; h: number; label: string } | null;
+  /** Carpas o sombrillas marcadas en rojo (por ejemplo, las que quedarían afuera al achicar). */
+  flagged?: Set<string>;
   /** Selección múltiple (modo edición). */
   group?: MapItem[];
   onGroupChange?: (items: MapItem[]) => void;
@@ -576,6 +582,7 @@ export function BeachMap({
                 tabIndex={0}
                 role="button"
                 aria-label={`${s.kind === "carpa" ? "Carpa" : "Sombrilla"} ${s.code}`}
+                data-state={s.state}
                 onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") onSelect({ type: "space", id: s.space_id }); }}
               >
                 <g transform={`rotate(${Number(s.rotation) || 0})`}>
@@ -583,11 +590,23 @@ export function BeachMap({
                     ? <TentIcon color={color} selected={selSpace === s.space_id || (multi && inGroup("space", s.space_id))} dashed={s.state === "desactivada"} design={dsg} />
                     : <UmbrellaIcon color={color} selected={selSpace === s.space_id || (multi && inGroup("space", s.space_id))} dashed={s.state === "desactivada"} design={dsg} />}
                 </g>
+                {flagged?.has(s.space_id) && (
+                  <circle r={s.kind === "carpa" ? 62 : UMBRELLA_R + 16} fill="none" stroke="var(--danger)" strokeWidth={6} strokeDasharray="12 8" pointerEvents="none" />
+                )}
                 <SpaceNumber code={s.code} color={color} design={dsg} dy={surname ? -9 : 0} />
                 {surname && <SpaceSurname name={surname} kind={s.kind} />}
               </g>
             );
           })}
+
+          {guide && (
+            <g pointerEvents="none">
+              <rect x={guide.x} y={guide.y} width={guide.w} height={guide.h} fill="none" stroke="var(--danger)"
+                strokeWidth={Math.max(4, view.w / 300)} strokeDasharray="24 14" opacity={0.85} />
+              <text x={guide.x + guide.w / 2} y={guide.y + Math.max(40, view.w / 40)} textAnchor="middle" fontSize={Math.max(26, view.w / 55)} fontWeight={800}
+                fill="var(--danger)" stroke="#ffffff" strokeWidth={5} paintOrder="stroke">{guide.label}</text>
+            </g>
+          )}
 
           {marquee && (
             <rect x={marquee.x0} y={marquee.y0} width={marquee.x1 - marquee.x0} height={marquee.y1 - marquee.y0}
@@ -603,11 +622,38 @@ export function BeachMap({
         <MapBtn label="Alejar" onClick={() => zoomAt(view.x + view.w / 2, view.y + view.h / 2, 1 / 0.75)} disabled={!zoomed}>−</MapBtn>
         {zoomed && <MapBtn label="Ver todo el plano" onClick={() => setView(full)}>⤢</MapBtn>}
       </div>
-      {(zoomed || editMode) && (
+      {zoomed && !editMode && (
         <p className="pointer-events-none absolute bottom-3 left-3 rounded-lg bg-surface/90 px-2 py-1 text-[11px] text-muted print:hidden">
-          {zoomed && "Arrastrá para recorrer el plano. "}
-          {editMode && "Arrastrá carpas y elementos para ubicarlos. Para elegir varios, arrastrá sobre la arena (o Ctrl + clic); después movelos juntos. Ctrl + C / Ctrl + V copia y pega. Con el botón derecho se recorre el plano. Esc cancela."}
+          Arrastrá para recorrer el plano.
         </p>
+      )}
+      {editMode && <Shortcuts />}
+    </div>
+  );
+}
+
+/** Atajos del editor, arriba a la derecha y discretos (se pueden plegar). */
+function Shortcuts() {
+  const [open, setOpen] = useState(true);
+  const rows: [string, string][] = [
+    ["Arrastrar", "mover"],
+    ["Arrastrar sobre la arena", "elegir varias"],
+    ["Ctrl + clic", "sumar o sacar una"],
+    ["Ctrl + A", "elegir todo (para moverlo)"],
+    ["Ctrl + C / Ctrl + V", "copiar caminos y elementos"],
+    ["Esc", "soltar la selección"],
+    ["Botón derecho", "recorrer el plano"],
+    ["Ctrl + rueda", "acercar o alejar"],
+  ];
+  return (
+    <div className="absolute right-3 top-14 z-[1] max-w-[15rem] rounded-xl border border-line/60 bg-surface/75 text-[11px] leading-snug text-muted shadow-sm backdrop-blur print:hidden">
+      <button type="button" onClick={() => setOpen((v) => !v)} className="flex w-full items-center justify-between gap-2 px-2.5 py-1.5 font-semibold uppercase tracking-wider" aria-expanded={open}>
+        Atajos <span aria-hidden>{open ? "−" : "+"}</span>
+      </button>
+      {open && (
+        <dl className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 px-2.5 pb-2">
+          {rows.map(([k, v]) => (<Fragment key={k}><dt className="whitespace-nowrap font-semibold text-fg/80">{k}</dt><dd>{v}</dd></Fragment>))}
+        </dl>
       )}
     </div>
   );

@@ -263,7 +263,8 @@ const FULL_COLOR: TentStyle = {
   numberBg: "#ffffff", numberText: "#111111", stateDot: false,
 };
 export function designForState(state: SpaceState, design: TentStyle | null | undefined): TentStyle | null {
-  if (state === "ocupada" || state === "cortesia" || state === "reservada_futura") return FULL_COLOR;
+  // Ocupadas, reservadas y en mantenimiento: todo el espacio del color del estado (mantenimiento queda entera gris).
+  if (state === "ocupada" || state === "cortesia" || state === "reservada_futura" || state === "mantenimiento") return FULL_COLOR;
   return design ?? null;
 }
 

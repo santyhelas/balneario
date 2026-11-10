@@ -9,7 +9,9 @@ import { useWorkspace } from "@/components/workspace";
 import { PageHeader, SyncNotice } from "@/components/shell";
 import { Alert, Badge, Button, Card, ConfirmDialog, Field, Input, Modal, Select, Spinner, Textarea, TextField } from "@/components/ui";
 import { BeachMap, FEATURE_KIND_LABEL, type MapFeature, type MapItem, type MapItemPos, type MapSpace, type Selection } from "@/components/map/BeachMap";
-import { WeatherStrip, WindCompass } from "@/components/weather";
+import { WeatherStrip, WindCompass, type CompassLayout } from "@/components/weather";
+import { RelocateModal } from "@/components/relocate";
+import { loadReservation, type Full } from "@/lib/reservations";
 import { DEFAULT_TENT_STYLE, normalizeTentStyle, STATE_COLOR, STATE_LABEL, type SpaceState, type TentStyle } from "@/components/map/icons";
 import { TentDesigner } from "@/components/map/TentDesigner";
 
@@ -104,6 +106,9 @@ export default function MapaPage() {
   const [design, setDesign] = useState<TentStyle | null>(null);
   const [designReady, setDesignReady] = useState(false);
   const [resizing, setResizing] = useState(false);
+  /** Mostrar hasta dónde llega el plano si se achica (y qué queda afuera). */
+  const [showLimit, setShowLimit] = useState(false);
+  const [hoverShrink, setHoverShrink] = useState(false);
   /** Agranda o achica el plano: lo que está cerca del mar queda cerca del mar; el lugar nuevo va del lado de tierra. */
   async function resize(factor: number) {
     const w = Math.round(Math.min(20000, Math.max(400, ws.map_width * factor)));
@@ -114,9 +119,11 @@ export default function MapaPage() {
     const { error } = await getSupabase().rpc("resize_map", { p_workspace_id: ws.id, p_width: w, p_height: h, p_expected_version: ws.version });
     setResizing(false);
     if (error) {
-      setMessage({ tone: "danger", text: error.code === "PGRST202" ? "Para cambiar el tamaño del plano hay que aplicar la actualización 0033." : friendlyError(error) });
+      setMessage({ tone: "danger", text: error.code === "PGRST202" ? "Para cambiar el tamaño del plano hay que aplicar la actualización 0033." : `${friendlyError(error)} La línea roja punteada marca hasta dónde llegaría el plano; lo marcado en rojo queda afuera.` });
+      if (factor < 1) setShowLimit(true);
       return;
     }
+    setShowLimit(false);
     setMessage({ tone: "ok", text: factor > 1 ? "Listo: el plano es más grande. Hay más lugar para carpas (se ve más alejado; acercate con +)." : "Listo: el plano es más chico." });
     await reloadWorkspace();
     reload();
@@ -149,6 +156,115 @@ export default function MapaPage() {
     return true;
   }
 
+  // Brújula: lugar y tamaño sobre el plano (sin la actualización 0041 queda en su lugar de siempre).
+  const [compass, setCompass] = useState<CompassLayout | null>(null);
+  const [compassReady, setCompassReady] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    sb.from("workspaces").select("compass_layout").eq("id", ws.id).single().then(({ data: row, error: err }) => {
+      if (!alive || err) return;
+      const c = (row as { compass_layout: CompassLayout | null }).compass_layout;
+      setCompass(c && typeof c.x === "number" && typeof c.y === "number" && typeof c.scale === "number" ? c : null);
+      setCompassReady(true);
+    });
+    return () => { alive = false; };
+  }, [sb, ws.id]);
+  async function saveCompass(next: CompassLayout | null) {
+    setCompass(next);
+    const cur = await sb.from("workspaces").select("version").eq("id", ws.id).single();
+    const res = cur.error ? cur : await sb.from("workspaces").update({ compass_layout: next, version: (cur.data as { version: number }).version + 1 }).eq("id", ws.id).select("id");
+    if (res.error) setMessage({ tone: "danger", text: `No se guardó la brújula: ${friendlyError(res.error)}` });
+    else await reloadWorkspace();
+  }
+
+  // Foto del plano al entrar a editar, para poder dejar todo como estaba.
+  type Snapshot = {
+    width: number; height: number; design: TentStyle | null; compass: CompassLayout | null;
+    spaces: { id: string; x: number; y: number; rotation: number; code: string; active: boolean }[];
+    features: { id: string; kind: MapFeature["kind"]; label: string | null; x: number; y: number; width: number; height: number; rotation: number; color: string | null; layer?: number }[];
+  };
+  const snapshot = useRef<Snapshot | null>(null);
+  const [restoreOpen, setRestoreOpen] = useState(false);
+  const [restoring, setRestoring] = useState(false);
+  function startEditing() {
+    snapshot.current = {
+      width: ws.map_width, height: ws.map_height, design, compass,
+      spaces: (data ?? []).map((x) => ({ id: x.space_id, x: Number(x.x), y: Number(x.y), rotation: Number(x.rotation) || 0, code: x.code, active: x.active })),
+      features: (featuresQ.data ?? []).map((f) => ({ id: f.id, kind: f.kind, label: f.label, x: Number(f.x), y: Number(f.y), width: Number(f.width), height: Number(f.height), rotation: Number(f.rotation) || 0, color: f.color, layer: f.layer })),
+    };
+    setEditMode(true);
+  }
+  /** Vuelve el plano a como estaba al tocar «Editar plano» (ubicaciones, tamaños, nombres, elementos, diseño y brújula). */
+  async function restoreSnapshot() {
+    const snap = snapshot.current;
+    if (!snap) return;
+    setRestoring(true);
+    setMessage(null);
+    const problems: string[] = [];
+    try {
+      // 1) Tamaño del plano (corre todo junto), 2) ubicaciones exactas, 3) el resto de los datos.
+      if (snap.width !== ws.map_width || snap.height !== ws.map_height) {
+        const cur = await sb.from("workspaces").select("version").eq("id", ws.id).single();
+        const r = cur.error ? cur : await sb.rpc("resize_map", { p_workspace_id: ws.id, p_width: snap.width, p_height: snap.height, p_expected_version: (cur.data as { version: number }).version });
+        if (r.error) problems.push(`tamaño del plano: ${friendlyError(r.error)}`);
+      }
+      const spRows = unwrap(await sb.from("spaces").select("id, x, y, rotation, code, active, version").eq("workspace_id", ws.id)) as
+        { id: string; x: number; y: number; rotation: number; code: string; active: boolean; version: number }[];
+      const ftRows = unwrap(await sb.from("map_features").select("*").eq("workspace_id", ws.id)) as unknown as (MapFeature & { active: boolean })[];
+      const spById = new Map(spRows.map((r) => [r.id, r]));
+      const moves = snap.spaces.filter((o) => { const c = spById.get(o.id); return c && (Number(c.x) !== o.x || Number(c.y) !== o.y); })
+        .map((o) => ({ type: "space", id: o.id, x: o.x, y: o.y, version: spById.get(o.id)!.version }));
+      if (moves.length) {
+        const r = await sb.rpc("move_map_items", { p_workspace_id: ws.id, p_items: moves });
+        if (r.error) problems.push(`ubicaciones: ${friendlyError(r.error)}`);
+      }
+      const spRows2 = moves.length ? unwrap(await sb.from("spaces").select("id, x, y, rotation, code, active, version").eq("workspace_id", ws.id)) as typeof spRows : spRows;
+      for (const o of snap.spaces) {
+        const c = spRows2.find((r) => r.id === o.id);
+        if (!c) continue;
+        const patch: Record<string, unknown> = {};
+        if ((Number(c.rotation) || 0) !== o.rotation) patch.rotation = o.rotation;
+        if (c.code !== o.code) patch.code = o.code;
+        if (c.active !== o.active) patch.active = o.active;
+        if (!Object.keys(patch).length) continue;
+        const r = await sb.from("spaces").update({ ...patch, version: c.version + 1 }).eq("id", o.id).select("id").single();
+        if (r.error) problems.push(`${o.code}: ${friendlyError(r.error)}`);
+      }
+      // Carpas o sombrillas agregadas durante la edición: se desactivan (no se borran, por el historial).
+      for (const c of spRows2.filter((r) => r.active && !snap.spaces.some((o) => o.id === r.id))) {
+        const r = await sb.from("spaces").update({ active: false, version: c.version + 1 }).eq("id", c.id).select("id").single();
+        if (r.error) problems.push(`${c.code}: ${friendlyError(r.error)}`);
+      }
+      for (const o of snap.features) {
+        const c = ftRows.find((r) => r.id === o.id);
+        if (!c) continue;
+        const same = c.active && c.kind === o.kind && (c.label ?? null) === o.label && Number(c.x) === o.x && Number(c.y) === o.y && Number(c.width) === o.width
+          && Number(c.height) === o.height && (Number(c.rotation) || 0) === o.rotation && (c.color ?? null) === o.color && (o.layer === undefined || (c.layer ?? 0) === (o.layer ?? 0));
+        if (same) continue;
+        const { id: _id, ...rest } = o;
+        void _id;
+        const r = await sb.from("map_features").update({ ...rest, active: true, version: c.version + 1 }).eq("id", o.id).select("id").single();
+        if (r.error) problems.push(`elemento: ${friendlyError(r.error)}`);
+      }
+      for (const c of ftRows.filter((r) => r.active && !snap.features.some((o) => o.id === r.id))) {
+        const r = await sb.from("map_features").update({ active: false, version: c.version + 1 }).eq("id", c.id).select("id").single();
+        if (r.error) problems.push(`elemento: ${friendlyError(r.error)}`);
+      }
+      if (JSON.stringify(snap.design) !== JSON.stringify(design)) await saveDesign(snap.design);
+      if (JSON.stringify(snap.compass) !== JSON.stringify(compass)) await saveCompass(snap.compass);
+    } catch (e) {
+      problems.push(friendlyError(e));
+    }
+    setRestoring(false);
+    setRestoreOpen(false);
+    setGroup([]);
+    await reloadWorkspace();
+    await Promise.all([reload(), featuresQ.reload()]);
+    setMessage(problems.length
+      ? { tone: "danger", text: `Se volvió atrás casi todo, pero no se pudo: ${problems.slice(0, 4).join(" · ")}${problems.length > 4 ? "…" : ""}` }
+      : { tone: "ok", text: "Listo: el plano quedó como estaba antes de editar." });
+  }
+
   async function applyLayout() {
     setLayoutBusy(true);
     const { data: res, error } = await sb.rpc("apply_parador_layout", { p_workspace_id: ws.id });
@@ -178,9 +294,13 @@ export default function MapaPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editMode, sel, group.length]);
 
+  // Copiar y pegar es solo para caminos y elementos: las carpas y sombrillas no se duplican (son las del plan).
   function copyGroup() {
-    const items = group.length ? group : sel ? [sel] : [];
-    if (!items.length) return;
+    const items = (group.length ? group : sel ? [sel] : []).filter((i) => i.type === "feature");
+    if (!items.length) {
+      setMessage({ tone: "danger", text: "Las carpas y sombrillas no se copian: solo se mueven. Copiar y pegar sirve para caminos, juegos y otros elementos." });
+      return;
+    }
     clip.current = { items, pastes: 0 };
     setClipCount(items.length);
   }
@@ -201,8 +321,7 @@ export default function MapaPage() {
     const created = res as MapItem[];
     await Promise.all([reload(), featuresQ.reload()]);
     setGroup(created);
-    const nSp = created.filter((i) => i.type === "space").length;
-    setMessage({ tone: "ok", text: `Pegado: ${created.length === 1 ? "1 copia" : `${created.length} copias`}${nSp ? " (las carpas y sombrillas nuevas tienen el número siguiente libre)" : ""}. Ya quedaron elegidas: arrastralas a su lugar.` });
+    setMessage({ tone: "ok", text: `Pegado: ${created.length === 1 ? "1 copia" : `${created.length} copias`}. Ya quedaron elegidas: arrastralas a su lugar.` });
   }
 
   async function moveMany(items: MapItemPos[]): Promise<boolean> {
@@ -243,18 +362,32 @@ export default function MapaPage() {
     return () => window.removeEventListener("keydown", onKey);
   }, [editMode, isAdmin]);
 
-  // En pantallas chicas la ficha queda debajo del plano: bajar hasta ella.
+  // En pantallas chicas la ficha de edición queda debajo del plano: bajar hasta ella.
   useEffect(() => {
-    if (!sel || window.innerWidth >= 1024) return;
+    if (!sel || !editMode || window.innerWidth >= 1024) return;
     const el = document.getElementById("ficha-espacio");
     if (el) requestAnimationFrame(() => el.scrollIntoView({ behavior: "smooth", block: "start" }));
-  }, [sel]);
+  }, [sel, editMode]);
 
   const counts = useMemo(() => {
     const c = Object.fromEntries(STATES.map((s) => [s, 0])) as Record<SpaceState, number>;
     spaces.forEach((s) => (c[s.state] += 1));
     return c;
   }, [spaces]);
+
+  // Hasta dónde llegaría el plano si se achica (mismo cálculo que la base: el lado del mar queda fijo).
+  const shrink = useMemo(() => {
+    const W = ws.map_width, H = ws.map_height;
+    const w = Math.round(Math.max(400, W * 0.8)), h = Math.round(Math.max(400, H * 0.8));
+    const dx = ws.sea_side === "left" ? 0 : ws.sea_side === "right" ? w - W : Math.round((w - W) / 2);
+    const dy = ws.sea_side === "top" ? 0 : ws.sea_side === "bottom" ? h - H : Math.round((h - H) / 2);
+    const rect = { x: -dx, y: -dy, w, h };
+    const inside = (x: number, y: number) => x >= rect.x && x <= rect.x + w && y >= rect.y && y <= rect.y + h;
+    const outSpaces = new Set((data ?? []).filter((x) => x.active && !inside(Number(x.x), Number(x.y))).map((x) => x.space_id));
+    const outFeatures = (featuresQ.data ?? []).filter((f) => !inside(Number(f.x), Number(f.y))).length;
+    return { rect, outSpaces, outFeatures, possible: w < W || h < H };
+  }, [ws.map_width, ws.map_height, ws.sea_side, data, featuresQ.data]);
+  const limitVisible = editMode && (showLimit || hoverShrink);
 
   async function moveSpace(id: string, x: number, y: number): Promise<boolean> {
     const s = spaces.find((sp) => sp.space_id === id);
@@ -309,7 +442,11 @@ export default function MapaPage() {
                   Plan: {usage.carpa.used}/{usage.carpa.max ?? "∞"} carpas · {usage.sombrilla.used}/{usage.sombrilla.max ?? "∞"} sombrillas
                 </span>
               )}
-              <Button data-tour="mapa-editar" variant={editMode ? "primary" : "secondary"} onClick={() => { setEditMode((v) => !v); setMessage(null); }}>
+              {editMode && (
+                <Button variant="secondary" onClick={() => setRestoreOpen(true)} title="Vuelve el plano a como estaba al tocar «Editar plano»">Deshacer todo lo editado</Button>
+              )}
+              <Button data-tour="mapa-editar" variant={editMode ? "primary" : "secondary"}
+                onClick={() => { if (editMode) { setEditMode(false); setShowLimit(false); } else startEditing(); setMessage(null); }}>
                 {editMode ? "Terminar edición" : "Editar plano"}
               </Button>
             </>
@@ -356,11 +493,24 @@ export default function MapaPage() {
               Diseño de carpas
             </Button>
           )}
-          <span className="text-xs text-muted">Tocá un elemento para editarlo; arrastralo para moverlo. Para elegir varios, arrastrá sobre la arena o usá Ctrl + clic.</span>
+          <span className="text-xs text-muted">Tocá un elemento para editarlo; arrastralo para moverlo. La brújula también se arrastra y se agranda o achica.</span>
+          {limitVisible && (
+            <span className="basis-full text-xs font-medium text-danger">
+              {shrink.outSpaces.size || shrink.outFeatures
+                ? `Para achicar, mové hacia adentro de la línea roja: ${shrink.outSpaces.size ? `${shrink.outSpaces.size} ${shrink.outSpaces.size === 1 ? "carpa o sombrilla" : "carpas o sombrillas"} (marcadas en rojo)` : ""}${shrink.outSpaces.size && shrink.outFeatures ? " y " : ""}${shrink.outFeatures ? `${shrink.outFeatures} ${shrink.outFeatures === 1 ? "elemento" : "elementos"}` : ""}.`
+                : "Todo entra: al achicar, el plano queda hasta la línea roja."}
+            </span>
+          )}
           {isAdmin && (
             <span className="ml-auto flex items-center gap-1.5">
               <span className="text-xs text-muted">Tamaño del plano:</span>
-              <Button variant="secondary" className="py-1.5" disabled={resizing} onClick={() => resize(0.8)} title="Achicar el plano (si no queda nada afuera)">Achicar</Button>
+              <span onMouseEnter={() => setHoverShrink(true)} onMouseLeave={() => setHoverShrink(false)}>
+                <Button variant="secondary" className="py-1.5" disabled={resizing || !shrink.possible} onClick={() => resize(0.8)}
+                  title="Achicar el plano: la línea roja muestra hasta dónde llegaría">Achicar</Button>
+              </span>
+              <Button variant="ghost" className="py-1.5 text-xs" onClick={() => setShowLimit((v) => !v)} aria-pressed={showLimit}>
+                {showLimit ? "Ocultar límite" : "Ver límite"}
+              </Button>
               <Button variant="secondary" className="py-1.5" disabled={resizing} onClick={() => resize(1.25)} title="Más lugar para carpas: el plano se ve más alejado">Agrandar</Button>
             </span>
           )}
@@ -376,7 +526,7 @@ export default function MapaPage() {
                 <span className="font-normal text-muted"> ({group.filter((g) => g.type === "space").length} carpas o sombrillas, {group.filter((g) => g.type === "feature").length} elementos)</span>
               </span>
             )}
-            {group.length > 0 && <Button variant="secondary" className="py-1.5" onClick={copyGroup}>Copiar</Button>}
+            {group.some((g) => g.type === "feature") && <Button variant="secondary" className="py-1.5" onClick={copyGroup}>Copiar elementos</Button>}
             {clipCount > 0 && <Button variant="secondary" className="py-1.5" loading={pasting} onClick={() => void pasteClip()}>Pegar {clipCount === 1 ? "1 cosa" : `${clipCount} cosas`}</Button>}
             {group.length > 1 && <Button variant="secondary" className="py-1.5" onClick={() => setGroup([])}>Quitar selección</Button>}
           </div>
@@ -398,8 +548,10 @@ export default function MapaPage() {
             group={editMode ? group : []}
             onGroupChange={setGroup}
             onMoveMany={moveMany}
-            overlay={<WindCompass seaSide={ws.sea_side} />}
+            overlay={<WindCompass seaSide={ws.sea_side} layout={compass} editable={editMode && isAdmin && compassReady} onLayoutChange={(l) => void saveCompass(l)} />}
             design={design}
+            guide={limitVisible && shrink.possible ? { ...shrink.rect, label: "Límite si achicás" } : null}
+            flagged={limitVisible ? shrink.outSpaces : undefined}
           />
         ) : (
           <div className="flex aspect-[4/3] items-center justify-center rounded-2xl bg-surface-2 text-muted">
@@ -407,15 +559,28 @@ export default function MapaPage() {
           </div>
         )}
 
-        {(selectedSpace || selectedFeature) && (
+        {((editMode && selectedSpace) || selectedFeature) && (
           <div id="ficha-espacio" className="mt-3 scroll-mt-20 lg:absolute lg:left-3 lg:top-3 lg:mt-0 lg:max-h-[calc(100%-1.5rem)] lg:w-[340px] lg:overflow-y-auto lg:rounded-xl lg:shadow-xl">
-            {selectedSpace && <SpacePanel space={selectedSpace} day={day} today={today} isAdmin={isAdmin} onChanged={reload} onCheckDate={setDay} onClose={() => setSel(null)} />}
+            {selectedSpace && <SpaceEditPanel space={selectedSpace} day={day} onChanged={reload} onClose={() => setSel(null)} />}
             {selectedFeature && <FeaturePanel feature={selectedFeature} features={features} onSave={(patch) => updateFeature(selectedFeature.id, patch)} onSaveOther={(id, patch) => updateFeature(id, patch)} onClose={() => setSel(null)} onRemove={async () => { if (await updateFeature(selectedFeature.id, { active: false } as Partial<MapFeature>)) setSel(null); }} />}
           </div>
         )}
       </div>
       {!sel && <p className="mt-2 text-xs text-muted">Tocá una carpa o sombrilla para ver su estado{day === today ? " de hoy" : ` el ${formatDate(day)}`}.</p>}
 
+      {!editMode && selectedSpace && (
+        <SpaceModal space={selectedSpace} spaces={spaces} day={day} today={today} isAdmin={isAdmin} onChanged={reload} onCheckDate={(d) => { setDay(d); }} onClose={() => setSel(null)}
+          onMoved={(t) => { setMessage({ tone: "ok", text: t }); reload(); }} />
+      )}
+      <ConfirmDialog
+        open={restoreOpen}
+        title="Deshacer todo lo editado"
+        message="El plano vuelve a como estaba cuando tocaste «Editar plano»: ubicación y giro de cada carpa, nombres, caminos y elementos, tamaño del plano, diseño de las carpas y la brújula. Las carpas que agregaste en esta edición se desactivan. Las reservas no cambian."
+        confirmLabel="Dejar como estaba"
+        busy={restoring}
+        onConfirm={restoreSnapshot}
+        onCancel={() => setRestoreOpen(false)}
+      />
       <ConfirmDialog
         open={layoutConfirm}
         title="Aplicar el Diseño Parador"
@@ -544,45 +709,15 @@ function FeaturePanel({ feature, features, onSave, onSaveOther, onClose, onRemov
   );
 }
 
-function SpacePanel({ space, day, today, isAdmin, onChanged, onCheckDate, onClose }: { space: DayStatus; day: string; today: string; isAdmin: boolean; onChanged: () => void; onCheckDate: (d: string) => void; onClose: () => void }) {
-  const [renaming, setRenaming] = useState(false);
-  const [toggling, setToggling] = useState(false);
-  const [maint, setMaint] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function rotate() {
-    if (!space) return;
-    setBusy(true);
-    setError(null);
-    const { error } = await getSupabase().from("spaces")
-      .update({ rotation: ((Number(space.rotation) || 0) + 90) % 360, version: space.version + 1 })
-      .eq("id", space.space_id).select("id").single();
-    setBusy(false);
-    if (error) return setError(friendlyError(error));
-    onChanged();
-  }
-
-  async function toggleActive() {
-    if (!space) return;
-    setBusy(true);
-    setError(null);
-    const { error } = await getSupabase().from("spaces").update({ active: !space.active, version: space.version + 1 }).eq("id", space.space_id).select("id").single();
-    setBusy(false);
-    setToggling(false);
-    if (error) return setError(friendlyError(error));
-    onChanged();
-  }
-
-  const kindLabel = space.kind === "carpa" ? "Carpa" : "Sombrilla";
+/** Estado de una carpa o sombrilla el día consultado (sirve para la ficha y para la ventana). */
+function SpaceInfo({ space, day, onCheckDate }: { space: DayStatus; day: string; onCheckDate: (d: string) => void }) {
   return (
-    <Card title={`${kindLabel} ${space.code}`} actions={<button onClick={onClose} className="rounded p-1 text-muted hover:bg-surface-2" aria-label="Cerrar">✕</button>}>
+    <>
       <div className="mb-3 flex items-center gap-2">
         <span className="inline-block h-3 w-3 rounded-full" style={{ background: STATE_COLOR[space.state] }} />
         <span className="text-sm font-medium">{STATE_LABEL[space.state]}</span>
         <span className="text-xs text-muted">el {formatDate(day)}</span>
       </div>
-
       {space.reservation_id && (
         <dl className="mb-3 grid grid-cols-2 gap-2 rounded-lg bg-surface-2 p-3 text-sm">
           <div className="col-span-2"><dt className="text-xs text-muted">Cliente</dt><dd className="font-medium">{space.customer_name}</dd></div>
@@ -606,27 +741,139 @@ function SpacePanel({ space, day, today, isAdmin, onChanged, onCheckDate, onClos
         </p>
       )}
       {space.state === "disponible" && !space.next_start && <p className="mb-3 text-sm text-muted">Sin reservas futuras.</p>}
+    </>
+  );
+}
 
-      {error && <Alert tone="danger" className="mb-3">{error}</Alert>}
+/**
+ * Ventana en el medio de la pantalla al tocar una carpa (fuera de la edición del plano):
+ * su estado, la reserva, y mover clientes: si está ocupada, cambiarlo de lugar; si está libre, traer a alguien de otra.
+ */
+function SpaceModal({ space, spaces, day, today, isAdmin, onChanged, onCheckDate, onClose, onMoved }: {
+  space: DayStatus; spaces: DayStatus[]; day: string; today: string; isAdmin: boolean;
+  onChanged: () => void; onCheckDate: (d: string) => void; onClose: () => void; onMoved: (t: string) => void;
+}) {
+  const [maint, setMaint] = useState(false);
+  const [picking, setPicking] = useState(false);
+  const [moving, setMoving] = useState<{ full: Full; target?: string } | null>(null);
+  const [loadingRes, setLoadingRes] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const kindLabel = space.kind === "carpa" ? "Carpa" : "Sombrilla";
+  const free = space.active && !space.reservation_id && space.state !== "mantenimiento";
+  const pastDay = day < today;
+  // Quiénes están ocupando otra carpa o sombrilla ese día (para traerlos a esta).
+  const occupants = spaces.filter((x) => x.reservation_id && x.space_id !== space.space_id && (x.state === "ocupada" || x.state === "cortesia"))
+    .sort((a, b) => a.code.localeCompare(b.code, "es", { numeric: true }));
 
-      <div className="mb-3 flex flex-wrap gap-2">
-        {space.reservation_id && <Link href={`/reservas/${space.reservation_id}`}><Button>Ver reserva #{space.reservation_number}</Button></Link>}
-        {space.active && !space.reservation_id && space.state !== "mantenimiento" && (
-          <Link href={`/reservas/nueva?espacio=${space.space_id}&desde=${day}`}><Button>Reservar desde el {formatDate(day)}</Button></Link>
+  async function openMove(reservationId: string, target?: string) {
+    setLoadingRes(reservationId);
+    setError(null);
+    try {
+      const full = await loadReservation(reservationId);
+      setMoving({ full, target });
+      setPicking(false);
+    } catch (e) {
+      setError(friendlyError(e));
+    }
+    setLoadingRes(null);
+  }
+
+  if (moving) {
+    return (
+      <RelocateModal open full={moving.full} today={today} initialDay={day} initialTarget={moving.target}
+        onClose={() => setMoving(null)}
+        onDone={(t) => { setMoving(null); onClose(); onMoved(t); }} />
+    );
+  }
+
+  return (
+    <>
+    <Modal open={!maint} onClose={onClose} title={`${kindLabel} ${space.code}`}>
+      <div>
+        <SpaceInfo space={space} day={day} onCheckDate={(d) => { onCheckDate(d); onClose(); }} />
+        {error && <Alert tone="danger" className="mb-3">{error}</Alert>}
+
+        {picking ? (
+          <div className="flex flex-col gap-2">
+            <p className="text-sm font-medium">¿A quién traés a la {kindLabel.toLowerCase()} {space.code}?</p>
+            {occupants.length === 0 ? <p className="text-sm text-muted">No hay nadie en otra carpa o sombrilla el {formatDate(day)}.</p> : (
+              <ul className="max-h-72 divide-y divide-line overflow-y-auto rounded-lg border border-line">
+                {occupants.map((o) => (
+                  <li key={o.space_id}>
+                    <button type="button" disabled={loadingRes !== null} onClick={() => openMove(o.reservation_id!, space.space_id)}
+                      className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-surface-2 disabled:opacity-60">
+                      <span><strong>{o.kind === "carpa" ? "Carpa" : "Sombrilla"} {o.code}</strong> · {o.customer_name ?? o.surname ?? "Cliente"}</span>
+                      {loadingRes === o.reservation_id ? <Spinner small /> : <span className="text-xs text-muted">hasta {formatDate(o.reservation_end)}</span>}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <div className="flex justify-end"><Button variant="secondary" onClick={() => setPicking(false)}>Volver</Button></div>
+          </div>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {space.reservation_id && <Link href={`/reservas/${space.reservation_id}`}><Button>Ver reserva #{space.reservation_number}</Button></Link>}
+            {space.reservation_id && !pastDay && (
+              <Button variant="secondary" loading={loadingRes === space.reservation_id} onClick={() => openMove(space.reservation_id!)}>Cambiar de lugar</Button>
+            )}
+            {free && !pastDay && (
+              <Link href={`/reservas/nueva?espacio=${space.space_id}&desde=${day}`}><Button>Reservar desde el {formatDate(day)}</Button></Link>
+            )}
+            {free && !pastDay && (
+              <Button variant="secondary" onClick={() => setPicking(true)}>Traer a alguien de otra carpa</Button>
+            )}
+            {isAdmin && space.active && !pastDay && <Button variant="secondary" onClick={() => setMaint(true)}>Bloquear por mantenimiento</Button>}
+          </div>
         )}
       </div>
+    </Modal>
+    <MaintenanceModal open={maint} space={space} today={today} onClose={() => setMaint(false)} onDone={() => { setMaint(false); onChanged(); }} />
+    </>
+  );
+}
 
-      {isAdmin && (
-        <div className="flex flex-wrap gap-2 border-t border-line pt-3">
-          <Button variant="secondary" onClick={() => setRenaming(true)}>Cambiar identificación</Button>
-          <Button variant="secondary" onClick={rotate} loading={busy}>Girar 90°</Button>
-          {space.active && <Button variant="secondary" onClick={() => setMaint(true)}>Bloquear por mantenimiento</Button>}
-          <Button variant={space.active ? "danger" : "secondary"} onClick={() => setToggling(true)}>{space.active ? "Desactivar" : "Reactivar"}</Button>
-        </div>
-      )}
+/** Ficha en la edición del plano: cambiar la identificación, girar y desactivar. */
+function SpaceEditPanel({ space, day, onChanged, onClose }: { space: DayStatus; day: string; onChanged: () => void; onClose: () => void }) {
+  const [renaming, setRenaming] = useState(false);
+  const [toggling, setToggling] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function rotate() {
+    setBusy(true);
+    setError(null);
+    const { error } = await getSupabase().from("spaces")
+      .update({ rotation: ((Number(space.rotation) || 0) + 90) % 360, version: space.version + 1 })
+      .eq("id", space.space_id).select("id").single();
+    setBusy(false);
+    if (error) return setError(friendlyError(error));
+    onChanged();
+  }
+
+  async function toggleActive() {
+    setBusy(true);
+    setError(null);
+    const { error } = await getSupabase().from("spaces").update({ active: !space.active, version: space.version + 1 }).eq("id", space.space_id).select("id").single();
+    setBusy(false);
+    setToggling(false);
+    if (error) return setError(friendlyError(error));
+    onChanged();
+  }
+
+  const kindLabel = space.kind === "carpa" ? "Carpa" : "Sombrilla";
+  return (
+    <Card title={`${kindLabel} ${space.code}`} actions={<button onClick={onClose} className="rounded p-1 text-muted hover:bg-surface-2" aria-label="Cerrar">✕</button>}>
+      <p className="mb-3 text-sm text-muted">{STATE_LABEL[space.state]} el {formatDate(day)}. Arrastrala para moverla.</p>
+      {error && <Alert tone="danger" className="mb-3">{error}</Alert>}
+      <div className="flex flex-wrap gap-2">
+        <Button variant="secondary" onClick={() => setRenaming(true)}>Cambiar identificación</Button>
+        <Button variant="secondary" onClick={rotate} loading={busy}>Girar 90°</Button>
+        <Button variant={space.active ? "danger" : "secondary"} onClick={() => setToggling(true)}>{space.active ? "Desactivar" : "Reactivar"}</Button>
+      </div>
+      {space.active && <p className="mt-2 text-xs text-muted">Desactivarla libera un lugar de tu plan para activar otra. Las reservas e historial se conservan.</p>}
 
       <RenameModal open={renaming} space={space} onClose={() => setRenaming(false)} onDone={() => { setRenaming(false); onChanged(); }} />
-      <MaintenanceModal open={maint} space={space} today={today} onClose={() => setMaint(false)} onDone={() => { setMaint(false); onChanged(); }} />
       <ConfirmDialog
         open={toggling}
         title={space.active ? `Desactivar ${space.code}` : `Reactivar ${space.code}`}

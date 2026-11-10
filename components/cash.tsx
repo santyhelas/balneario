@@ -123,7 +123,7 @@ export function CloseCashModal({ open, summary, onClose, onDone }: { open: boole
             <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} maxLength={1000} placeholder={diff ? "Explicá la diferencia si la conocés" : ""} />
           </Field>
           {error && <Alert tone="danger">{error}</Alert>}
-          <p className="text-xs text-muted">Una vez cerrada, la caja no se puede reabrir ni modificar.</p>
+          <p className="text-xs text-muted">Los movimientos no se pueden modificar. Si la cerrás por error, el propietario o un administrador la puede reabrir hoy mismo (queda registrado).</p>
           <div className="flex justify-end gap-2">
             <Button type="button" variant="secondary" onClick={onClose} disabled={busy}>Cancelar</Button>
             <Button type="submit" loading={busy}>Confirmar cierre</Button>

@@ -13,7 +13,7 @@ import { Alert, Button, Card, ConfirmDialog, EmptyState, Field, Input, Modal, Se
 import { CloseCashModal, ExpenseModal, IncomeModal, OpenCashModal, type CashSummary } from "@/components/cash";
 import { METHOD_LABEL, PAYMENT_METHODS } from "@/lib/methods";
 
-type Session = { id: string; business_date: string; opening_cash: number; closed_at: string | null; expected_cash: number | null; counted_cash: number | null; difference: number | null };
+type Session = { id: string; business_date: string; opening_cash: number; closed_at: string | null; expected_cash: number | null; counted_cash: number | null; difference: number | null; version: number };
 type Movement = { id: string; direction: "entrada" | "salida"; method: string; amount: number; category: string; concept: string; created_at: string; expense_id: string | null; voids_movement_id?: string | null };
 type Category = { id: string; name: string; active: boolean };
 type ExpenseRow = { id: string; voided_at: string | null };
@@ -51,7 +51,7 @@ export default function CajaPage() {
 
   const { data, error, loading, reload, stale, updatedAt } = useLoader<PageData>(async () => {
     const sessions = unwrap(
-      await sb.from("cash_sessions").select("id, business_date, opening_cash, closed_at, expected_cash, counted_cash, difference")
+      await sb.from("cash_sessions").select("id, business_date, opening_cash, closed_at, expected_cash, counted_cash, difference, version")
         .eq("workspace_id", ws.id).order("business_date", { ascending: false }).limit(30),
     ) as Session[];
     const current = sessions.find((s) => !s.closed_at) ?? sessions.find((s) => s.business_date === today) ?? null;
@@ -88,6 +88,7 @@ export default function CajaPage() {
   const [voiding, setVoiding] = useState<Movement | null>(null);
   const [depositOpen, setDepositOpen] = useState(false);
   const [voidingDeposit, setVoidingDeposit] = useState<Movement | null>(null);
+  const [reopening, setReopening] = useState(false);
 
   if (!data && loading) return <div className="flex items-center gap-2 text-muted"><Spinner small /> Cargando caja…</div>;
 
@@ -121,7 +122,10 @@ export default function CajaPage() {
         </Alert>
       )}
       {current?.closed_at && (
-        <Alert tone="info" className="mb-4">La caja de hoy ya está cerrada. Mañana se abre una nueva.</Alert>
+        <Alert tone="info" className="mb-4 flex flex-wrap items-center justify-between gap-2">
+          <span>La caja de hoy ya está cerrada. Mañana se abre una nueva.{current.business_date === today && !isAdmin ? " Si se cerró por error, pedile al propietario que la reabra." : ""}</span>
+          {current.business_date === today && isAdmin && <Button variant="secondary" onClick={() => setReopening(true)}>Reabrir caja</Button>}
+        </Alert>
       )}
       {!current && (
         <Alert tone="warn" className="mb-4">La caja de hoy no está abierta. Abrila para poder registrar cobros y gastos.</Alert>
@@ -253,6 +257,9 @@ export default function CajaPage() {
           onClose={() => setDepositOpen(false)} onDone={() => { setDepositOpen(false); reload(); status.reload(); }} />
       )}
       <VoidDeposit movement={voidingDeposit} onClose={() => setVoidingDeposit(null)} onDone={() => { setVoidingDeposit(null); reload(); status.reload(); }} />
+      {reopening && current?.closed_at && (
+        <ReopenCash session={current} onClose={() => setReopening(false)} onDone={() => { setReopening(false); reload(); status.reload(); }} />
+      )}
       <VoidExpense movement={voiding} onClose={() => setVoiding(null)} onDone={() => { setVoiding(null); reload(); status.reload(); }} />
     </>
   );
@@ -264,6 +271,42 @@ function Row({ label, value, strong, tone }: { label: string; value: string; str
       <dt className="text-muted">{label}</dt>
       <dd className={`tabular ${strong ? "font-semibold" : ""} ${tone === "warn" ? "text-warn" : ""}`}>{value}</dd>
     </div>
+  );
+}
+
+/** Reabrir la caja de hoy si se cerró por error: el cierre anterior queda guardado y en el historial. */
+function ReopenCash({ session, onClose, onDone }: { session: Session; onClose: () => void; onDone: () => void }) {
+  const [reason, setReason] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  async function confirm() {
+    if (reason.trim().length < 3) return setError("Escribí el motivo.");
+    setBusy(true);
+    setError(null);
+    const { error: e } = await getSupabase().rpc("reopen_cash_session", { p_session_id: session.id, p_expected_version: session.version, p_reason: reason.trim() });
+    setBusy(false);
+    if (e) return setError(e.code === "PGRST202" ? "Para reabrir la caja hay que aplicar la actualización 0041 de la base de datos." : friendlyError(e));
+    onDone();
+  }
+  return (
+    <ConfirmDialog
+      open
+      title="Reabrir la caja de hoy"
+      confirmLabel="Reabrir caja"
+      busy={busy}
+      onCancel={onClose}
+      onConfirm={confirm}
+      message={
+        <div className="flex flex-col gap-3">
+          <p>La caja vuelve a quedar abierta para seguir cobrando y cargando gastos. Al final del día la cerrás de nuevo, contando la plata.</p>
+          <p className="text-xs text-muted">
+            El cierre anterior (contado {formatMoney(session.counted_cash)}, diferencia {formatMoney(session.difference)}) no se borra: queda guardado con el motivo, quién la reabrió y a qué hora.
+          </p>
+          <TextField label="Motivo" value={reason} onChange={(e) => setReason(e.target.value)} required maxLength={300} placeholder="Ej: la cerré por error, faltaba cobrar" />
+          {error && <Alert tone="danger">{error}</Alert>}
+        </div>
+      }
+    />
   );
 }
 

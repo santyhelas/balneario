@@ -1166,6 +1166,27 @@ select set_config('request.jwt.claims', '{"sub":"11111111-1111-1111-1111-1111111
 select t.throws(format($$select public.paste_map_items(%L, '[{"type":"space","id":"%s"}]'::jsonb, 0, 0)$$, t.get('wsC'), t.get('pst')::jsonb -> 0 ->> 'id'), 'permiso',
   'Copiar y pegar: otro balneario no puede pegar carpas ajenas');
 
+-- 42. Reabrir la caja de hoy (cerrada por error)
+select set_config('request.jwt.claims', '{"sub":"33333333-3333-3333-3333-333333333333","email":"operador@test.com"}', false);
+select t.throws(format($$select public.reopen_cash_session(%L, (select version from public.cash_sessions where id = %L), 'Me equivoqué')$$, t.get('session'), t.get('session')),
+  'permiso', 'Reabrir caja: un operador no puede');
+select set_config('request.jwt.claims', '{"sub":"11111111-1111-1111-1111-111111111111","email":"duenio@test.com"}', false);
+select t.throws(format($$select public.reopen_cash_session(%L, (select version from public.cash_sessions where id = %L), '')$$, t.get('session'), t.get('session')),
+  'motivo', 'Reabrir caja: pide el motivo');
+select public.reopen_cash_session(t.uid('session'), (select version from public.cash_sessions where id = t.uid('session')), 'Se cerró por error');
+select t.ok((select closed_at is null and counted_cash is null and jsonb_array_length(reopen_history) = 1
+               and (reopen_history -> 0 ->> 'diferencia')::numeric = -500 and reopen_history -> 0 ->> 'motivo' = 'Se cerró por error'
+             from public.cash_sessions where id = t.uid('session')), 'Reabrir caja: queda abierta y el cierre anterior se guarda con su diferencia');
+select t.ok((select count(*) from public.cash_movements where cash_session_id = t.uid('session')) > 0, 'Reabrir caja: los movimientos siguen ahí');
+select t.throws(format($$select public.reopen_cash_session(%L, (select version from public.cash_sessions where id = %L), 'Otra vez')$$, t.get('session'), t.get('session')),
+  'ya está abierta', 'Reabrir caja: no se reabre una caja abierta');
+select t.ok((select (x ->> 'difference')::numeric = 0 from public.close_cash_session(t.uid('session'), 100000, (select version from public.cash_sessions where id = t.uid('session')), 'Ahora sí') x),
+  'Reabrir caja: se vuelve a cerrar con el conteo nuevo');
+reset role;
+select t.throws(format($$update public.cash_sessions set close_notes = 'tocado', version = version + 1 where id = %L$$, t.get('session')), 'cerrada',
+  'Reabrir caja: una caja cerrada sigue sin poder editarse a mano (ni desde la base)');
+set role authenticated;
+
 reset role;
 \o
 -- Resultado ----------------------------------------------------------
