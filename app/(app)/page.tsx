@@ -6,8 +6,8 @@ import { formatDate, formatMoney } from "@/lib/format";
 import { useWorkspace } from "@/components/workspace";
 import { useStatus, type ResItem } from "@/components/status";
 import { WeekAhead } from "@/components/week-ahead";
-import { ICON_HELP, Icon, NAV } from "@/components/shell";
-import { SupportModal } from "@/components/support";
+import { Icon, NAV } from "@/components/shell";
+import { HOTKEYS } from "@/lib/hotkeys";
 import { Alert, Button, Spinner, cx } from "@/components/ui";
 import { CloseCashModal, OpenCashModal, type CashSummary } from "@/components/cash";
 import { WeatherStrip } from "@/components/weather";
@@ -37,7 +37,6 @@ export default function DashboardPage() {
   const [cash, setCash] = useState<CashSummary | null>(null);
   const [openCash, setOpenCash] = useState(false);
   const [closing, setClosing] = useState<CashSummary | null>(null);
-  const [supportOpen, setSupportOpen] = useState(false);
 
   // Llegó / no vino de los que empiezan hoy (se lee aparte para no tocar el resumen del día).
   const [arrivals, setArrivals] = useState<Record<string, ArrivalState>>({});
@@ -149,24 +148,15 @@ export default function DashboardPage() {
 
       <div data-tour="semana"><WeekAhead /></div>
 
-      {/* Accesos rápidos: lo que no está en la barra de arriba */}
-      <section className="rounded-2xl border border-line bg-surface p-4">
-        <h2 className="mb-3 text-xs font-bold uppercase tracking-widest text-muted">Accesos rápidos</h2>
-        <div className="mb-stagger grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-6">
-          <Shortcut href="/disponibilidad" tone="orange" icon="M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM21 21l-4.3-4.3" title="Disponibilidad" sub="Qué hay libre y cuándo" />
-          <Shortcut href="/reservas" tone="violet" icon="M5 12h14M13 6l6 6-6 6" title="Cambiar de carpa" sub="Elegí la reserva" />
-          <Shortcut href="/clientes" tone="accent" icon={icon("/clientes")} title="Buscar cliente" sub="Historial y contacto" />
-          <Shortcut href="/renovacion" tone="ok" icon={icon("/renovacion")} title="Renovación" sub="Clientes del año pasado" />
-          <Shortcut href="/reportes" tone="teal" icon={icon("/reportes")} title="Reportes" sub="Ocupación y plata" />
-          <button onClick={() => setSupportOpen(true)} className="flex items-center gap-3 rounded-xl border border-line p-3 text-left hover:bg-surface-2">
-            <span className={cx("flex h-10 w-10 shrink-0 items-center justify-center rounded-lg", SHORTCUT_TONE.slate)}><Icon d={ICON_HELP} /></span>
-            <span className="min-w-0">
-              <span className="block truncate text-sm font-bold">Consultas</span>
-              <span className="block truncate text-xs text-muted">Escribinos</span>
-            </span>
-          </button>
-        </div>
-      </section>
+      {/* Atajos de teclado (reemplazan los botones de accesos rápidos): solo en compu */}
+      <p className="hidden flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted md:flex" data-tour="atajos">
+        <span className="font-semibold">Atajos:</span>
+        {HOTKEYS.map((h) => (
+          <span key={h.key} className="inline-flex items-center gap-1">
+            <kbd className="rounded border border-line bg-surface-2 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-fg">{h.key}</kbd>{h.label}
+          </span>
+        ))}
+      </p>
 
       <div className="grid gap-4 lg:grid-cols-2">
         <ResCard title={`Inician hoy (${data.ingresan_hoy.length})`} tone="accent" items={data.ingresan_hoy} empty="No hay ingresos previstos para hoy."
@@ -178,7 +168,6 @@ export default function DashboardPage() {
         <ResCard title={`Finalizan hoy (${data.finalizan_hoy.length})`} tone="orange" items={data.finalizan_hoy} empty="No hay finalizaciones previstas para hoy." right="Liberación de espacios" />
       </div>
 
-      <SupportModal open={supportOpen} onClose={() => setSupportOpen(false)} />
       <OpenCashModal open={openCash} workspaceId={ws.id} onClose={() => setOpenCash(false)} onDone={() => { setOpenCash(false); st.reload(); }} />
       <CloseCashModal open={closing !== null} summary={closing} onClose={() => setClosing(null)} onDone={() => { setClosing(null); st.reload(); }} />
     </div>
@@ -199,16 +188,6 @@ function Stat({ tone, label, value, note, icon, href, valueTone }: { tone: Tone;
   );
 }
 
-const SHORTCUT_TONE: Record<string, string> = {
-  accent: "bg-accent-soft text-accent",
-  ok: "bg-ok-soft text-ok",
-  danger: "bg-danger-soft text-danger",
-  orange: "bg-orange-500/15 text-orange-500",
-  violet: "bg-violet-500/15 text-violet-500",
-  teal: "bg-teal-500/15 text-teal-600 dark:text-teal-400",
-  slate: "bg-surface-2 text-fg",
-};
-
 function StatGroup({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section>
@@ -218,22 +197,16 @@ function StatGroup({ title, children }: { title: string; children: ReactNode }) 
   );
 }
 
-function Shortcut({ href, tone, icon, title, sub }: { href: string; tone: string; icon: string; title: string; sub: string }) {
-  return (
-    <Link href={href} className="flex items-center gap-3 rounded-xl border border-line p-3 hover:bg-surface-2">
-      <span className={cx("flex h-10 w-10 shrink-0 items-center justify-center rounded-lg", SHORTCUT_TONE[tone])}><Icon d={icon} /></span>
-      <span className="min-w-0">
-        <span className="block truncate text-sm font-bold">{title}</span>
-        <span className="block truncate text-xs text-muted">{sub}</span>
-      </span>
-    </Link>
-  );
-}
-
 function ResCard({ title, tone, items, empty, right, arrivals, onArrival }: {
   title: string; tone: Tone; items: ResItem[]; empty: string; right: string;
   arrivals?: Record<string, ArrivalState>; onArrival?: (id: string, v: ArrivalState) => void;
 }) {
+  // De a 5 por página para que el panel no se haga larguísimo en los días de mucho movimiento.
+  const PAGE = 5;
+  const pages = Math.max(1, Math.ceil(items.length / PAGE));
+  const [page, setPage] = useState(0);
+  useEffect(() => { if (page > pages - 1) setPage(pages - 1); }, [page, pages]);
+  const shown = items.slice(page * PAGE, page * PAGE + PAGE);
   return (
     <section className="rounded-2xl border border-line bg-surface p-4">
       <div className="mb-3 flex items-center justify-between gap-2 border-b border-line pb-2">
@@ -244,7 +217,7 @@ function ResCard({ title, tone, items, empty, right, arrivals, onArrival }: {
       </div>
       {items.length === 0 ? <p className="py-6 text-center text-sm text-muted">{empty}</p> : (
         <ul className="flex flex-col gap-2">
-          {items.map((r) => {
+          {shown.map((r) => {
             const debt = Number(r.due_amount) > 0;
             return (
               <li key={r.reservation_id}>
@@ -269,6 +242,15 @@ function ResCard({ title, tone, items, empty, right, arrivals, onArrival }: {
             );
           })}
         </ul>
+      )}
+      {pages > 1 && (
+        <div className="mt-3 flex items-center justify-between gap-2 border-t border-line pt-2 text-xs">
+          <button type="button" onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={page === 0}
+            className="rounded-lg px-2.5 py-1 font-semibold hover:bg-surface-2 disabled:opacity-40" aria-label="Página anterior">‹ Anterior</button>
+          <span className="tabular text-muted">Página {page + 1} de {pages}</span>
+          <button type="button" onClick={() => setPage((p) => Math.min(pages - 1, p + 1))} disabled={page >= pages - 1}
+            className="rounded-lg px-2.5 py-1 font-semibold hover:bg-surface-2 disabled:opacity-40" aria-label="Página siguiente">Siguiente ›</button>
+        </div>
       )}
     </section>
   );

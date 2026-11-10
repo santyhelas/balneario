@@ -1,7 +1,8 @@
 "use client";
+import { HOTKEYS } from "@/lib/hotkeys";
 import { SupportModal } from "@/components/support";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { getSupabase } from "@/lib/supabase/client";
 import { allowLeave, leaveAllowed } from "@/lib/leave";
@@ -107,10 +108,23 @@ export function Shell({ children }: { children: ReactNode }) {
   const { ws, email, theme, setTheme, role, profile, isGuest, guideDone, setGuideDone, isPlatformAdmin, adminAlerts } = useWorkspace();
   const status = useStatus();
   const pathname = usePathname();
+  const router = useRouter();
   const [confirmLogout, setConfirmLogout] = useState(false);
   // Menú lateral: cerrado por defecto (pantalla limpia); se abre con el botón de tres rayas.
   const [drawerOpen, setDrawerOpen] = useState(false);
   useEffect(() => setDrawerOpen(false), [pathname]);
+  // Atajos de teclado (F2 nueva reserva, F4 mapa…): en cualquier pantalla, salvo con una ventana abierta.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.altKey || e.metaKey || e.shiftKey) return;
+      const hk = HOTKEYS.find((h) => h.key === e.key);
+      if (!hk || document.querySelector('[role="dialog"][aria-modal="true"]')) return;
+      e.preventDefault();
+      router.push(hk.href);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [router]);
   // El tutorial abre el menú para señalar dónde está cada sección.
   useEffect(() => {
     const on = (e: Event) => setDrawerOpen(!!(e as CustomEvent<boolean>).detail);

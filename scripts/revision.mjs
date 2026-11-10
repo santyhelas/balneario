@@ -594,7 +594,9 @@ for (const [view, opts] of Object.entries(VIEWS)) {
     const f9 = { flujo: "Consultas: escribir la consulta", pasos: [] };
     try {
       await page.goto(DEMO + "/", { waitUntil: "networkidle" });
-      await page.getByRole("button", { name: /Consultas/ }).first().click();
+      await page.getByRole("button", { name: "Abrir menú" }).first().click();
+      await page.waitForTimeout(400);
+      await page.getByRole("button", { name: /Consultas/ }).locator("visible=true").first().click();
       const d = page.getByRole("dialog", { name: "Consultas" });
       await d.waitFor({ timeout: 10000 });
       const ta = d.locator("textarea");
@@ -609,6 +611,26 @@ for (const [view, opts] of Object.entries(VIEWS)) {
       await page.keyboard.press("Escape");
     } catch (e) { f9.resultado = `Se cortó: ${String(e).slice(0, 200)}`; }
     report.flujos.push(f9);
+
+    // i2) Atajos de teclado: F4 abre el mapa, F2 nueva reserva; el panel ya no tiene botones de accesos rápidos
+    const f9b = { flujo: "Panel: atajos F# y listas de a 5", pasos: [] };
+    try {
+      await page.goto(DEMO + "/", { waitUntil: "networkidle" });
+      const old = await page.getByText("Accesos rápidos").count();
+      f9b.pasos.push(old ? "todavía hay accesos rápidos" : "sin botones de accesos rápidos");
+      await page.screenshot({ path: `${OUT}/capturas/panel-atajos.png` });
+      await page.keyboard.press("F4");
+      await page.waitForURL(/\/mapa/, { timeout: 10000 });
+      f9b.pasos.push("F4 → mapa");
+      await page.keyboard.press("F2");
+      await page.waitForURL(/\/reservas\/nueva/, { timeout: 10000 });
+      f9b.pasos.push("F2 → nueva reserva");
+      await page.goto(DEMO + "/", { waitUntil: "networkidle" });
+      const lists = await page.locator("section ul").evaluateAll((uls) => uls.map((u) => u.children.length));
+      f9b.pasos.push(`ítems por lista: ${lists.join(", ") || "—"}`);
+      f9b.resultado = !old && lists.every((n) => n <= 5) ? "OK" : "Revisar";
+    } catch (e) { f9b.resultado = `Se cortó: ${String(e).slice(0, 200)}`; }
+    report.flujos.push(f9b);
 
     // j) Campanita: al abrirla se apaga el número; se puede eliminar un aviso
     const f10 = { flujo: "Avisos: abrir apaga el número y se pueden eliminar", pasos: [] };
