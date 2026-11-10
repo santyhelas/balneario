@@ -47,17 +47,16 @@ export default function WelcomePage() {
     e.preventDefault();
     setError(null);
     const u = normalizeUsername(usuario);
-    if (u && !USERNAME_RE.test(u)) return setError("El usuario debe tener entre 3 y 30 caracteres: letras, números, punto, guion o guion bajo (sin espacios).");
+    if (!u) return setError("Elegí un usuario para ingresar.");
+    if (!USERNAME_RE.test(u)) return setError("El usuario debe tener entre 3 y 30 caracteres: letras, números, punto, guion o guion bajo (sin espacios).");
     if (password.length < 8) return setError("La contraseña debe tener al menos 8 caracteres.");
     if (password !== repeat) return setError("Las contraseñas no coinciden.");
     setBusy(true);
     const sb = getSupabase();
     const r1 = await sb.auth.updateUser({ password });
     if (r1.error) { setBusy(false); return setError(friendlyError(r1.error)); }
-    if (u) {
-      const r2 = await sb.rpc("set_my_username", { p_username: u });
-      if (r2.error) { setBusy(false); return setError(friendlyError(r2.error)); }
-    }
+    const r2 = await sb.rpc("set_my_username", { p_username: u });
+    if (r2.error) { setBusy(false); return setError(friendlyError(r2.error)); }
     window.location.assign("/");
   }
 
@@ -67,7 +66,7 @@ export default function WelcomePage() {
         <div className="mb-5 flex flex-col items-center gap-2 text-center">
           <img src="/logo.png" alt="" className="h-16 w-16" />
           <h1 className="text-xl font-bold">¡Bienvenido a Mi Balneario!</h1>
-          {state === "listo" && <p className="text-sm text-muted">Elegí cómo vas a ingresar{email ? <> con <strong className="text-fg">{email}</strong></> : null}.</p>}
+          {state === "listo" && <p className="text-sm text-muted">Creá tu usuario y tu contraseña para ingresar.</p>}
         </div>
         {state === "cargando" && <div className="flex items-center justify-center gap-2 text-muted"><Spinner small /> Abriendo tu invitación…</div>}
         {state === "error" && (
@@ -78,9 +77,11 @@ export default function WelcomePage() {
         )}
         {state === "listo" && (
           <form onSubmit={submit} className="flex flex-col gap-3">
-            <TextField label="Usuario (opcional)" autoCapitalize="none" autoCorrect="off" spellCheck={false} value={usuario}
-              onChange={(e) => setUsuario(e.target.value)} placeholder="Ej: laola" />
-            <p className="-mt-2 text-xs text-muted">Si no elegís uno, ingresás con tu correo. También vas a poder entrar con Google.</p>
+            <TextField label="Correo" type="email" value={email ?? ""} readOnly disabled
+              hint="Es el correo de tu cuenta: ahí te llegan los avisos y la recuperación de la contraseña." />
+            <TextField label="Usuario" autoCapitalize="none" autoCorrect="off" spellCheck={false} autoComplete="username" value={usuario} required
+              onChange={(e) => setUsuario(e.target.value)} placeholder="Ej: laola"
+              hint="Entre 3 y 30 caracteres, sin espacios. Con él ingresás; también podés entrar con Google." />
             <TextField label="Contraseña" type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} required />
             <TextField label="Repetila" type="password" autoComplete="new-password" value={repeat} onChange={(e) => setRepeat(e.target.value)} required />
             {error && <Alert tone="danger">{error}</Alert>}
