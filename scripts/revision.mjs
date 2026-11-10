@@ -569,7 +569,7 @@ for (const [view, opts] of Object.entries(VIEWS)) {
   try {
     await p2.goto(DEMO + "/login", { waitUntil: "networkidle" });
     for (let i = 0; i < 3; i++) {
-      await p2.getByLabel("Usuario").fill("nadie-de-prueba");
+      await p2.getByLabel("Usuario").fill("no-existe@ejemplo.com");
       await p2.locator("#pw").fill("incorrecta" + i);
       await p2.getByRole("button", { name: /Ingresar/ }).first().click({ timeout: 40000 });
       await passCaptcha(p2, 20000);
