@@ -486,6 +486,8 @@ for (const [view, opts] of Object.entries(VIEWS)) {
       await page.waitForTimeout(3000);
       const tiles = await box.locator("img.leaflet-tile-loaded").count();
       f8.pasos.push(`mosaicos cargados: ${tiles}`);
+      await box.scrollIntoViewIfNeeded();
+      await page.waitForTimeout(500);
       const bb = await box.boundingBox();
       await page.mouse.click(bb.x + bb.width * 0.3, bb.y + bb.height * 0.4);
       await page.waitForTimeout(1500);
@@ -549,7 +551,7 @@ for (const [view, opts] of Object.entries(VIEWS)) {
       await page.screenshot({ path: `${OUT}/capturas/config-cerrada.png`, fullPage: true });
       await page.locator("details#perfil summary").click();
       await page.waitForTimeout(500);
-      const tema = await page.getByLabel("Tema").isVisible().catch(() => false);
+      const tema = await page.locator("details#perfil").getByText("Tema", { exact: true }).isVisible().catch(() => false);
       f11.pasos.push(tema ? "perfil abierto con «Tema»" : "no se ve «Tema»");
       await page.screenshot({ path: `${OUT}/capturas/config-perfil.png`, fullPage: true });
       f11.resultado = n >= 5 && tema ? "OK" : "Revisar";
@@ -569,8 +571,10 @@ for (const [view, opts] of Object.entries(VIEWS)) {
     for (let i = 0; i < 3; i++) {
       await p2.getByLabel("Usuario").fill("nadie-de-prueba");
       await p2.locator("#pw").fill("incorrecta" + i);
+      await p2.waitForFunction(() => !document.querySelector('form button[type="submit"]')?.disabled, null, { timeout: 40000 });
       await p2.getByRole("button", { name: "Ingresar" }).click();
-      await p2.waitForTimeout(2500);
+      await p2.waitForTimeout(1500);
+      await p2.waitForFunction(() => !document.querySelector('form button[type="submit"]')?.disabled, null, { timeout: 40000 });
     }
     const shown = await p2.getByText("¿Te olvidaste la contraseña?").isVisible().catch(() => false);
     f12.pasos.push(shown ? "aviso visible" : `sin aviso: ${(await p2.locator('[role="alert"]').allInnerTexts()).join(" | ").slice(0, 160)}`);
