@@ -626,9 +626,11 @@ for (const [view, opts] of Object.entries(VIEWS)) {
       await page.waitForURL(/\/reservas\/nueva/, { timeout: 10000 });
       f9b.pasos.push("F2 → nueva reserva");
       await page.goto(DEMO + "/", { waitUntil: "networkidle" });
-      const lists = await page.locator("section ul").evaluateAll((uls) => uls.map((u) => u.children.length));
+      const lists = await page.locator("section", { has: page.getByRole("heading", { name: /Inician hoy|Finalizan hoy/ }) }).locator("ul").evaluateAll((uls) => uls.map((u) => u.children.length));
       f9b.pasos.push(`ítems por lista: ${lists.join(", ") || "—"}`);
-      f9b.resultado = !old && lists.every((n) => n <= 5) ? "OK" : "Revisar";
+      const pager = await page.getByText(/Página \d+ de \d+/).count();
+      f9b.pasos.push(pager ? "con páginas" : "sin páginas (hay 5 o menos)");
+      f9b.resultado = !old && lists.length > 0 && lists.every((n) => n <= 5) ? "OK" : "Revisar";
     } catch (e) { f9b.resultado = `Se cortó: ${String(e).slice(0, 200)}`; }
     report.flujos.push(f9b);
 
