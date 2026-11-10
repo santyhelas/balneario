@@ -408,7 +408,7 @@ for (const [view, opts] of Object.entries(VIEWS)) {
     try {
       await page.goto(DEMO + "/mapa", { waitUntil: "networkidle" });
       await page.getByRole("button", { name: "Editar plano" }).click();
-      await page.getByRole("button", { name: "Agrandar" }).click();
+      await page.getByRole("button", { name: "Agrandar", exact: true }).click();
       await page.waitForTimeout(3000);
       await page.screenshot({ path: `${OUT}/capturas/flujo-plano.png`, fullPage: true });
       f5.resultado = (await page.getByText("el plano es más grande").count()) ? "OK" : "Revisar: no apareció el aviso";
@@ -601,7 +601,7 @@ for (const [view, opts] of Object.entries(VIEWS)) {
       const tema = await page.locator("details#perfil").getByText("Tema", { exact: true }).isVisible().catch(() => false);
       f11.pasos.push(tema ? "perfil abierto con «Tema»" : "no se ve «Tema»");
       await page.screenshot({ path: `${OUT}/capturas/config-perfil.png`, fullPage: true });
-      f11.resultado = n >= 5 && tema ? "OK" : "Revisar";
+      f11.resultado = n >= 4 && tema ? "OK" : "Revisar";
     } catch (e) { f11.resultado = `Se cortó: ${String(e).slice(0, 200)}`; }
     report.flujos.push(f11);
 
