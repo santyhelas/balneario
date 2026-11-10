@@ -29,7 +29,9 @@ export type Workspace = {
 
 /** Plan de Mi Balneario de este balneario (null: sin plan, no vence). */
 export type MyPlan = {
-  plan: "mensual" | "temporada"; precio: number; estado: "pendiente" | "activa" | "cancelada" | "manual" | "exenta";
+  plan: "mensual" | "anual" | "temporada"; precio: number; estado: "pendiente" | "activa" | "cancelada" | "manual" | "exenta";
+  entrada?: number | null; cuota?: number | null; cuotas_pagas?: number;
+  partes?: { nombre: string; importe: number | null; vence: string | null; pagada: boolean }[] | null;
   pago_hasta: string | null; bloquea_desde: string | null; vencido: boolean; dias_gracia: number; proximo_debito: string | null;
   debito_automatico: boolean; pagador: string | null; ultimo_pago: string | null; ultimo_estado: "aprobado" | "rechazado" | null;
   temporada_hasta: string; hoy: string;

@@ -1017,8 +1017,8 @@ select set_config('request.jwt.claims', '{"sub":"11111111-1111-1111-1111-1111111
 select t.ok(private.extend_until('temporada', null, '2026-11-20') = '2027-03-31' and private.extend_until('temporada', '2027-03-31', '2027-02-10') = '2028-03-31'
         and private.extend_until('temporada', '2026-12-01', '2026-12-01') = '2027-03-31', 'Planes: la temporada paga hasta el 31/3 que corresponde');
 select t.ok(private.extend_until('mensual', '2027-01-10', '2027-01-08') = '2027-02-10' and private.extend_until('mensual', '2026-12-01', '2027-01-05') = '2027-02-05', 'Planes: el mensual suma un mes desde el vencimiento (o desde el pago si estaba vencido)');
-select public.admin_set_prices(15000, 120000);
-select public.admin_allow_signup('cliente@test.com', 'La Ola', 'mensual', null, 10, 2);
+select public.admin_set_prices(180000, 60000, 50000);
+select public.admin_allow_signup('cliente@test.com', 'La Ola', 'anual', null, 10, 2);
 reset role;
 insert into auth.users (id, email) values ('99999999-9999-9999-9999-999999999999', 'cliente@test.com');
 set role authenticated;
@@ -1026,7 +1026,7 @@ select set_config('request.jwt.claims', '{"sub":"99999999-9999-9999-9999-9999999
 select t.throws($$select public.create_workspace('La Ola', 11, 0)$$, 'incluye hasta 10 carpas', 'Límite: al crear no se pasa de lo habilitado');
 select t.set('wsC', public.create_workspace('La Ola', 3, 0)::text);
 select t.ok((select max_tents = 10 and max_umbrellas = 2 from public.workspaces where id = t.uid('wsC')), 'Límite: el máximo es lo habilitado aunque se carguen menos');
-select t.ok((select plan = 'mensual' and price = 15000 and status = 'pendiente' and paid_until = private.today_ar() from public.subscriptions where workspace_id = t.uid('wsC')),
+select t.ok((select plan = 'anual' and price = 180000 and status = 'pendiente' and paid_until = private.today_ar() from public.subscriptions where workspace_id = t.uid('wsC')),
         'Planes: al crear el balneario nace su plan con el precio general');
 insert into public.customers (workspace_id, first_name) values (t.uid('wsC'), 'Primer');
 select t.ok(true, 'Planes: durante los días de gracia se puede cargar');
@@ -1043,8 +1043,8 @@ select public.plan_mp_status('pre-1', 'authorized', private.today_ar());
 select public.plan_mp_payment('pre-1', 'pay-1', 'approved', 15000, private.today_ar());
 select public.plan_mp_payment('pre-1', 'pay-1', 'approved', 15000, private.today_ar());
 reset role;
-select t.ok((select status = 'activa' and paid_until = (private.today_ar() + interval '1 month')::date from public.subscriptions where workspace_id = t.uid('wsC')),
-        'Planes: el débito aprobado extiende un mes (y el mismo aviso repetido no suma dos veces)');
+select t.ok((select status = 'activa' and paid_until = (private.today_ar() + interval '1 year')::date from public.subscriptions where workspace_id = t.uid('wsC')),
+        'Planes: el pago aprobado del anual extiende un año (y el mismo aviso repetido no suma dos veces)');
 set role authenticated;
 insert into public.customers (workspace_id, first_name) values (t.uid('wsC'), 'Pagó');
 select t.ok(not (public.my_plan(t.uid('wsC')) ->> 'vencido')::boolean, 'Planes: al pagar vuelve a poder cargar');
@@ -1064,13 +1064,29 @@ reset role;
 select t.ok(t.get('hasta') = '2030-01-31'
         and (select status = 'manual' from public.subscriptions where workspace_id = t.uid('wsC')), 'Planes: el dueño registra un pago a mano y elige hasta cuándo');
 set role authenticated;
-select public.admin_set_plan(t.uid('ws'), 'temporada', 0, true);
+select public.admin_set_plan(t.uid('ws'), 'anual', 0, true);
 select t.ok((select status = 'exenta' from public.subscriptions where workspace_id = t.uid('ws')) and not private.plan_expired(t.uid('ws')), 'Planes: un balneario exento no vence');
 select set_config('request.jwt.claims', '{"sub":"99999999-9999-9999-9999-999999999999","email":"cliente@test.com"}', false);
 select t.throws(format($$select public.admin_register_payment(%L, 1, null, null)$$, t.get('wsC')), 'No tenés permiso', 'Planes: el cliente no se registra pagos solo');
 select t.throws(format($$update public.subscriptions set paid_until = '2099-01-01' where workspace_id = %L$$, t.get('wsC')), 'permission denied', 'Planes: el cliente no cambia su vencimiento');
 select public.cancel_my_plan(t.uid('wsC'));
 select t.ok((select status = 'cancelada' and paid_until = '2030-01-31' from public.subscriptions where workspace_id = t.uid('wsC')), 'Planes: «No renovar» sin débito: sigue hasta el día pago');
+-- Temporada: entrada + 2 cuotas (1/1 y 1/2)
+select set_config('request.jwt.claims', '{"sub":"11111111-1111-1111-1111-111111111111","email":"duenio@test.com"}', false);
+select t.throws(format($$select public.admin_set_plan(%L, 'temporada', 0, false)$$, t.get('wsC')), 'entrada y la cuota', 'Temporada: pide entrada y cuota');
+select public.admin_set_plan(t.uid('wsC'), 'temporada', 0, false, 60000, 50000);
+reset role;
+update public.subscriptions set paid_until = private.today_ar(), installments_paid = 0, season_end = null where workspace_id = t.uid('wsC');
+select t.ok((select price = 160000 and entry_amount = 60000 and installment_amount = 50000 from public.subscriptions where workspace_id = t.uid('wsC')), 'Temporada: total = entrada + 2 cuotas (60.000 + 2 × 50.000)');
+set role authenticated;
+select t.set('p1', public.admin_register_payment(t.uid('wsC'), 60000)::text);
+select t.ok(t.get('p1')::date = greatest(make_date(extract(year from private.season_end(private.today_ar()))::int, 1, 1) - 1, private.today_ar()), 'Temporada: la entrada paga hasta el 31/12', t.get('p1'));
+select t.set('p2', public.admin_register_payment(t.uid('wsC'), 50000)::text);
+select t.ok(t.get('p2')::date = greatest(make_date(extract(year from private.season_end(private.today_ar()))::int, 2, 1) - 1, private.today_ar()), 'Temporada: la cuota 1 paga hasta el 31/1', t.get('p2'));
+select t.set('p3', public.admin_register_payment(t.uid('wsC'), 50000)::text);
+select t.ok(t.get('p3')::date = private.season_end(private.today_ar()), 'Temporada: la cuota 2 paga hasta el 31/3', t.get('p3'));
+select set_config('request.jwt.claims', '{"sub":"99999999-9999-9999-9999-999999999999","email":"cliente@test.com"}', false);
+select t.ok((public.my_plan(t.uid('wsC')) ->> 'cuotas_pagas')::int = 3 and jsonb_array_length(public.my_plan(t.uid('wsC')) -> 'partes') = 3, 'Temporada: el balneario ve sus 3 partes pagas');
 select set_config('request.jwt.claims', '{"sub":"22222222-2222-2222-2222-222222222222","email":"extranio@test.com"}', false);
 select t.throws(format($$select public.my_plan(%L)$$, t.get('wsC')), 'No tenés permiso', 'Planes: otro balneario no ve el plan');
 select set_config('request.jwt.claims', '{"sub":"11111111-1111-1111-1111-111111111111","email":"duenio@test.com"}', false);

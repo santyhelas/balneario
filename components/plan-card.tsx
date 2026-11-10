@@ -5,6 +5,7 @@ import { friendlyError } from "@/lib/errors";
 import { formatDate, formatDateTime, formatMoney } from "@/lib/format";
 import { useWorkspace } from "@/components/workspace";
 import { Alert, Badge, Button, Card, ConfirmDialog, TextField } from "@/components/ui";
+import { SITE_EMAIL } from "@/lib/site";
 
 /** "Mi plan": el plan de Mi Balneario del balneario, el débito automático y "No renovar". */
 
@@ -79,15 +80,19 @@ export function PlanCard() {
     }
   }
 
-  const planName = plan.plan === "mensual" ? "Mensual" : "Por temporada (1/12 al 31/3)";
-  const canActivate = owner && !exempt && !plan.debito_automatico;
+  const planName = plan.plan === "mensual" ? "Mensual" : plan.plan === "anual" ? "Anual" : "Temporada";
+  const priceText = plan.plan === "mensual" ? `${formatMoney(plan.precio)} por mes`
+    : plan.plan === "anual" ? `${formatMoney(plan.precio)} por año (un solo pago)`
+    : plan.entrada != null && plan.cuota != null ? `entrada ${formatMoney(plan.entrada)} + 2 cuotas de ${formatMoney(plan.cuota)}` : `${formatMoney(plan.precio)} por temporada`;
+  // Los planes se pagan por transferencia o efectivo: el débito automático solo queda para el mensual que ya lo tenía.
+  const canActivate = owner && !exempt && !plan.debito_automatico && plan.plan === "mensual";
 
   return (
     <section>
       <Card title="Mi plan">
         <div className="mb-3 flex flex-wrap items-center gap-2">
           <span className="font-semibold">{planName}</span>
-          <span className="tabular text-muted">· {formatMoney(plan.precio)}{plan.plan === "mensual" ? " por mes" : " por temporada"}</span>
+          <span className="tabular text-muted">· {priceText}</span>
           <Badge tone={plan.vencido ? "danger" : st.tone}>{plan.vencido ? "Vencido: solo lectura" : st.label}</Badge>
         </div>
         {!exempt && (
@@ -98,6 +103,28 @@ export function PlanCard() {
               : <div><dt className="text-xs text-muted">Solo lectura desde</dt><dd className="font-medium">{formatDate(plan.bloquea_desde)}</dd></div>}
             {plan.pagador && <div className="col-span-2"><dt className="text-xs text-muted">Cuenta que paga</dt><dd>{plan.pagador}</dd></div>}
           </dl>
+        )}
+        {plan.partes && !exempt && (
+          <ul className="mb-3 divide-y divide-line rounded-xl border border-line text-sm">
+            {plan.partes.map((x) => (
+              <li key={x.nombre} className="flex items-center justify-between gap-2 px-3 py-2">
+                <span>
+                  <span className="font-medium">{x.nombre}</span>
+                  <span className="block text-xs text-muted">{x.vence ? `vence el ${formatDate(x.vence)}` : "al contratar"}</span>
+                </span>
+                <span className="flex items-center gap-2">
+                  <span className="tabular">{formatMoney(x.importe)}</span>
+                  {x.pagada ? <Badge tone="ok">Pagada</Badge> : <Badge tone="warn">Pendiente</Badge>}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+        {!exempt && !plan.debito_automatico && plan.plan !== "mensual" && (
+          <p className="mb-3 text-sm text-muted">
+            Se paga por transferencia o en efectivo. Cuando te toque pagar, escribinos a{" "}
+            <a href={`mailto:${SITE_EMAIL}`} className="font-medium text-accent hover:underline">{SITE_EMAIL}</a> y te pasamos los datos.
+          </p>
         )}
         {plan.ultimo_estado === "rechazado" && !plan.vencido && (
           <Alert tone="warn" className="mb-3">Mercado Pago no pudo cobrar el último débito. Revisá que la tarjeta tenga fondos o esté vigente; Mercado Pago lo reintenta solo.</Alert>

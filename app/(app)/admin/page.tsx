@@ -10,9 +10,10 @@ import { Alert, Badge, Button, Card, ConfirmDialog, EmptyState, Input, Modal, Se
 
 /** Panel del dueño de Mi Balneario: balnearios, planes y cobros, altas habilitadas y pausas. */
 
-type PlanKind = "mensual" | "temporada";
+type PlanKind = "mensual" | "anual" | "temporada";
 type PlanInfo = {
   plan: PlanKind; precio: number; estado: string; pago_hasta: string | null; vencido: boolean; debito: boolean;
+  entrada?: number | null; cuota?: number | null; cuotas_pagas?: number;
   proximo_debito: string | null; ultimo_estado: "aprobado" | "rechazado" | null; ultimo_pago: string | null;
 };
 type Balneario = {
@@ -20,15 +21,35 @@ type Balneario = {
   usuarios: number; carpas: number; sombrillas: number; max_carpas?: number | null; max_sombrillas?: number | null; reservas: number; reservas_30d: number; ultimo_uso: string | null;
   plan: PlanInfo | null;
 };
-type Habilitacion = { correo: string; nota: string | null; creado: string; usado: string | null; balneario: string | null; plan: PlanKind | null; precio: number | null; carpas?: number | null; sombrillas?: number | null };
+type Habilitacion = { correo: string; nota: string | null; creado: string; usado: string | null; balneario: string | null; plan: PlanKind | null; precio: number | null; entrada?: number | null; cuota?: number | null; carpas?: number | null; sombrillas?: number | null };
 type Aviso = { id: string; tipo: "cancelada" | "pago_rechazado"; balneario: string; workspace_id: string; importe: number | null; detalle: string | null; fecha: string };
 type Overview = {
   balnearios: Balneario[]; habilitaciones: Habilitacion[]; avisos: Aviso[]; hoy: string; demos_abiertas: number;
-  precios: { mensual: number; temporada: number; dias_gracia: number };
+  precios: { mensual: number; temporada: number; anual?: number; entrada?: number; cuota?: number; dias_gracia: number };
 };
 
 const daysAgo = (ts: string | null) => (ts ? Math.floor((Date.now() - new Date(ts).getTime()) / 86_400_000) : null);
-const PLAN_LABEL: Record<PlanKind, string> = { mensual: "Mensual", temporada: "Temporada" };
+const PLAN_LABEL: Record<PlanKind, string> = { mensual: "Mensual", anual: "Anual", temporada: "Temporada" };
+
+/** Lo que se carga de un plan: anual = un precio; temporada = entrada + cuota (2 cuotas iguales, 1/1 y 1/2). */
+type PlanValue = { plan: "anual" | "temporada"; price: string; entry: string; installment: string };
+const planDefaults = (prices: Overview["precios"], plan: PlanValue["plan"] = "temporada"): PlanValue => ({
+  plan, price: String(prices.anual || ""), entry: String(prices.entrada || ""), installment: String(prices.cuota || ""),
+});
+/** Valida y devuelve lo que se manda a la base (o el error para mostrar). */
+function readPlan(v: PlanValue): { ok: true; plan: PlanValue["plan"]; price: number; entry: number | null; installment: number | null } | { ok: false; error: string } {
+  if (v.plan === "anual") {
+    const p = parseMoney(v.price);
+    return p == null || p < 0 ? { ok: false, error: "Poné el precio anual." } : { ok: true, plan: "anual", price: p, entry: null, installment: null };
+  }
+  const e = parseMoney(v.entry), c = parseMoney(v.installment);
+  if (e == null || e < 0 || c == null || c < 0) return { ok: false, error: "Poné la entrada y el valor de cada cuota." };
+  return { ok: true, plan: "temporada", price: e + 2 * c, entry: e, installment: c };
+}
+const planSummary = (p: { plan: PlanKind; precio: number | null; entrada?: number | null; cuota?: number | null }) =>
+  p.plan === "temporada" && p.entrada != null && p.cuota != null
+    ? `Temporada · entrada ${formatMoney(p.entrada)} + 2 cuotas de ${formatMoney(p.cuota)}`
+    : `${PLAN_LABEL[p.plan]}${p.precio != null ? ` ${formatMoney(p.precio)}` : ""}`;
 const daysBetween = (a: string, b: string) => Math.round((new Date(b + "T12:00:00Z").getTime() - new Date(a + "T12:00:00Z").getTime()) / 86_400_000);
 
 function planBadge(p: PlanInfo | null, hoy: string) {
@@ -119,9 +140,9 @@ export default function AdminPage() {
   const conPlan = d?.balnearios.filter((b) => b.plan && b.plan.estado !== "exenta") ?? [];
   const vencidos = conPlan.filter((b) => b.plan!.vencido);
   const porVencer = d ? conPlan.filter((b) => !b.plan!.vencido && !b.plan!.debito && b.plan!.pago_hasta && daysBetween(d.hoy, b.plan!.pago_hasta) <= 7) : [];
-  // Lo que entra por mes si todos los que tienen débito activo siguen (temporada: dividido 4 meses).
-  const mensualizado = conPlan.filter((b) => b.plan!.estado === "activa" || b.plan!.estado === "manual")
-    .reduce((a, b) => a + (b.plan!.plan === "mensual" ? Number(b.plan!.precio) : Number(b.plan!.precio) / 4), 0);
+  // Lo que entra en el año con los planes al día (anual: su precio; temporada: entrada + 2 cuotas).
+  const anualizado = conPlan.filter((b) => b.plan!.estado === "activa" || b.plan!.estado === "manual")
+    .reduce((a, b) => a + (b.plan!.plan === "mensual" ? Number(b.plan!.precio) * 12 : Number(b.plan!.precio)), 0);
 
   return (
     <>
@@ -134,7 +155,7 @@ export default function AdminPage() {
             <Kpi label="Balnearios" value={String(d.balnearios.length)} note={`${usados7} usados esta semana · ${d.balnearios.length - activos.length} en pausa`} />
             <Kpi label="Planes al día" value={String(conPlan.length - vencidos.length)} note={`${conPlan.filter((b) => b.plan!.debito).length} con débito automático`} />
             <Kpi label="Vencidos / por vencer" value={`${vencidos.length} / ${porVencer.length}`} note="por vencer: en 7 días y sin débito" tone={vencidos.length ? "danger" : undefined} />
-            <Kpi label="Ingreso por mes (aprox.)" value={formatMoney(mensualizado)} note="mensuales + temporadas ÷ 4" />
+            <Kpi label="Ingreso por año (aprox.)" value={formatMoney(anualizado)} note="anuales + temporadas al día" />
           </div>
 
           {(d.avisos.length > 0 || vencidos.length > 0 || porVencer.length > 0) && (
@@ -209,8 +230,8 @@ export default function AdminPage() {
 
           {tab === "altas" && (
             <SignupsCard rows={d.habilitaciones} busy={busy} prices={d.precios}
-              onAdd={async (email, note, plan, price, tents, umbrellas) => {
-                const ok = await run(() => sb.rpc("admin_allow_signup", { p_email: email, p_note: note || null, p_plan: plan, p_price: price, p_tents: tents, p_umbrellas: umbrellas }),
+              onAdd={async (email, note, p, tents, umbrellas) => {
+                const ok = await run(() => sb.rpc("admin_allow_signup", { p_email: email, p_note: note || null, p_plan: p.plan, p_price: p.price, p_tents: tents, p_umbrellas: umbrellas, p_entry: p.entry, p_installment: p.installment }),
                   `Listo: ${email} ya puede crear su balneario.`);
                 if (ok) await invite(email, true);
                 return ok;
@@ -222,7 +243,7 @@ export default function AdminPage() {
           {tab === "precios" && (
             <div className="max-w-xl">
               <PricesCard prices={d.precios} busy={busy}
-                onSave={(m, t) => run(() => sb.rpc("admin_set_prices", { p_mensual: m, p_temporada: t }), "Precios guardados. Se usan para los clientes nuevos.")} />
+                onSave={(a, e, c) => run(() => sb.rpc("admin_set_prices", { p_anual: a, p_entrada: e, p_cuota: c }), "Precios guardados. Se usan para los clientes nuevos.")} />
             </div>
           )}
         </div>
@@ -238,7 +259,7 @@ export default function AdminPage() {
       {pausing && <PauseModal b={pausing} busy={busy} onClose={() => setPausing(null)}
         onConfirm={async (reason) => { if (await run(() => sb.rpc("admin_set_paused", { p_workspace_id: pausing.id, p_paused: true, p_reason: reason }), `${pausing.nombre} quedó en pausa.`)) setPausing(null); }} />}
       {planFor && d && <PlanModal b={planFor} prices={d.precios} busy={busy} onClose={() => setPlanFor(null)}
-        onSave={async (plan, price, exempt) => { if (await run(() => sb.rpc("admin_set_plan", { p_workspace_id: planFor.id, p_plan: plan, p_price: price, p_exempt: exempt }), `Plan de ${planFor.nombre} guardado.`)) setPlanFor(null); }} />}
+        onSave={async (p, exempt) => { if (await run(() => sb.rpc("admin_set_plan", { p_workspace_id: planFor.id, p_plan: p.plan, p_price: p.price, p_exempt: exempt, p_entry: p.entry, p_installment: p.installment }), `Plan de ${planFor.nombre} guardado.`)) setPlanFor(null); }} />}
       {payFor && <PaymentModal b={payFor} busy={busy} onClose={() => setPayFor(null)}
         onSave={async (amount, until, note) => { if (await run(() => sb.rpc("admin_register_payment", { p_workspace_id: payFor.id, p_amount: amount, p_until: until, p_note: note || null }), `Pago de ${payFor.nombre} registrado.`)) setPayFor(null); }} />}
       <ConfirmDialog open={!!resuming} title="Reactivar balneario" confirmLabel="Reactivar" busy={busy}
@@ -263,49 +284,61 @@ function Kpi({ label, value, note, tone }: { label: string; value: string; note:
   );
 }
 
-function PlanFields({ plan, setPlan, price, setPrice }: { plan: PlanKind; setPlan: (p: PlanKind) => void; price: string; setPrice: (v: string) => void }) {
+function PlanFields({ v, setV }: { v: PlanValue; setV: (v: PlanValue) => void }) {
+  const e = parseMoney(v.entry) ?? 0, c = parseMoney(v.installment) ?? 0;
   return (
-    <div className="grid grid-cols-2 gap-2">
-      <label className="flex flex-col gap-1 text-sm font-medium">Plan
-        <Select value={plan} onChange={(e) => setPlan(e.target.value as PlanKind)}>
-          <option value="mensual">Mensual</option>
-          <option value="temporada">Temporada (1/12 al 31/3)</option>
-        </Select>
-      </label>
-      <TextField label="Precio" inputMode="decimal" value={price} onChange={(e) => setPrice(e.target.value)} />
+    <div className="flex flex-col gap-2">
+      <div className="grid grid-cols-2 gap-1 rounded-lg bg-surface-2 p-1 text-sm">
+        {(["temporada", "anual"] as const).map((k) => (
+          <button key={k} type="button" onClick={() => setV({ ...v, plan: k })}
+            className={cx("rounded-md px-3 py-1.5 font-semibold", v.plan === k ? "bg-surface text-fg shadow-sm" : "text-muted")}>
+            {k === "temporada" ? "Temporada" : "Anual"}
+          </button>
+        ))}
+      </div>
+      {v.plan === "anual" ? (
+        <TextField label="Precio anual (un solo pago)" inputMode="decimal" value={v.price} onChange={(ev) => setV({ ...v, price: ev.target.value })} />
+      ) : (
+        <>
+          <div className="grid grid-cols-2 gap-2">
+            <TextField label="Entrada (al contratar)" inputMode="decimal" value={v.entry} onChange={(ev) => setV({ ...v, entry: ev.target.value })} />
+            <TextField label="Cada cuota (1/1 y 1/2)" inputMode="decimal" value={v.installment} onChange={(ev) => setV({ ...v, installment: ev.target.value })} />
+          </div>
+          <p className="-mt-1 text-xs text-muted">Total de la temporada: <strong className="tabular">{formatMoney(e + 2 * c)}</strong> (entrada + 2 cuotas).</p>
+        </>
+      )}
     </div>
   );
 }
 
 function SignupsCard({ rows, busy, prices, onAdd, onRevoke, onInvite }: {
   rows: Habilitacion[]; busy: boolean; prices: Overview["precios"];
-  onAdd: (email: string, note: string, plan: PlanKind, price: number, tents: number | null, umbrellas: number | null) => Promise<boolean>; onRevoke: (h: Habilitacion) => void;
+  onAdd: (email: string, note: string, plan: ReturnType<typeof readPlan> & { ok: true }, tents: number | null, umbrellas: number | null) => Promise<boolean>; onRevoke: (h: Habilitacion) => void;
   onInvite: (email: string) => void;
 }) {
   const [email, setEmail] = useState("");
   const [tents, setTents] = useState("");
   const [umbrellas, setUmbrellas] = useState("");
   const [note, setNote] = useState("");
-  const [plan, setPlan] = useState<PlanKind>("temporada");
-  const [price, setPrice] = useState(String(prices.temporada || ""));
+  const [pv, setPv] = useState<PlanValue>(() => planDefaults(prices));
   const [err, setErr] = useState<string | null>(null);
   async function submit(e: FormEvent) {
     e.preventDefault();
-    const p = parseMoney(price);
-    if (p == null || p < 0) return setErr("Poné el precio del plan.");
+    const p = readPlan(pv);
+    if (!p.ok) return setErr(p.error);
     const t = tents.trim() === "" ? null : Number(tents);
     const u = umbrellas.trim() === "" ? null : Number(umbrellas);
     if ((t != null && (!Number.isInteger(t) || t < 0 || t > 600)) || (u != null && (!Number.isInteger(u) || u < 0 || u > 300))) return setErr("Carpas: de 0 a 600; sombrillas: de 0 a 300.");
     setErr(null);
-    if (await onAdd(email.trim().toLowerCase(), note.trim(), plan, p, t, u)) { setEmail(""); setNote(""); setTents(""); setUmbrellas(""); }
+    if (await onAdd(email.trim().toLowerCase(), note.trim(), p, t, u)) { setEmail(""); setNote(""); setTents(""); setUmbrellas(""); }
   }
   return (
     <Card title="Altas habilitadas">
-      <p className="mb-3 text-sm text-muted">Cuando alguien contrata, poné su correo (el de Google o el que va a usar) y su plan. Le llega un mail para elegir su usuario y contraseña; también puede entrar con Google con ese mismo correo. Al crear su balneario tiene {prices.dias_gracia} días para activar el débito.</p>
+      <p className="mb-3 text-sm text-muted">Cuando alguien contrata, poné su correo (el de Google o el que va a usar) y su plan. Le llega un mail para elegir su usuario y contraseña; también puede entrar con Google con ese mismo correo. Al crear su balneario tiene {prices.dias_gracia} días de gracia hasta que registres el primer pago.</p>
       <div className="grid gap-6 lg:grid-cols-2">
       <form onSubmit={submit} className="flex flex-col gap-2">
         <TextField label="Correo" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="cliente@gmail.com" />
-        <PlanFields plan={plan} setPlan={(v) => { setPlan(v); setPrice(String((v === "mensual" ? prices.mensual : prices.temporada) || "")); }} price={price} setPrice={setPrice} />
+        <PlanFields v={pv} setV={setPv} />
         <div className="grid grid-cols-2 gap-2">
           <TextField label="Carpas contratadas" type="number" inputMode="numeric" min={0} max={600} value={tents} onChange={(e) => setTents(e.target.value)} placeholder="Ej: 90" />
           <TextField label="Sombrillas contratadas" type="number" inputMode="numeric" min={0} max={300} value={umbrellas} onChange={(e) => setUmbrellas(e.target.value)} placeholder="Ej: 10" />
@@ -322,7 +355,7 @@ function SignupsCard({ rows, busy, prices, onAdd, onRevoke, onInvite }: {
               <div className="min-w-0">
                 <div className="truncate font-medium">{h.correo}</div>
                 <div className="text-xs text-muted">
-                  {h.plan ? `${PLAN_LABEL[h.plan]}${h.precio != null ? ` ${formatMoney(h.precio)}` : ""} · ` : ""}{h.carpas != null || h.sombrillas != null ? `${h.carpas ?? "—"} carpas + ${h.sombrillas ?? "—"} sombrillas · ` : ""}{h.nota ? `${h.nota} · ` : ""}habilitado el {formatDate(h.creado.slice(0, 10))}
+                  {h.plan ? `${planSummary({ ...h, plan: h.plan })} · ` : ""}{h.carpas != null || h.sombrillas != null ? `${h.carpas ?? "—"} carpas + ${h.sombrillas ?? "—"} sombrillas · ` : ""}{h.nota ? `${h.nota} · ` : ""}habilitado el {formatDate(h.creado.slice(0, 10))}
                 </div>
               </div>
               {h.usado
@@ -337,52 +370,71 @@ function SignupsCard({ rows, busy, prices, onAdd, onRevoke, onInvite }: {
   );
 }
 
-function PricesCard({ prices, busy, onSave }: { prices: Overview["precios"]; busy: boolean; onSave: (m: number, t: number) => Promise<boolean> }) {
-  const [m, setM] = useState(String(prices.mensual || ""));
-  const [t, setT] = useState(String(prices.temporada || ""));
+function PricesCard({ prices, busy, onSave }: { prices: Overview["precios"]; busy: boolean; onSave: (anual: number, entrada: number, cuota: number) => Promise<boolean> }) {
+  const [anual, setAnual] = useState(String(prices.anual || ""));
+  const [entrada, setEntrada] = useState(String(prices.entrada || ""));
+  const [cuota, setCuota] = useState(String(prices.cuota || ""));
   const [err, setErr] = useState<string | null>(null);
+  const e = parseMoney(entrada) ?? 0, c = parseMoney(cuota) ?? 0;
   return (
     <Card title="Precios de los planes">
       <p className="mb-3 text-sm text-muted">Son los precios que se proponen al habilitar un cliente nuevo. Cambiarlos no modifica lo que ya paga cada balneario.</p>
-      <div className="grid grid-cols-2 gap-2">
-        <TextField label="Mensual" inputMode="decimal" value={m} onChange={(e) => setM(e.target.value)} />
-        <TextField label="Temporada" inputMode="decimal" value={t} onChange={(e) => setT(e.target.value)} />
+      <div className="flex flex-col gap-3">
+        <div className="rounded-xl border border-line p-3">
+          <div className="mb-2 text-sm font-semibold">Temporada <span className="font-normal text-muted">· entrada al contratar + 2 cuotas (1/1 y 1/2)</span></div>
+          <div className="grid grid-cols-2 gap-2">
+            <TextField label="Entrada" inputMode="decimal" value={entrada} onChange={(ev) => setEntrada(ev.target.value)} />
+            <TextField label="Cada cuota" inputMode="decimal" value={cuota} onChange={(ev) => setCuota(ev.target.value)} />
+          </div>
+          <p className="mt-1 text-xs text-muted">Total: <strong className="tabular">{formatMoney(e + 2 * c)}</strong></p>
+        </div>
+        <div className="rounded-xl border border-line p-3">
+          <div className="mb-2 text-sm font-semibold">Anual <span className="font-normal text-muted">· un solo pago, cubre 12 meses</span></div>
+          <TextField label="Precio anual" inputMode="decimal" value={anual} onChange={(ev) => setAnual(ev.target.value)} />
+        </div>
       </div>
       {err && <Alert tone="danger" className="mt-2">{err}</Alert>}
       <Button className="mt-3" loading={busy} onClick={() => {
-        const a = parseMoney(m); const b = parseMoney(t);
-        if (a == null || b == null || a < 0 || b < 0) return setErr("Poné los dos precios.");
-        setErr(null); onSave(a, b);
+        const a = parseMoney(anual), en = parseMoney(entrada), cu = parseMoney(cuota);
+        if (a == null || en == null || cu == null || a < 0 || en < 0 || cu < 0) return setErr("Poné los tres precios.");
+        setErr(null); onSave(a, en, cu);
       }}>Guardar precios</Button>
     </Card>
   );
 }
 
 function PlanModal({ b, prices, busy, onClose, onSave }: {
-  b: Balneario; prices: Overview["precios"]; busy: boolean; onClose: () => void; onSave: (plan: PlanKind, price: number, exempt: boolean) => void;
+  b: Balneario; prices: Overview["precios"]; busy: boolean; onClose: () => void; onSave: (plan: ReturnType<typeof readPlan> & { ok: true }, exempt: boolean) => void;
 }) {
-  const [plan, setPlan] = useState<PlanKind>(b.plan?.plan ?? "temporada");
-  const [price, setPrice] = useState(String(b.plan?.precio ?? (prices.temporada || "")));
+  const [pv, setPv] = useState<PlanValue>(() => {
+    const d = planDefaults(prices, b.plan?.plan === "anual" ? "anual" : "temporada");
+    if (b.plan?.plan === "anual") d.price = String(b.plan.precio);
+    if (b.plan?.plan === "temporada" && b.plan.entrada != null && b.plan.cuota != null) { d.entry = String(b.plan.entrada); d.installment = String(b.plan.cuota); }
+    return d;
+  });
   const [exempt, setExempt] = useState(b.plan?.estado === "exenta");
   const [err, setErr] = useState<string | null>(null);
   return (
     <Modal open onClose={onClose} busy={busy} title={`Plan de ${b.nombre}`}
       footer={<><Button variant="secondary" onClick={onClose} disabled={busy}>Cancelar</Button><Button loading={busy} onClick={() => {
-        const p = parseMoney(price);
-        if (p == null || p < 0) return setErr("Poné el precio.");
-        onSave(plan, p, exempt);
+        const p = readPlan(pv);
+        if (!p.ok) return setErr(p.error);
+        onSave(p, exempt);
       }}>Guardar</Button></>}>
-      <PlanFields plan={plan} setPlan={setPlan} price={price} setPrice={setPrice} />
+      <PlanFields v={pv} setV={setPv} />
       <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={exempt} onChange={(e) => setExempt(e.target.checked)} /> Sin vencimiento (no paga, por ejemplo el tuyo)</label>
       {b.plan?.debito && <p className="text-xs text-muted">Tiene débito automático activo: el precio nuevo se cobra recién cuando vuelva a activar el débito. Mercado Pago sigue cobrando el importe que autorizó.</p>}
-      {!b.plan && <p className="text-xs text-muted">Arranca con vencimiento hoy: tiene los días de gracia para activar el débito o para que registres su pago.</p>}
+      {!b.plan && <p className="text-xs text-muted">Arranca con vencimiento hoy: tiene los días de gracia hasta que registres su primer pago.</p>}
       {err && <Alert tone="danger">{err}</Alert>}
     </Modal>
   );
 }
 
 function PaymentModal({ b, busy, onClose, onSave }: { b: Balneario; busy: boolean; onClose: () => void; onSave: (amount: number, until: string | null, note: string) => void }) {
-  const [amount, setAmount] = useState(String(b.plan?.precio ?? ""));
+  // Temporada: cada pago es la parte que sigue (entrada, cuota 1, cuota 2).
+  const part = b.plan?.plan === "temporada" ? Math.min((b.plan.cuotas_pagas ?? 0) + 1, 3) : null;
+  const partLabel = part === 1 ? "la entrada (paga hasta el 31/12)" : part === 2 ? "la cuota 1 de enero (paga hasta el 31/1)" : part === 3 ? "la cuota 2 de febrero (paga hasta el 31/3)" : null;
+  const [amount, setAmount] = useState(String(part === 1 ? b.plan?.entrada ?? "" : part ? b.plan?.cuota ?? "" : b.plan?.precio ?? ""));
   const [until, setUntil] = useState("");
   const [note, setNote] = useState("Transferencia");
   const [err, setErr] = useState<string | null>(null);
@@ -393,7 +445,11 @@ function PaymentModal({ b, busy, onClose, onSave }: { b: Balneario; busy: boolea
         if (a == null || a < 0) return setErr("Poné el importe.");
         onSave(a, until || null, note.trim());
       }}>Registrar</Button></>}>
-      <p className="text-sm text-muted">Para pagos por fuera de Mercado Pago (transferencia, efectivo). {b.plan?.plan === "mensual" ? "Suma un mes" : "Cubre la temporada (hasta el 31/3)"}, salvo que elijas otra fecha.</p>
+      <p className="text-sm text-muted">
+        Transferencia o efectivo.{" "}
+        {partLabel ? <>Se registra como <strong className="text-fg">{partLabel}</strong>, salvo que elijas otra fecha.</>
+          : b.plan?.plan === "anual" ? "Cubre un año desde el vencimiento, salvo que elijas otra fecha." : "Suma un mes, salvo que elijas otra fecha."}
+      </p>
       <TextField label="Importe" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} />
       <TextField label="Pago hasta (opcional)" type="date" value={until} onChange={(e) => setUntil(e.target.value)} />
       <TextField label="Nota" value={note} onChange={(e) => setNote(e.target.value)} maxLength={200} />
@@ -497,7 +553,7 @@ function BalnearioCard({ b, hoy, mine, onPlan, onPay, onLimits, onPause, onResum
       </div>
       {b.pausado && b.motivo_pausa && <p className="mt-2 rounded-lg bg-danger-soft px-2 py-1 text-xs">{b.motivo_pausa}</p>}
       <dl className="mt-3 divide-y divide-line border-y border-line">
-        <Row k="Plan">{p && p.estado !== "exenta" ? <>{PLAN_LABEL[p.plan]} · <b className="tabular">{formatMoney(p.precio)}</b></> : p ? "Sin vencimiento" : "—"}</Row>
+        <Row k="Plan">{p && p.estado !== "exenta" ? <>{planSummary(p)}{p.plan === "temporada" ? <span className="text-muted"> · {p.cuotas_pagas ?? 0}/3 pagas</span> : null}</> : p ? "Sin vencimiento" : "—"}</Row>
         {p && p.estado !== "exenta" && (
           <Row k={p.debito ? "Próximo débito" : "Pagado hasta"}>
             <span className="tabular">{formatDate(p.debito && p.proximo_debito ? p.proximo_debito : p.pago_hasta)}</span>

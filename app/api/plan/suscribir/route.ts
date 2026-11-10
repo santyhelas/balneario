@@ -26,8 +26,9 @@ export async function POST(req: NextRequest) {
 
   const { data: plan, error } = await admin.rpc("plan_for_checkout", { p_workspace_id: me.ws });
   if (error || !plan) return json({ error: "Tu balneario no tiene un plan asignado. Escribinos." }, 400);
-  const p = plan as { plan: "mensual" | "temporada"; precio: number; estado: string; preapproval: string | null; balneario: string; hoy: string; inicio_temporada: string };
+  const p = plan as { plan: "mensual" | "anual" | "temporada"; precio: number; estado: string; preapproval: string | null; balneario: string; hoy: string; inicio_temporada: string };
   if (p.estado === "exenta") return json({ error: "Tu plan no necesita pago." }, 400);
+  if (p.plan !== "mensual") return json({ error: "Este plan se paga por transferencia o en efectivo. Escribinos y te pasamos los datos." }, 400);
   if (!(Number(p.precio) > 0)) return json({ error: "Tu plan todavía no tiene precio. Escribinos." }, 400);
 
   // Si había un débito anterior sin terminar o cancelado, se reemplaza por uno nuevo.
@@ -41,7 +42,7 @@ export async function POST(req: NextRequest) {
       method: "POST",
       idempotencyKey: `${me.ws}:${Date.now()}`,
       body: {
-        reason: `Mi Balneario · plan ${p.plan === "mensual" ? "mensual" : "por temporada"} · ${p.balneario}`.slice(0, 120),
+        reason: `Mi Balneario · plan ${p.plan} · ${p.balneario}`.slice(0, 120),
         external_reference: me.ws,
         payer_email: payerEmail,
         auto_recurring: recurringFor(p.plan, Number(p.precio), p.inicio_temporada, p.hoy),

@@ -49,9 +49,9 @@ export function paymentOutcome(ap: { status?: string; payment?: { status?: strin
 }
 
 /** Datos del débito para Mercado Pago: mensual cada mes; temporada cada 12 meses desde el 1/12. */
-export function recurringFor(plan: "mensual" | "temporada", price: number, seasonStart: string, today: string) {
+export function recurringFor(plan: "mensual" | "anual" | "temporada", price: number, seasonStart: string, today: string) {
   const base = { transaction_amount: Math.round(price * 100) / 100, currency_id: "ARS" as const, frequency: plan === "mensual" ? 1 : 12, frequency_type: "months" as const };
-  if (plan === "mensual" || seasonStart <= today) return base;
+  if (plan !== "temporada" || seasonStart <= today) return base;
   // Se cobra recién el 1/12 a las 10 (hora de Argentina).
   return { ...base, start_date: `${seasonStart}T10:00:00.000-03:00` };
 }
