@@ -83,7 +83,7 @@ export function PlanCard() {
   const canActivate = owner && !exempt && !plan.debito_automatico;
 
   return (
-    <section id="plan" className="scroll-mt-20">
+    <section>
       <Card title="Mi plan">
         <div className="mb-3 flex flex-wrap items-center gap-2">
           <span className="font-semibold">{planName}</span>

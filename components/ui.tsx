@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useId, useRef, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from "react";
+import { createContext, useContext, useEffect, useId, useRef, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from "react";
 
 export function cx(...c: (string | false | null | undefined)[]) {
   return c.filter(Boolean).join(" ");
@@ -85,7 +85,19 @@ export function TextField({ label, hint, error, ...rest }: InputHTMLAttributes<H
   );
 }
 
+/** Dentro de un apartado que ya tiene su propio encabezado (Configuración), la tarjeta va sin borde ni título. */
+export const CardBareContext = createContext(false);
+
 export function Card({ title, actions, children, className, tour }: { title?: ReactNode; actions?: ReactNode; children: ReactNode; className?: string; tour?: string }) {
+  const bare = useContext(CardBareContext);
+  if (bare) {
+    return (
+      <section data-tour={tour} className={className}>
+        {actions && <div className="mb-3 flex justify-end gap-2">{actions}</div>}
+        {children}
+      </section>
+    );
+  }
   return (
     <section data-tour={tour} className={cx("rounded-xl border border-line bg-surface p-4", className)}>
       {(title || actions) && (
@@ -144,15 +156,21 @@ export function Modal({
   wide?: boolean;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  // onClose suele ser una función nueva en cada render: se guarda aparte para que escribir
+  // en un campo no vuelva a mover el foco al primero.
+  const closeRef = useRef(onClose);
+  const busyRef = useRef(busy);
+  closeRef.current = onClose;
+  busyRef.current = busy;
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !busy) onClose();
+      if (e.key === "Escape" && !busyRef.current) closeRef.current();
     };
     window.addEventListener("keydown", onKey);
     ref.current?.querySelector<HTMLElement>("input, select, textarea, button")?.focus();
     return () => window.removeEventListener("keydown", onKey);
-  }, [open, busy, onClose]);
+  }, [open]);
   if (!open) return null;
   return (
     <div

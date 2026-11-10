@@ -93,6 +93,25 @@ export default function AdminPage() {
     return true;
   }
 
+  // Mail al cliente para que elija su usuario y contraseña (la habilitación ya quedó guardada).
+  async function invite(email: string, afterAdd: boolean) {
+    setBusy(true);
+    let r: { ok?: boolean; tipo?: string; error?: string } = {};
+    try {
+      const res = await fetch("/api/admin/invitar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email }) });
+      r = await res.json().catch(() => ({ error: "Respuesta inválida del servidor." }));
+    } catch {
+      r = { error: "No hay conexión con el servidor." };
+    }
+    setBusy(false);
+    const head = afterAdd ? `${email} ya está habilitado. ` : "";
+    if (r.ok) {
+      setMsg({ tone: "ok", text: `${head}Le mandamos un mail a ${email} para que elija su usuario y contraseña${r.tipo === "ya_tenia_cuenta" ? " (ya tenía cuenta: también puede entrar directo con Google)" : ""}.` });
+    } else {
+      setMsg({ tone: "danger", text: `${head}Pero no se pudo mandar el mail: ${r.error ?? "error desconocido"} Igual puede entrar con Google usando ese correo.` });
+    }
+  }
+
   const d = q.data;
   const activos = d?.balnearios.filter((b) => !b.pausado) ?? [];
   const usados7 = activos.filter((b) => (daysAgo(b.ultimo_uso) ?? 99) <= 7).length;
@@ -189,8 +208,13 @@ export default function AdminPage() {
 
           {tab === "altas" && (
             <SignupsCard rows={d.habilitaciones} busy={busy} prices={d.precios}
-              onAdd={(email, note, plan, price, tents, umbrellas) => run(() => sb.rpc("admin_allow_signup", { p_email: email, p_note: note || null, p_plan: plan, p_price: price, p_tents: tents, p_umbrellas: umbrellas }),
-                `Listo: ${email} ya puede crear su balneario (con usuario o con Google).`)}
+              onAdd={async (email, note, plan, price, tents, umbrellas) => {
+                const ok = await run(() => sb.rpc("admin_allow_signup", { p_email: email, p_note: note || null, p_plan: plan, p_price: price, p_tents: tents, p_umbrellas: umbrellas }),
+                  `Listo: ${email} ya puede crear su balneario.`);
+                if (ok) await invite(email, true);
+                return ok;
+              }}
+              onInvite={(email) => invite(email, false)}
               onRevoke={setRevoking} />
           )}
 
@@ -247,9 +271,10 @@ function PlanFields({ plan, setPlan, price, setPrice }: { plan: PlanKind; setPla
   );
 }
 
-function SignupsCard({ rows, busy, prices, onAdd, onRevoke }: {
+function SignupsCard({ rows, busy, prices, onAdd, onRevoke, onInvite }: {
   rows: Habilitacion[]; busy: boolean; prices: Overview["precios"];
   onAdd: (email: string, note: string, plan: PlanKind, price: number, tents: number | null, umbrellas: number | null) => Promise<boolean>; onRevoke: (h: Habilitacion) => void;
+  onInvite: (email: string) => void;
 }) {
   const [email, setEmail] = useState("");
   const [tents, setTents] = useState("");
@@ -270,7 +295,7 @@ function SignupsCard({ rows, busy, prices, onAdd, onRevoke }: {
   }
   return (
     <Card title="Altas habilitadas">
-      <p className="mb-3 text-sm text-muted">Cuando alguien contrata, poné su correo (el de Google o el que va a usar) y su plan. Solo esas cuentas pueden crear un balneario. Al crearlo tiene {prices.dias_gracia} días para activar el débito.</p>
+      <p className="mb-3 text-sm text-muted">Cuando alguien contrata, poné su correo (el de Google o el que va a usar) y su plan. Le llega un mail para elegir su usuario y contraseña; también puede entrar con Google con ese mismo correo. Al crear su balneario tiene {prices.dias_gracia} días para activar el débito.</p>
       <div className="grid gap-6 lg:grid-cols-2">
       <form onSubmit={submit} className="flex flex-col gap-2">
         <TextField label="Correo" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="cliente@gmail.com" />
@@ -296,7 +321,7 @@ function SignupsCard({ rows, busy, prices, onAdd, onRevoke }: {
               </div>
               {h.usado
                 ? <Badge tone="ok">Creó {h.balneario ?? "su balneario"}</Badge>
-                : <span className="flex items-center gap-2"><Badge tone="warn">Sin usar</Badge><Button variant="ghost" onClick={() => onRevoke(h)}>Quitar</Button></span>}
+                : <span className="flex items-center gap-2"><Badge tone="warn">Sin usar</Badge><Button variant="ghost" disabled={busy} onClick={() => onInvite(h.correo)}>Reenviar mail</Button><Button variant="ghost" onClick={() => onRevoke(h)}>Quitar</Button></span>}
             </li>
           ))}
         </ul>

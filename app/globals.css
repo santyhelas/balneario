@@ -5,12 +5,13 @@
 
 :root {
   color-scheme: light;
-  --bg: #f6f3ec;
-  --surface: #ffffff;
-  --surface-2: #f1ede4;
+  /* Tonos de arena: fondo apenas amarillo y tarjetas blanco cálido. */
+  --bg: #f6eedb;
+  --surface: #fffcf4;
+  --surface-2: #f3e9d3;
   --fg: #1c2830;
-  --muted: #56666f;
-  --line: #e0d9cb;
+  --muted: #55636b;
+  --line: #e4d6b8;
   --accent: #0b6a87;
   --accent-fg: #ffffff;
   --accent-soft: #dceff5;

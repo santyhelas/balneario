@@ -168,7 +168,10 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         const allowed = await sb.rpc("can_create_workspace");
         if (allowed.error || allowed.data !== true) {
           await sb.auth.signOut();
-          window.location.assign("/?sin_plan=1#planes");
+          // Se muestra con qué correo entró, para notar si Google eligió otra cuenta.
+          const q = new URLSearchParams({ sin_plan: user.email ?? "1" });
+          if (allowed.error) q.set("motivo", "error");
+          window.location.assign(`/?${q.toString()}#planes`);
           return;
         }
         setState({ kind: "onboarding", userId: user.id, email: user.email ?? null });

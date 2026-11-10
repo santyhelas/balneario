@@ -25,6 +25,11 @@ export async function startDemo(): Promise<string | null> {
     // 57014: el servidor cortó por tiempo (falta la actualización 0038, que le da más tiempo a la demo).
     return e2.code === "57014" ? "La demo tardó demasiado en armarse. Probá de nuevo en un momento." : friendlyError(e2);
   }
+  // Se cuenta la visita (sin esperar ni fallar si no se puede).
+  await Promise.race([
+    fetch("/api/demo", { method: "POST", keepalive: true }).catch(() => undefined),
+    new Promise((r) => setTimeout(r, 800)),
+  ]);
   try { sessionStorage.setItem(GUEST_MARK, "1"); } catch { /* sin almacenamiento: igual funciona en esta pestaña */ }
   window.location.assign("/");
   return null;

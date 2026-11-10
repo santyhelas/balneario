@@ -31,6 +31,8 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [canRegister, setCanRegister] = useState(false);
+  // Contraseñas incorrectas seguidas: a la tercera se sugiere recuperarla.
+  const [fails, setFails] = useState(0);
 
   useEffect(() => {
     const p = new URLSearchParams(window.location.search);
@@ -81,6 +83,7 @@ export default function LoginPage() {
       const r = await post("/auth/ingresar", { usuario, password, recordar: remember, captchaToken: captcha });
       if (!r.ok) {
         setBusy(false);
+        if (/incorrect/i.test(r.error ?? "")) setFails((n) => n + 1);
         return setError(r.error!);
       }
       window.location.assign("/");
@@ -179,7 +182,18 @@ export default function LoginPage() {
               </label>
             </>
           )}
-          {error && <Alert tone="danger">{error}</Alert>}
+          {error && !(mode === "ingresar" && fails >= 3) && <Alert tone="danger">{error}</Alert>}
+          {mode === "ingresar" && fails >= 3 && (
+            <div role="alert" className="flex flex-col gap-2 rounded-xl border border-warn/50 bg-warn-soft p-3 text-sm">
+              <strong>¿Te olvidaste la contraseña?</strong>
+              <span>Ya probaste {fails} veces sin éxito. Antes de que se bloquee el ingreso por unos minutos, podés recuperarla o entrar con Google.</span>
+              <span className="flex flex-wrap gap-2">
+                <Button type="button" variant="secondary" onClick={() => { go("recuperar"); setFails(0); }}>Recuperar contraseña</Button>
+                <Button type="button" variant="ghost" onClick={() => setFails(0)}>Seguir intentando</Button>
+              </span>
+              <span className="text-xs text-muted">Si ingresás con un usuario que te dio el propietario, pedile que te ponga una contraseña nueva.</span>
+            </div>
+          )}
           {info && <Alert tone="ok">{info}</Alert>}
           <Button type="submit" loading={busy} className="w-full py-2.5" disabled={mismatch}>
             {mode === "ingresar" ? "Ingresar" : mode === "crear" ? "Crear cuenta" : "Enviar enlace"}

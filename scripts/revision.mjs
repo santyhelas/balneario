@@ -312,7 +312,7 @@ for (const [view, opts] of Object.entries(VIEWS)) {
       // c) Extras: cargar uno en Configuración y sumarlo a la reserva recién creada
       const f3 = { flujo: "Extras: crear «Reposera» y agregarla a la reserva", pasos: [] };
       try {
-        await page.goto(DEMO + "/configuracion", { waitUntil: "networkidle" });
+        await page.goto(DEMO + "/configuracion#extras", { waitUntil: "networkidle" });
         await page.getByRole("button", { name: "Agregar extra" }).first().click();
         const d = page.getByRole("dialog");
         await d.getByLabel("Nombre").fill("Reposera de prueba");
@@ -368,7 +368,7 @@ for (const [view, opts] of Object.entries(VIEWS)) {
     // d) Límite de efectivo: se configura bajo, aparece el aviso y se registra un depósito
     const f4 = { flujo: "Límite de efectivo y depósito", pasos: [] };
     try {
-      await page.goto(DEMO + "/configuracion", { waitUntil: "networkidle" });
+      await page.goto(DEMO + "/configuracion#reglas", { waitUntil: "networkidle" });
       await page.getByLabel("Límite de efectivo en caja").fill("1000");
       await page.getByRole("button", { name: "Guardar" }).filter({ hasText: /^Guardar$/ }).last().click();
       await page.waitForTimeout(2000);
@@ -479,7 +479,7 @@ for (const [view, opts] of Object.entries(VIEWS)) {
     // h) Configuración: marcar el punto exacto en el mapa
     const f8 = { flujo: "Ubicación: mapa para marcar el punto", pasos: [] };
     try {
-      await page.goto(DEMO + "/configuracion", { waitUntil: "networkidle" });
+      await page.goto(DEMO + "/configuracion#balneario", { waitUntil: "networkidle" });
       await page.getByRole("button", { name: "Marcar el punto exacto en el mapa" }).click();
       const box = page.locator('[aria-label="Mapa para marcar la ubicación del balneario"]');
       await box.waitFor({ timeout: 15000 });
@@ -496,8 +496,99 @@ for (const [view, opts] of Object.entries(VIEWS)) {
       f8.resultado = tiles > 0 && coords ? "OK" : "Revisar";
     } catch (e) { f8.resultado = `Se cortó: ${String(e).slice(0, 200)}`; }
     report.flujos.push(f8);
+
+    // i) Consultas: se puede escribir en el cuadro de texto (antes el foco saltaba al primer campo)
+    const f9 = { flujo: "Consultas: escribir la consulta", pasos: [] };
+    try {
+      await page.goto(DEMO + "/", { waitUntil: "networkidle" });
+      await page.getByRole("button", { name: /Consultas/ }).first().click();
+      const d = page.getByRole("dialog", { name: "Consultas" });
+      await d.waitFor({ timeout: 10000 });
+      const ta = d.locator("textarea");
+      await ta.click();
+      await page.keyboard.type("Hola, esto es una prueba de consulta");
+      const val = await ta.inputValue();
+      f9.pasos.push(`texto: «${val}»`);
+      const href = await d.getByRole("link", { name: "Enviar por mail" }).getAttribute("href");
+      f9.pasos.push(href && href.includes("mibalnearioarg") ? "mail a mibalnearioarg" : `enlace: ${href}`);
+      await page.screenshot({ path: `${OUT}/capturas/consultas.png` });
+      f9.resultado = val === "Hola, esto es una prueba de consulta" ? "OK" : "Revisar";
+      await page.keyboard.press("Escape");
+    } catch (e) { f9.resultado = `Se cortó: ${String(e).slice(0, 200)}`; }
+    report.flujos.push(f9);
+
+    // j) Campanita: al abrirla se apaga el número; se puede eliminar un aviso
+    const f10 = { flujo: "Avisos: abrir apaga el número y se pueden eliminar", pasos: [] };
+    try {
+      await page.goto(DEMO + "/", { waitUntil: "networkidle" });
+      await page.waitForTimeout(1500);
+      const bell = page.locator('button[aria-label^="Avisos"]:visible').first();
+      f10.pasos.push(`antes: ${await bell.getAttribute("aria-label")}`);
+      await bell.click();
+      await page.waitForTimeout(800);
+      await page.screenshot({ path: `${OUT}/capturas/avisos-abiertos.png` });
+      const items = page.locator('button[aria-label^="Eliminar aviso"]');
+      const n0 = await items.count();
+      if (n0) { await items.first().click(); await page.waitForTimeout(500); }
+      const n1 = await items.count();
+      f10.pasos.push(`avisos: ${n0} → ${n1}`);
+      await page.keyboard.press("Escape");
+      await page.waitForTimeout(500);
+      const after = await bell.getAttribute("aria-label");
+      f10.pasos.push(`después: ${after}`);
+      f10.resultado = after === "Avisos" && (n0 === 0 || n1 === n0 - 1) ? "OK" : "Revisar";
+    } catch (e) { f10.resultado = `Se cortó: ${String(e).slice(0, 200)}`; }
+    report.flujos.push(f10);
+
+    // k) Configuración en apartados desplegables
+    const f11 = { flujo: "Configuración: apartados desplegables", pasos: [] };
+    try {
+      await page.goto(DEMO + "/configuracion", { waitUntil: "networkidle" });
+      const n = await page.locator("details").count();
+      f11.pasos.push(`apartados: ${n}`);
+      await page.screenshot({ path: `${OUT}/capturas/config-cerrada.png`, fullPage: true });
+      await page.locator("details#perfil summary").click();
+      await page.waitForTimeout(500);
+      const tema = await page.getByLabel("Tema").isVisible().catch(() => false);
+      f11.pasos.push(tema ? "perfil abierto con «Tema»" : "no se ve «Tema»");
+      await page.screenshot({ path: `${OUT}/capturas/config-perfil.png`, fullPage: true });
+      f11.resultado = n >= 5 && tema ? "OK" : "Revisar";
+    } catch (e) { f11.resultado = `Se cortó: ${String(e).slice(0, 200)}`; }
+    report.flujos.push(f11);
   }
   await ctx.close();
+}
+
+// l) Ingreso: a la tercera contraseña incorrecta aparece el aviso de recuperarla
+{
+  const ctx2 = await browser.newContext({ viewport: { width: 1366, height: 900 } });
+  const p2 = await ctx2.newPage();
+  const f12 = { flujo: "Ingreso: aviso tras 3 contraseñas incorrectas", pasos: [] };
+  try {
+    await p2.goto(BASE + "/login", { waitUntil: "networkidle" });
+    for (let i = 0; i < 3; i++) {
+      await p2.getByLabel("Usuario").fill("nadie-de-prueba");
+      await p2.locator("#pw").fill("incorrecta" + i);
+      await p2.getByRole("button", { name: "Ingresar" }).click();
+      await p2.waitForTimeout(2500);
+    }
+    const shown = await p2.getByText("¿Te olvidaste la contraseña?").isVisible().catch(() => false);
+    f12.pasos.push(shown ? "aviso visible" : `sin aviso: ${(await p2.locator('[role="alert"]').allInnerTexts()).join(" | ").slice(0, 160)}`);
+    await p2.screenshot({ path: `${OUT}/capturas/login-tres-intentos.png` });
+    f12.resultado = shown ? "OK" : "Revisar";
+  } catch (e) { f12.resultado = `Se cortó: ${String(e).slice(0, 200)}`; }
+  report.flujos.push(f12);
+  // m) Página de bienvenida sin enlace válido: muestra el error, no se rompe
+  const f13 = { flujo: "Bienvenida sin invitación válida", pasos: [] };
+  try {
+    await p2.goto(BASE + "/auth/bienvenida", { waitUntil: "networkidle" });
+    await p2.waitForTimeout(1500);
+    const t = await p2.locator("main").innerText();
+    f13.pasos.push(t.replace(/\s+/g, " ").slice(0, 120));
+    f13.resultado = /venció|usado/.test(t) ? "OK" : "Revisar";
+  } catch (e) { f13.resultado = `Se cortó: ${String(e).slice(0, 200)}`; }
+  report.flujos.push(f13);
+  await ctx2.close();
 }
 await browser.close();
 

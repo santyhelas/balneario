@@ -1,13 +1,13 @@
 "use client";
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { getSupabase } from "@/lib/supabase/client";
 import { unwrap, useLoader } from "@/lib/data";
 import { friendlyError, isVersionConflict } from "@/lib/errors";
 import { resizeImage } from "@/lib/image";
 import { useWorkspace, type ThemePref } from "@/components/workspace";
 import { useStatus } from "@/components/status";
-import { BrandLogo, PageHeader, SyncNotice } from "@/components/shell";
-import { Alert, Badge, Button, Card, Field, Select, Spinner, TextField } from "@/components/ui";
+import { BrandLogo, Icon, PageHeader, SyncNotice } from "@/components/shell";
+import { Alert, Badge, Button, Card, CardBareContext, Field, Select, Spinner, TextField } from "@/components/ui";
 import { LinkedAccountsCard } from "@/components/linked-accounts";
 import { MyUsernameField, UsersCard } from "@/components/users";
 import { LocationPicker } from "@/components/location-picker";
@@ -33,22 +33,69 @@ export default function ConfiguracionPage() {
       <PageHeader title="Configuración" subtitle="Datos del balneario, tu perfil y preferencias." />
       <SyncNotice error={q.error} stale={q.stale} updatedAt={q.updatedAt} onRetry={q.reload} />
       {!q.data ? (q.loading && <div className="flex items-center gap-2 text-muted"><Spinner small /> Cargando…</div>) : (
-        <div className="grid gap-4 lg:grid-cols-2">
-          <div className="flex flex-col gap-4">
-          <BalnearioCard key={q.data.row.version} row={q.data.row} editable={isAdmin} onSaved={async () => { await reloadWorkspace(); q.reload(); }} onConflict={q.reload} />
-          <MessagesCard key={`m${q.data.row.version}`} editable={isAdmin} onSaved={q.reload} />
-          <ExtrasCard />
-          <div data-tour="config-reglas"><RulesCard /></div>
-          </div>
-          <div className="flex flex-col gap-4">
-            {!isGuest && <PlanCard />}
+        <div className="flex max-w-4xl flex-col gap-3">
+          <ConfigSection id="balneario" title="Datos del balneario" sub="Nombre, logo, contacto y ubicación (para el clima)" icon="M3 21h18M5 21V8l7-5 7 5v13M9 21v-6h6v6">
+            <BalnearioCard key={q.data.row.version} row={q.data.row} editable={isAdmin} onSaved={async () => { await reloadWorkspace(); q.reload(); }} onConflict={q.reload} />
+          </ConfigSection>
+          <ConfigSection id="mensajes" title="Mensajes a clientes" sub="Textos de WhatsApp y correo para recordatorios y comprobantes" icon="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z">
+            <MessagesCard key={`m${q.data.row.version}`} editable={isAdmin} onSaved={q.reload} />
+          </ConfigSection>
+          <ConfigSection id="extras" title="Extras" sub="Reposeras, estacionamiento y otros cobros aparte" icon="M12 5v14M5 12h14">
+            <ExtrasCard />
+          </ConfigSection>
+          <ConfigSection id="reglas" title="Caja y descuentos" sub="Límite de efectivo en caja y tope de descuento" icon="M3 7h18v12H3zM3 11h18M7 15h3">
+            <div data-tour="config-reglas"><RulesCard /></div>
+          </ConfigSection>
+          {!isGuest && (
+            <ConfigSection id="plan" title="Mi plan" sub="Vencimiento, pagos y débito automático" icon="M12 3v18M16.5 7.5c0-1.7-2-3-4.5-3s-4.5 1.3-4.5 3 2 2.5 4.5 3 4.5 1.3 4.5 3-2 3-4.5 3-4.5-1.3-4.5-3">
+              <PlanCard />
+            </ConfigSection>
+          )}
+          <ConfigSection id="perfil" title="Mi perfil" sub="Tu nombre, foto, usuario, contraseña, tema y temperatura" icon="M20 21a8 8 0 0 0-16 0M12 13a5 5 0 1 0 0-10 5 5 0 0 0 0 10z">
             <ProfileCard />
-            {!isGuest && <LinkedAccountsCard />}
-            {!isGuest && <div data-tour="config-usuarios"><UsersCard /></div>}
-          </div>
+          </ConfigSection>
+          {!isGuest && (
+            <ConfigSection id="cuentas" title="Cuentas vinculadas" sub="Entrar con Google" icon="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1">
+              <LinkedAccountsCard />
+            </ConfigSection>
+          )}
+          {!isGuest && (
+            <ConfigSection id="usuarios" title="Usuarios" sub="Tu equipo: quién puede entrar y con qué permisos" icon="M16 19v-1a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v1M9.5 10a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM21 19v-1a4 4 0 0 0-3-3.9M16 3.1a3.5 3.5 0 0 1 0 6.8">
+              <div data-tour="config-usuarios"><UsersCard /></div>
+            </ConfigSection>
+          )}
         </div>
       )}
     </>
+  );
+}
+
+/**
+ * Apartado plegable de Configuración. Adentro va la tarjeta de siempre, sin su borde ni su título
+ * (el título ya está en el encabezado). Se abre solo si la dirección termina en #<id>.
+ */
+function ConfigSection({ id, title, sub, icon, children }: { id: string; title: string; sub: string; icon: string; children: ReactNode }) {
+  const ref = useRef<HTMLDetailsElement>(null);
+  useEffect(() => {
+    if (window.location.hash === `#${id}` && ref.current) {
+      ref.current.open = true;
+      ref.current.scrollIntoView({ block: "start" });
+    }
+  }, [id]);
+  return (
+    <details ref={ref} id={id} className="group scroll-mt-20 rounded-2xl border border-line bg-surface open:shadow-sm">
+      <summary className="flex cursor-pointer list-none items-center gap-3 rounded-2xl p-4 hover:bg-surface-2 [&::-webkit-details-marker]:hidden">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent-soft text-accent"><Icon d={icon} className="h-5 w-5" /></span>
+        <span className="min-w-0 flex-1">
+          <span className="block font-semibold">{title}</span>
+          <span className="block truncate text-xs text-muted">{sub}</span>
+        </span>
+        <Icon d="M6 9l6 6 6-6" className="h-5 w-5 shrink-0 text-muted transition group-open:rotate-180" />
+      </summary>
+      <div className="border-t border-line px-4 pb-4 pt-3">
+        <CardBareContext.Provider value={true}>{children}</CardBareContext.Provider>
+      </div>
+    </details>
   );
 }
 
@@ -317,7 +364,7 @@ function MessagesCard({ editable, onSaved }: { editable: boolean; onSaved: () =>
   const info = isMail ? { label: "Correo", help: "El correo que se arma al tocar «Enviar correo» en una reserva (si el cliente tiene mail cargado)." } : DEBT_CASES.find((c) => c.key === tab)!;
   const changed = (k: Key) => draft[k] !== DEFAULTS[k];
   return (
-    <section id="mensajes" className="scroll-mt-20">
+    <section>
       <Card title="Mensajes a clientes (WhatsApp y correo)" tour="config-mensajes">
         <div className="mb-2 flex flex-wrap gap-1">
           {DEBT_CASES.map((c) => (

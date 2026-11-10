@@ -108,6 +108,8 @@ type Rect = { top: number; left: number; width: number; height: number };
 /** El primer elemento visible con esa marca (en la compu y en el celular hay botones distintos). */
 function findVisible(tag: string): HTMLElement | null {
   for (const el of Array.from(document.querySelectorAll<HTMLElement>(`[data-tour="${tag}"]`))) {
+    // Si está dentro de un apartado plegado (Configuración), se despliega para mostrarlo.
+    for (let d = el.closest("details"); d; d = d.parentElement?.closest("details") ?? null) if (!d.open) d.open = true;
     const r = el.getBoundingClientRect();
     if (r.width > 0 && r.height > 0) return el;
   }

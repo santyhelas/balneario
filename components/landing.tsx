@@ -16,9 +16,23 @@ function useLoggedIn(): boolean {
   return on;
 }
 
-export function DemoButton({ className, children = "Probar la demo" }: { className?: string; children?: ReactNode }) {
+// Cuántas personas probaron la demo (una sola consulta aunque haya varios botones).
+let demoCount: Promise<number | null> | null = null;
+function useDemoCount(): number | null {
+  const [n, setN] = useState<number | null>(null);
+  useEffect(() => {
+    demoCount ??= fetch("/api/demo").then((r) => r.json()).then((d: { cantidad?: number | null }) => (typeof d.cantidad === "number" ? d.cantidad : null)).catch(() => null);
+    let alive = true;
+    demoCount.then((v) => { if (alive) setN(v); });
+    return () => { alive = false; };
+  }, []);
+  return n;
+}
+
+export function DemoButton({ className, children = "Probar la demo", countClassName }: { className?: string; children?: ReactNode; countClassName?: string }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const count = useDemoCount();
   return (
     <span className="inline-flex flex-col">
       <button type="button" disabled={busy}
@@ -26,6 +40,11 @@ export function DemoButton({ className, children = "Probar la demo" }: { classNa
         className={cx("inline-flex items-center justify-center py-3 text-base font-bold transition disabled:opacity-60", className ?? "rounded-xl px-5")}>
         {busy ? "Preparando la demo…" : children}
       </button>
+      {count != null && count > 0 && (
+        <span className={cx("mt-1.5 text-center text-xs opacity-80", countClassName)}>
+          Ya la {count === 1 ? "probó 1 persona" : `probaron ${count.toLocaleString("es-AR")} personas`}
+        </span>
+      )}
       {error && <span role="alert" className="mt-1 max-w-xs text-xs text-danger">{error}</span>}
     </span>
   );
@@ -67,11 +86,16 @@ export function MobileMenu({ links }: { links: { href: string; label: string }[]
 /** Aviso al volver de la demo (?demo=fin). */
 export function DemoEndedNotice() {
   const [show, setShow] = useState<null | "demo" | "plan">(null);
+  const [account, setAccount] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
   useEffect(() => {
     const p = new URLSearchParams(window.location.search);
     const kind = p.get("demo") === "fin" ? "demo" : p.get("sin_plan") ? "plan" : null;
     if (kind) {
       setShow(kind);
+      const who = p.get("sin_plan");
+      if (who && who.includes("@")) setAccount(who);
+      setFailed(p.get("motivo") === "error");
       window.history.replaceState(null, "", window.location.pathname + window.location.hash);
       if (kind === "plan") document.getElementById("planes")?.scrollIntoView({ behavior: "smooth" });
     }
@@ -80,7 +104,9 @@ export function DemoEndedNotice() {
   return (
     <div role="status" className={show === "plan" ? "border-b border-amber-300 bg-amber-50 px-4 py-2 text-center text-sm text-amber-950" : "border-b border-ok/40 bg-ok-soft px-4 py-2 text-center text-sm"}>
       {show === "plan"
-        ? <>Esa cuenta todavía no tiene un balneario habilitado. Para crear el tuyo, <a href="#planes" className="font-semibold underline">pedí tu presupuesto</a>.</>
+        ? failed
+          ? <>No pudimos verificar si {account ? <strong>{account}</strong> : "tu cuenta"} tiene un balneario habilitado. Probá de nuevo en un rato o escribinos.</>
+          : <>{account ? <>La cuenta <strong>{account}</strong></> : "Esa cuenta"} todavía no tiene un balneario habilitado. Si ya contrataste, fijate de entrar con el mismo correo que nos pasaste. Si no, <a href="#planes" className="font-semibold underline">pedí tu presupuesto</a>.</>
         : <>Saliste de la demo y se borró todo lo que cargaste. ¿Te gustó? <a href="#planes" className="font-semibold text-accent underline">Pedí tu presupuesto</a>.</>}
       <button type="button" onClick={() => setShow(null)} className="ml-3 text-muted hover:text-fg" aria-label="Cerrar aviso">×</button>
     </div>

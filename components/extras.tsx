@@ -136,7 +136,7 @@ export function ReservationExtras({ reservationId, stayDays, editable, onChanged
   if (q.data.catalog.length === 0 && q.data.lines.length === 0) {
     return (
       <Card title="Extras">
-        <p className="text-sm text-muted">Si cobrás reposeras, estacionamiento u otra cosa aparte, cargalos en <a href="/configuracion" className="font-medium text-accent hover:underline">Configuración → Extras</a> y después los sumás acá.</p>
+        <p className="text-sm text-muted">Si cobrás reposeras, estacionamiento u otra cosa aparte, cargalos en <a href="/configuracion#extras" className="font-medium text-accent hover:underline">Configuración → Extras</a> y después los sumás acá.</p>
       </Card>
     );
   }
