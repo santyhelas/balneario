@@ -450,8 +450,8 @@ for (const [view, opts] of Object.entries(VIEWS)) {
       await page.getByRole("button", { name: "Ver límite" }).click().catch(() => {});
       await page.waitForTimeout(600);
       await page.screenshot({ path: `${OUT}/capturas/flujo-plano-varias.png`, fullPage: true });
-      const lim = await svg.getByText("Límite si achicás").count();
-      f6.pasos.push(lim ? "límite visible" : "sin límite");
+      const lim = (await svg.getByText("Así queda si achicás").count()) + (await page.getByText("No se puede achicar más").count());
+      f6.pasos.push(lim ? "límite visible (o aviso de que no se puede achicar)" : "sin límite");
       // Deshacer todo lo editado: la primera vuelve a su lugar
       await page.getByRole("button", { name: "Deshacer todo lo editado" }).click();
       await page.getByRole("dialog").getByRole("button", { name: "Dejar como estaba" }).click();
