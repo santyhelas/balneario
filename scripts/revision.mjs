@@ -470,6 +470,15 @@ for (const [view, opts] of Object.entries(VIEWS)) {
     try {
       await page.goto(DEMO + "/mapa", { waitUntil: "networkidle" });
       const svg = page.locator('svg[aria-label="Plano del balneario"]');
+      // Pantalla completa: el plano ocupa toda la pantalla
+      await page.getByRole("button", { name: "Pantalla completa" }).click();
+      await page.waitForTimeout(500);
+      const fb = await svg.boundingBox();
+      const vp = page.viewportSize();
+      f6b.pasos.push(fb && fb.height > vp.height * 0.85 ? "pantalla completa" : `pantalla completa NO (${Math.round(fb?.height ?? 0)}px de ${vp.height})`);
+      await page.screenshot({ path: `${OUT}/capturas/mapa-pantalla-completa.png` });
+      await page.keyboard.press("Escape");
+      await page.waitForTimeout(300);
       await svg.locator('g[data-state="ocupada"]').first().click();
       const dlg = page.getByRole("dialog");
       await dlg.waitFor({ timeout: 8000 });
