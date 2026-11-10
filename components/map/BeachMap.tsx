@@ -646,13 +646,13 @@ function Shortcuts() {
     ["Ctrl + rueda", "acercar o alejar"],
   ];
   return (
-    <div className="absolute right-3 top-14 z-[1] max-w-[15rem] rounded-xl border border-line/60 bg-surface/75 text-[11px] leading-snug text-muted shadow-sm backdrop-blur print:hidden">
+    <div className="absolute right-3 top-14 z-[1] rounded-xl border border-line/50 bg-surface/70 text-[10.5px] leading-snug text-muted shadow-sm backdrop-blur print:hidden">
       <button type="button" onClick={() => setOpen((v) => !v)} className="flex w-full items-center justify-between gap-2 px-2.5 py-1.5 font-semibold uppercase tracking-wider" aria-expanded={open}>
         Atajos <span aria-hidden>{open ? "−" : "+"}</span>
       </button>
       {open && (
         <dl className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 px-2.5 pb-2">
-          {rows.map(([k, v]) => (<Fragment key={k}><dt className="whitespace-nowrap font-semibold text-fg/80">{k}</dt><dd>{v}</dd></Fragment>))}
+          {rows.map(([k, v]) => (<Fragment key={k}><dt className="whitespace-nowrap font-semibold text-fg/75">{k}</dt><dd className="whitespace-nowrap">{v}</dd></Fragment>))}
         </dl>
       )}
     </div>
