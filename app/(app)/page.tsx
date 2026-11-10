@@ -131,7 +131,7 @@ export default function DashboardPage() {
       )}
 
       {/* Indicadores, en dos grupos: la playa y la plata del día */}
-      <div data-tour="panel-stats" className="grid gap-4 xl:grid-cols-2">
+      <div data-tour="panel-stats" className="grid gap-4 min-[1700px]:grid-cols-2">
         <StatGroup title="Hoy en la playa">
           <Stat tone="ok" label="Libres" value={String(disponibles)} note={`${pct(disponibles)}% del balneario${mant ? ` · ${mant} en mantenimiento` : ""}`} icon="M20 6L9 17l-5-5" href="/mapa" />
           <Stat tone="danger" label="Ocupadas" value={String(ocupados)} note={`${pct(ocupados)}% ocupado${(carpa?.cortesias ?? 0) + (sombrilla?.cortesias ?? 0) ? ` · ${(carpa?.cortesias ?? 0) + (sombrilla?.cortesias ?? 0)} cortesía` : ""}`} icon="M3 20h18M6 20V9l6-5 6 5v11" href="/mapa" />
@@ -192,7 +192,7 @@ function Stat({ tone, label, value, note, icon, href, valueTone }: { tone: Tone;
         <span className={cx("text-sm font-semibold", t.label)}>{label}</span>
         <Icon d={icon} className={cx("h-5 w-5", t.label)} />
       </div>
-      <div className={cx("tabular mt-2 truncate text-2xl font-extrabold md:text-3xl xl:text-2xl 2xl:text-3xl", TONE[valueTone ?? tone].value)}>{value}</div>
+      <div className={cx("tabular mt-2 truncate text-xl font-extrabold sm:text-2xl md:text-3xl", TONE[valueTone ?? tone].value)}>{value}</div>
       {note && <div className="mt-1 text-xs text-muted">{note}</div>}
     </Link>
   );
