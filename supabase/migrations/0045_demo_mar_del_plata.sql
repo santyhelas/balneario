@@ -23,9 +23,10 @@ begin
     raise exception 'Hay muchos invitados en este momento. Probá de nuevo en un rato.';
   end if;
 
-  insert into public.workspaces (name, subtitle, created_by, map_width, map_height, sea_side, sea_bearing, latitude, longitude, timezone, is_demo)
+  -- La brújula arriba a la izquierda, sobre la arena libre (abajo a la derecha tapaba las carpas 01 a 04).
+  insert into public.workspaces (name, subtitle, created_by, map_width, map_height, sea_side, sea_bearing, latitude, longitude, timezone, is_demo, compass_layout)
   values ('Balneario de demostración', 'Mar del Plata · Modo invitado', v_user, 3050, 2300, 'bottom', 110,
-          -38.0055, -57.5426, 'America/Argentina/Buenos_Aires', true)
+          -38.0055, -57.5426, 'America/Argentina/Buenos_Aires', true, '{"x": 13, "y": 15, "scale": 0.85}'::jsonb)
   returning id into v_ws;
   insert into public.workspace_members (workspace_id, user_id, role) values (v_ws, v_user, 'propietario');
 
