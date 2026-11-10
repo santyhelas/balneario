@@ -421,7 +421,7 @@ for (const [view, opts] of Object.entries(VIEWS)) {
       await page.goto(DEMO + "/mapa", { waitUntil: "networkidle" });
       await page.getByRole("button", { name: "Editar plano" }).click();
       const svg = page.locator('svg[aria-label="Plano del balneario"]');
-      const tents = svg.locator('g[role="button"]');
+      const tents = svg.locator('g[role="button"][data-state]'); // solo carpas y sombrillas (no caminos ni instalaciones)
       // Dos carpas vecinas (las más cercanas entre las primeras 30), para que el recuadro no agarre otras cosas.
       const nTents = Math.min(30, await tents.count());
       const boxes = [];

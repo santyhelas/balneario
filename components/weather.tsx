@@ -1,5 +1,5 @@
 "use client";
-import { createContext, useContext, useEffect, useMemo, useRef, useState, type PointerEvent as RPointerEvent, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as RPointerEvent, type ReactNode } from "react";
 import { cardinal, cardinalName, sunPosition, sunTimes } from "@/lib/sun";
 import { formatTemperature } from "@/lib/format";
 import { useWorkspace } from "@/components/workspace";
@@ -354,9 +354,31 @@ export function WindCompass({ seaSide, layout = null, editable = false, onLayout
   const toward = w.data?.viento_desde != null ? (w.data.viento_desde + 180) % 360 : null;
   const sun = ws.latitude != null && ws.longitude != null ? sunPosition(now, Number(ws.latitude), Number(ws.longitude)) : null;
 
+  // Que nunca quede cortada: si el plano es angosto (o la brújula grande), se corre hacia adentro.
+  const [nudge, setNudge] = useState({ x: 0, y: 0 });
+  useLayoutEffect(() => {
+    const el = boxRef.current;
+    const parent = el?.parentElement;
+    if (!live || !el || !parent) { setNudge((n) => (n.x || n.y ? { x: 0, y: 0 } : n)); return; }
+    const fit = () => {
+      const p = parent.getBoundingClientRect();
+      const bw = el.offsetWidth * live.scale, bh = el.offsetHeight * live.scale;
+      const cx0 = (live.x / 100) * p.width, cy0 = (live.y / 100) * p.height;
+      const pad = 6;
+      const clamp = (c: number, half: number, size: number) => half * 2 + pad * 2 >= size ? size / 2 - c : Math.min(size - pad - half, Math.max(pad + half, c)) - c;
+      const next = { x: Math.round(clamp(cx0, bw / 2, p.width)), y: Math.round(clamp(cy0, bh / 2, p.height)) };
+      setNudge((n) => (n.x === next.x && n.y === next.y ? n : next));
+    };
+    fit();
+    const ro = new ResizeObserver(fit);
+    ro.observe(parent);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [live]);
+
   if (w.noLocation && !editable) return null;
   const placed = live
-    ? { left: `${live.x}%`, top: `${live.y}%`, transform: `translate(-50%, -50%) scale(${live.scale})`, transformOrigin: "center" }
+    ? { left: `${live.x}%`, top: `${live.y}%`, transform: `translate(calc(-50% + ${nudge.x}px), calc(-50% + ${nudge.y}px)) scale(${live.scale})`, transformOrigin: "center" }
     : undefined;
   return (
     <div ref={boxRef} style={placed}
