@@ -4,7 +4,6 @@ import { getSupabase } from "@/lib/supabase/client";
 import { unwrap, useLoader } from "@/lib/data";
 import { friendlyError, isVersionConflict } from "@/lib/errors";
 import { resizeImage } from "@/lib/image";
-import { SITE_EMAIL, gmailCompose } from "@/lib/site";
 import { useWorkspace, type ThemePref } from "@/components/workspace";
 import { useStatus } from "@/components/status";
 import { BrandLogo, PageHeader, SyncNotice } from "@/components/shell";
@@ -15,14 +14,13 @@ import { LocationPicker } from "@/components/location-picker";
 import { ExtrasCard } from "@/components/extras";
 import { PlanCard } from "@/components/plan-card";
 import { RulesCard } from "@/components/rules-card";
-import { startTour } from "@/components/demo-tour";
 import { DEBT_CASES, DEFAULT_MAIL, DEFAULT_TEMPLATES, PLACEHOLDERS, debtVars, fillTemplate, type DebtCase, type MailKey, type Templates } from "@/lib/whatsapp-messages";
 
 type WsRow = { name: string; subtitle: string | null; logo_data: string | null; legal_id: string | null; phone: string | null; address: string | null; latitude: number | null; longitude: number | null; version: number };
 type Member = { user_id: string; role: string; email: string | null; created_at: string };
 
 export default function ConfiguracionPage() {
-  const { ws, isAdmin, reloadWorkspace, isGuest, role } = useWorkspace();
+  const { ws, isAdmin, reloadWorkspace, isGuest } = useWorkspace();
   const sb = getSupabase();
   const q = useLoader(async () => {
     const row = unwrap(await sb.from("workspaces").select("name, subtitle, logo_data, legal_id, phone, address, latitude, longitude, version").eq("id", ws.id).single()) as WsRow;
@@ -47,18 +45,6 @@ export default function ConfiguracionPage() {
             <ProfileCard />
             {!isGuest && <LinkedAccountsCard />}
             {!isGuest && <div data-tour="config-usuarios"><UsersCard /></div>}
-            <Card title="Ayuda y consultas">
-              <p className="text-sm text-muted">
-                ¿Dudas, problemas o sugerencias? Escribinos a{" "}
-                <a href={gmailCompose(SITE_EMAIL)} target="_blank" rel="noopener noreferrer" className="font-medium text-accent hover:underline">{SITE_EMAIL}</a>.
-              </p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {!isGuest && role === "propietario" && (
-                  <Button variant="secondary" onClick={() => startTour("guia")}>Ver la guía de nuevo</Button>
-                )}
-                {isGuest && <Button variant="secondary" onClick={() => startTour("novedades")}>Ver las novedades</Button>}
-              </div>
-            </Card>
           </div>
         </div>
       )}

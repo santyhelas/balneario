@@ -1,4 +1,5 @@
 "use client";
+import { SupportModal } from "@/components/support";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState, type ReactNode } from "react";
@@ -44,6 +45,8 @@ const ICON_AUTO = "M12 3a9 9 0 1 0 0 18V3zM12 3a9 9 0 0 1 0 18";
 const ICON_BELL = "M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0";
 const ICON_LOGOUT = "M15 4h4v16h-4M10 8l-4 4 4 4M6 12h11";
 
+export const ICON_HELP = "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .8-1 1.5v.7M12 17h.01";
+
 export function Icon({ d, className }: { d: string; className?: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className={cx("h-5 w-5 shrink-0", className)} aria-hidden>
@@ -78,6 +81,7 @@ function longDate(iso: string, timeZone: string) {
 }
 
 export function Shell({ children }: { children: ReactNode }) {
+  const [supportOpen, setSupportOpen] = useState(false);
   const { ws, email, theme, setTheme, role, profile, isGuest, guideDone, setGuideDone, isPlatformAdmin, adminAlerts } = useWorkspace();
   const status = useStatus();
   const pathname = usePathname();
@@ -129,7 +133,7 @@ export function Shell({ children }: { children: ReactNode }) {
   }
 
   const isActive = (href: string) => (href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(href + "/")) && !(href === "/reservas" && pathname.startsWith("/reservas/nueva"));
-  const alerts = status.notices.filter((n) => n.tone !== "info").length;
+  const alerts = status.unseen;
   const carpa = status.summary?.espacios.carpa;
   const sombrilla = status.summary?.espacios.sombrilla;
   const userName = profile.displayName || email || "";
@@ -213,7 +217,11 @@ export function Shell({ children }: { children: ReactNode }) {
             <Icon d={THEME_ICON[theme]} className="h-4 w-4" />
           </button>
         </div>
-        <div className="px-3 pb-3">
+        <div className="flex flex-col gap-1.5 px-3 pb-3">
+          <button onClick={() => { setDrawerOpen(false); setSupportOpen(true); }} className="flex w-full items-center justify-center gap-2 rounded-lg border border-line py-2 text-sm font-medium hover:bg-surface-2">
+            <Icon d={ICON_HELP} className="h-4 w-4 text-accent" />
+            Consultas
+          </button>
           <button onClick={() => setConfirmLogout(true)} className="flex w-full items-center justify-center gap-2 rounded-lg bg-surface-2 py-2 text-sm font-medium hover:opacity-80">
             <Icon d={ICON_LOGOUT} className="h-4 w-4 text-danger" />
             Cerrar sesión
@@ -229,29 +237,28 @@ export function Shell({ children }: { children: ReactNode }) {
             <div className="truncate text-[11px] font-semibold uppercase tracking-wider text-muted">{ws.name}</div>
             <div className="truncate text-sm font-bold">{status.summary ? longDate(status.summary.fecha, ws.timezone) : "…"}</div>
           </div>
-          <SyncChip />
           <div data-tour="caja-chip"><CashChip /></div>
           <div data-tour="notas"><NotesButton /></div>
           <Link data-tour="nueva-reserva" href="/reservas/nueva" className="flex items-center gap-1.5 rounded-lg bg-accent px-3 py-2 text-sm font-semibold text-accent-fg hover:opacity-90" title="Nueva reserva">
             <Icon d="M12 5v14M5 12h14" className="h-4 w-4" /><span className="hidden xl:inline">Nueva reserva</span>
           </Link>
-          <Link data-tour="cobro" href="/cobros" className="flex items-center gap-1.5 rounded-lg bg-ok px-3 py-2 text-sm font-semibold text-bg hover:opacity-90" title="Registrar cobro">
-            Registrar cobro
+          <Link href="/gastos?nuevo=1" className="flex items-center gap-1.5 rounded-lg border border-danger/40 bg-danger-soft px-3 py-2 text-sm font-semibold text-danger hover:opacity-90" title="Nuevo gasto">
+            <Icon d="M5 12h14" className="h-4 w-4" /><span className="hidden xl:inline">Nuevo gasto</span>
           </Link>
-          <Link href="/gastos?nuevo=1" className="flex items-center gap-1.5 rounded-lg border border-line bg-surface-2 px-3 py-2 text-sm font-semibold hover:opacity-90" title="Nuevo gasto">
-            <Icon d="M5 12h14" className="h-4 w-4" /><span className="hidden 2xl:inline">Nuevo gasto</span>
-          </Link>
-          <button data-tour="deshacer" onClick={undo.start} className="flex items-center gap-1.5 rounded-lg border border-line bg-surface-2 px-3 py-2 text-sm font-semibold hover:opacity-90" title="Deshacer último cambio">
-            <Icon d="M9 14L4 9l5-5M4 9h11a5 5 0 0 1 0 10h-3" className="h-4 w-4" /><span className="hidden 2xl:inline">Deshacer cambio</span>
+          <button data-tour="deshacer" onClick={undo.start} className="rounded-lg p-2 text-muted hover:bg-surface-2 hover:text-fg" title="Deshacer último cambio" aria-label="Deshacer último cambio">
+            <Icon d="M9 14L4 9l5-5M4 9h11a5 5 0 0 1 0 10h-3" className="h-[18px] w-[18px]" />
           </button>
           <button onClick={cycleTheme} className="rounded-lg p-2 hover:bg-surface-2" title={`Tema: ${THEME_LABEL[theme]}`} aria-label={`Tema: ${THEME_LABEL[theme]}`}>
             <Icon d={THEME_ICON[theme]} />
           </button>
           <NoticesBell notices={status.notices} count={alerts} />
-          <Link href="/configuracion" className="flex items-center gap-2 rounded-lg p-1 pr-2 hover:bg-surface-2" title={email ?? ""}>
-            <Avatar src={profile.avatar} name={userName} className="h-8 w-8" />
-            <span className="hidden max-w-32 truncate text-sm font-semibold lg:inline">{userName}</span>
-          </Link>
+          <div className="flex items-center gap-1 rounded-lg p-1 pr-2 hover:bg-surface-2">
+            <Link href="/configuracion" className="flex items-center gap-2" title={email ?? ""}>
+              <Avatar src={profile.avatar} name={userName} className="h-8 w-8" />
+              <span className="hidden max-w-32 truncate text-sm font-semibold lg:inline">{userName}</span>
+            </Link>
+            <SyncDot />
+          </div>
           <button onClick={() => setConfirmLogout(true)} className="rounded-lg p-2 text-muted hover:bg-surface-2 hover:text-danger" title="Cerrar sesión" aria-label="Cerrar sesión">
             <Icon d={ICON_LOGOUT} />
           </button>
@@ -370,6 +377,9 @@ export function Shell({ children }: { children: ReactNode }) {
               <button onClick={() => { setMenuOpen(false); undo.start(); }} className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-left hover:bg-surface-2">
                 <Icon d="M9 14L4 9l5-5M4 9h11a5 5 0 0 1 0 10h-3" /> Deshacer último cambio
               </button>
+              <button onClick={() => { setMenuOpen(false); setSupportOpen(true); }} className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-left hover:bg-surface-2">
+                <Icon d={ICON_HELP} /> Consultas
+              </button>
               <InstallButton onDone={() => setMenuOpen(false)} />
               <Link href="/configuracion" className="flex items-center gap-3 rounded-lg px-3 py-2">
                 <Avatar src={profile.avatar} name={userName} className="h-7 w-7" />
@@ -384,6 +394,7 @@ export function Shell({ children }: { children: ReactNode }) {
       )}
 
       {undo.dialog}
+      <SupportModal open={supportOpen} onClose={() => setSupportOpen(false)} />
       <CashGuard closeRequest={closeForLogout} onClosedForLogout={() => { setCloseForLogout(false); logout(); }} onCancelClose={() => setCloseForLogout(false)} />
       <ConfirmDialog
         open={confirmLogout}
@@ -471,22 +482,24 @@ function CashGuard({ closeRequest, onClosedForLogout, onCancelClose }: { closeRe
   );
 }
 
-/** Estado de la conexión con la base: si falla, se avisa (no se muestran datos viejos como actuales). */
-function SyncChip() {
+/**
+ * Estado de la conexión con la base, como un punto al lado del usuario: verde si está conectado.
+ * Si falla, se muestra el texto en rojo (no se muestran datos viejos como actuales). Tocándolo se actualiza.
+ */
+function SyncDot() {
   const s = useStatus();
   const ok = s.online && !s.error;
   const time = s.updatedAt?.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" });
-  // Indica si esta pantalla está conectada al servidor donde se guardan los datos, y cuándo se actualizó por última vez.
-  const label = !s.online ? "Sin internet" : s.error ? "Sin conexión con el servidor" : `Conectado${time ? ` · ${time}` : ""}`;
+  const label = !s.online ? "Sin internet" : "Sin conexión";
   return (
     <button onClick={s.reload}
       title={ok
-        ? `Conectado al servidor. Todo lo que guardás queda en la base de datos online y se ve en las otras computadoras y celulares. Datos actualizados a las ${time ?? "—"}. Tocá para actualizar ahora.`
-        : `${s.error ?? "No hay internet"}. Lo que ves en pantalla puede estar desactualizado y no se puede guardar nada nuevo. Tocá para reintentar.`}
-      className={cx("hidden items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold lg:flex", ok ? "border-ok/40 bg-ok-soft text-ok" : "border-danger/40 bg-danger-soft text-danger")}>
-      <span className={cx("h-2 w-2 rounded-full", ok ? "bg-ok" : "bg-danger", s.loading && "animate-pulse")} />
-      {/* En pantallas medianas solo el puntito (el detalle está al pasar el mouse); si hay problema, siempre el texto. */}
-      <span className={ok ? "hidden 2xl:inline" : undefined}>{label}</span>
+        ? `Conectado. Todo lo que guardás queda online y se ve en las otras computadoras y celulares. Actualizado a las ${time ?? "—"}. Tocá para actualizar ahora.`
+        : `${s.error ?? "No hay internet"}. Lo que ves puede estar desactualizado y no se puede guardar nada nuevo. Tocá para reintentar.`}
+      aria-label={ok ? `Conectado, actualizado a las ${time ?? "—"}` : label}
+      className={cx("flex items-center gap-1.5 rounded-full p-1 text-xs font-semibold", !ok && "border border-danger/40 bg-danger-soft px-2 text-danger")}>
+      <span className={cx("h-2.5 w-2.5 rounded-full ring-2 ring-surface", ok ? "bg-ok" : "bg-danger", s.loading && "animate-pulse")} />
+      {!ok && <span>{label}</span>}
     </button>
   );
 }
@@ -549,13 +562,19 @@ const NOTICE_TONE: Record<Notice["tone"], string> = {
 };
 const DOT: Record<Notice["tone"], string> = { danger: "bg-danger", warn: "bg-warn", info: "bg-accent" };
 
-/** Campanita con los avisos operativos (cajas, deudas, ingresos del día). */
+/**
+ * Campanita con los avisos operativos (cajas, deudas, ingresos del día).
+ * Al abrirla se apaga el número (quedan vistos); cada aviso se puede eliminar de la lista.
+ * Eliminar un aviso no cambia deudas ni pagos: solo deja de mostrarse hasta mañana.
+ */
 function NoticesBell({ notices, count }: { notices: Notice[]; count: number }) {
-  const { markRead } = useStatus();
+  const { markRead, markSeen } = useStatus();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const pathname = usePathname();
   useEffect(() => setOpen(false), [pathname]);
+  // Mientras está abierta, lo que llega también queda visto.
+  useEffect(() => { if (open) markSeen(); }, [open, notices, markSeen]);
   useEffect(() => {
     if (!open) return;
     const onDown = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
@@ -566,33 +585,36 @@ function NoticesBell({ notices, count }: { notices: Notice[]; count: number }) {
   }, [open]);
   return (
     <div className="relative" ref={ref}>
-      <button onClick={() => setOpen((v) => !v)} className="relative rounded-lg p-2 hover:bg-surface-2" aria-label={`Avisos (${count})`} aria-expanded={open}>
+      <button onClick={() => setOpen((v) => !v)} className="relative rounded-lg p-2 hover:bg-surface-2" aria-label={count ? `Avisos (${count} nuevos)` : "Avisos"} aria-expanded={open}>
         <Icon d={ICON_BELL} />
         {count > 0 && <span className="absolute right-0.5 top-0.5 min-w-4 rounded-full bg-danger px-1 text-center text-[10px] font-bold leading-4 text-bg">{count}</span>}
       </button>
       {open && (
         <div className="fixed inset-x-3 top-16 z-50 max-h-[70dvh] overflow-y-auto rounded-xl border border-line bg-surface p-3 shadow-xl md:absolute md:inset-x-auto md:right-0 md:top-12 md:w-96">
           <div className="mb-2 flex items-center justify-between gap-2">
-            <strong className="text-sm">Avisos</strong>
-            <span className="flex items-center gap-2">
-              {notices.length > 0 && (
-                <button onClick={() => markRead(notices.map((n) => n.id))} className="text-xs text-accent hover:underline">Marcar todos como leídos</button>
-              )}
-              <span className="rounded-full bg-surface-2 px-2 py-0.5 text-xs">{notices.length}</span>
-            </span>
+            <strong className="text-sm">Avisos <span className="font-normal text-muted">({notices.length})</span></strong>
+            {notices.length > 0 && (
+              <button onClick={() => markRead(notices.map((n) => n.id))} className="flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold text-danger hover:bg-danger-soft">
+                <Icon d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" className="h-3.5 w-3.5" />Eliminar todos
+              </button>
+            )}
           </div>
-          {notices.length === 0 ? <p className="py-4 text-center text-sm text-muted">Sin avisos nuevos. Las deudas siguen en Cobros.</p> : (
+          {notices.length === 0 ? <p className="py-4 text-center text-sm text-muted">Sin avisos. Las deudas siguen en Cobros.</p> : (
             <ul className="flex flex-col gap-2">
               {notices.map((n) => (
-                <li key={n.id}>
-                  <Link href={n.href} onClick={() => markRead([n.id])} className={cx("block rounded-lg border p-2.5 text-sm hover:opacity-90", NOTICE_TONE[n.tone])}>
+                <li key={n.id} className={cx("flex items-start gap-1 rounded-lg border text-sm", NOTICE_TONE[n.tone])}>
+                  <Link href={n.href} className="min-w-0 flex-1 p-2.5 hover:opacity-90">
                     <div className="flex items-center gap-2 font-semibold"><span className={cx("h-2 w-2 shrink-0 rounded-full", DOT[n.tone])} />{n.title}</div>
                     <div className="pl-4 text-xs text-muted">{n.detail}</div>
                   </Link>
+                  <button onClick={() => markRead([n.id])} className="m-1.5 shrink-0 rounded-md p-1 text-muted hover:bg-surface hover:text-danger" title="Eliminar aviso" aria-label={`Eliminar aviso: ${n.title}`}>
+                    <Icon d="M6 6l12 12M18 6L6 18" className="h-4 w-4" />
+                  </button>
                 </li>
               ))}
             </ul>
           )}
+          {notices.length > 0 && <p className="mt-2 text-[11px] text-muted">Eliminar un aviso no borra la deuda ni el pago: si sigue pendiente, vuelve a aparecer mañana.</p>}
         </div>
       )}
     </div>

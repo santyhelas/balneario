@@ -35,7 +35,7 @@ const DEMO_STEPS: Step[] = [
 
 /** Guía de bienvenida: lo que hay que dejar listo antes de la primera reserva. */
 export const GUIDE_STEPS: Step[] = [
-  { path: "/", sel: null, title: "¡Bienvenido a Mi Balneario!", text: "En un par de minutos te mostramos qué dejar listo para empezar a trabajar. Podés saltearla y volver a verla cuando quieras desde Configuración." },
+  { path: "/", sel: null, title: "¡Bienvenido a Mi Balneario!", text: "En un par de minutos te mostramos qué dejar listo para empezar a trabajar. Podés saltearla y volver a verla cuando quieras desde «Consultas»." },
   { path: "/mapa", sel: "mapa", title: "1. Armá tu playa", text: "Tocá «Editar» y arrastrá las carpas y sombrillas hasta que el plano quede igual a tu balneario. Para mover varias juntas, arrastrá sobre la arena y encerralas en un recuadro (o Ctrl + clic); con Ctrl + C y Ctrl + V las copiás. Desde ahí también agregás, renombrás o desactivás espacios." },
   { path: "/tarifas", sel: "tarifas", title: "2. Cargá tus precios", text: "El precio por día de cada quincena, para carpas y sombrillas. Con eso el sistema calcula solo el total de cada reserva. Se copian de un mes a otro. En «Convenios y descuentos» elegís cómo se combinan los descuentos y un tope máximo." },
   { path: "/configuracion", sel: "config-balneario", title: "3. Tus datos y ubicación", text: "Nombre, logo y la ubicación de tu playa: con ella te mostramos el clima, el viento y el sol en el mapa." },
@@ -44,7 +44,7 @@ export const GUIDE_STEPS: Step[] = [
   { path: "/configuracion", sel: "config-mensajes", title: "6. Tus mensajes de WhatsApp y mail", text: "Los recordatorios de deuda salen con este texto, que puede llevar el total, la seña y otros datos del cliente. En la pestaña «Correo» armás el mail, que sale desde tu cuenta." },
   { path: "/caja", sel: "caja", title: "7. La caja de cada día", text: "Cada mañana abrís la caja con el efectivo inicial y a la noche la cerrás contando la plata. El sistema te dice si sobra o falta. En Configuración podés poner un límite de efectivo: si se pasa, te avisa que hagas un depósito." },
   { path: "/", sel: "nueva-reserva", title: "8. Tu primera reserva", text: "Cuando tengas el plano y los precios, tocá acá: elegís cliente, fechas y carpa, y registrás el cobro o la seña." },
-  { path: "/", sel: null, title: "¡Listo para arrancar!", text: "Si te trabás con algo, escribinos por WhatsApp. Para ver esta guía otra vez: Configuración → «Ver la guía de nuevo»." },
+  { path: "/", sel: null, title: "¡Listo para arrancar!", text: "Si te trabás con algo, escribinos por WhatsApp. Para ver esta guía otra vez: «Consultas» → «Ver la guía de nuevo»." },
 ];
 
 /** Lo nuevo de esta versión: se muestra solo en la demo, con el botón «Novedades». */

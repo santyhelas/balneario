@@ -4,9 +4,10 @@ import { useEffect, useState, type ReactNode } from "react";
 import { getSupabase } from "@/lib/supabase/client";
 import { formatDate, formatMoney } from "@/lib/format";
 import { useWorkspace } from "@/components/workspace";
-import { useStatus, type ResItem, type Notice } from "@/components/status";
+import { useStatus, type ResItem } from "@/components/status";
 import { WeekAhead } from "@/components/week-ahead";
-import { Icon, NAV } from "@/components/shell";
+import { ICON_HELP, Icon, NAV } from "@/components/shell";
+import { SupportModal } from "@/components/support";
 import { Alert, Button, Spinner, cx } from "@/components/ui";
 import { CloseCashModal, OpenCashModal, type CashSummary } from "@/components/cash";
 import { WeatherStrip } from "@/components/weather";
@@ -37,6 +38,7 @@ export default function DashboardPage() {
   const [openCash, setOpenCash] = useState(false);
   const [askedToday, setAskedToday] = useState(false);
   const [closing, setClosing] = useState<CashSummary | null>(null);
+  const [supportOpen, setSupportOpen] = useState(false);
 
   // Llegó / no vino de los que empiezan hoy (se lee aparte para no tocar el resumen del día).
   const [arrivals, setArrivals] = useState<Record<string, ArrivalState>>({});
@@ -97,25 +99,16 @@ export default function DashboardPage() {
     <div className="flex flex-col gap-4">
       {st.error && <Alert tone="danger">No se pudo actualizar ({st.error}). Los datos pueden estar desactualizados. <button className="underline" onClick={st.reload}>Reintentar</button></Alert>}
 
-      {/* Banner con el nombre del balneario */}
-      <section className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#0b6a87] via-[#0a5670] to-[#0d2533] p-5 text-white shadow-sm md:p-7">
-        <div className="relative flex flex-wrap items-center justify-between gap-4">
-          <div className="max-w-2xl">
-            <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-cyan-200">Panel de control operativo</div>
-            <h1 className="mt-1 text-2xl font-extrabold tracking-tight md:text-3xl">{ws.name}</h1>
-            <p className="mt-1 text-sm text-cyan-50/90">
-              {formatDate(data.fecha)} · {carpa?.total_activos ?? 0} carpas y {sombrilla?.total_activos ?? 0} sombrillas activas · {pct(ocupados)}% de ocupación hoy.
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Link href="/reservas/nueva" className="flex items-center gap-2 rounded-xl bg-white px-4 py-2 text-sm font-semibold text-[#0b6a87] hover:opacity-90"><Icon d="M12 5v14M5 12h14" className="h-4 w-4" />Crear reserva</Link>
-            <Link href="/mapa" className="flex items-center gap-2 rounded-xl border border-white/40 bg-white/10 px-4 py-2 text-sm font-semibold hover:bg-white/20"><Icon d={icon("/mapa")} className="h-4 w-4" />Ver mapa</Link>
-            <Link href="/caja" className="flex items-center gap-2 rounded-xl border border-white/40 bg-white/10 px-4 py-2 text-sm font-semibold hover:bg-white/20"><Icon d={icon("/caja")} className="h-4 w-4" />Caja diaria</Link>
-          </div>
-        </div>
+      {/* Encabezado: nombre del balneario, resumen del día y el clima */}
+      <section className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#0b6a87] via-[#0a5670] to-[#0d2533] p-5 text-white shadow-sm md:p-6">
+        <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-cyan-200">Panel de control operativo</div>
+        <h1 className="mt-1 text-2xl font-extrabold tracking-tight md:text-3xl">{ws.name}</h1>
+        <p className="mt-1 text-sm text-cyan-50/90">
+          {formatDate(data.fecha)} · {carpa?.total_activos ?? 0} carpas y {sombrilla?.total_activos ?? 0} sombrillas · {pct(ocupados)}% de ocupación hoy
+          {st.futureCount > 0 ? ` · ${st.futureCount} ${st.futureCount === 1 ? "reserva futura" : "reservas futuras"}` : ""}
+        </p>
+        <WeatherStrip onDark className="mt-4" />
       </section>
-
-      <WeatherStrip />
 
       {/* Avisos prioritarios */}
       {data.caja_anterior_sin_cerrar && (
@@ -137,45 +130,42 @@ export default function DashboardPage() {
         </Alert>
       )}
 
-      {/* Indicadores */}
-      <div data-tour="panel-stats" className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
-        <Stat tone="neutral" label="Total espacios" value={String(total)} note={`${carpa?.total_activos ?? 0} carpas · ${sombrilla?.total_activos ?? 0} sombrillas${mant ? ` · ${mant} en mant.` : ""}`} icon={icon("/mapa")} href="/mapa" />
-        <Stat tone="ok" label="Disponibles hoy" value={String(disponibles)} note={`${pct(disponibles)}% del balneario libre`} icon="M20 6L9 17l-5-5" href="/mapa" />
-        <Stat tone="danger" label="Ocupados hoy" value={String(ocupados)} note={`${pct(ocupados)}% de ocupación${(carpa?.cortesias ?? 0) + (sombrilla?.cortesias ?? 0) ? ` · ${(carpa?.cortesias ?? 0) + (sombrilla?.cortesias ?? 0)} cortesía` : ""}`} icon="M3 20h18M6 20V9l6-5 6 5v11" href="/mapa" />
-        <Stat tone="warn" label="Reservas futuras" value={String(st.futureCount)} note="Confirmadas, aún no ingresan" icon={icon("/disponibilidad")} href="/reservas" />
-        <Stat tone="accent" label="Inician hoy" value={String(data.ingresan_hoy.length)} note="Ingresos programados" icon="M12 7v5l3 3M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z" href="/reservas" />
-        <Stat tone="orange" label="Terminan hoy" value={String(data.finalizan_hoy.length)} note={endingWithDebt.length ? `${endingWithDebt.length} con deuda` : "Salidas del día"} icon="M12 8v4M12 16h.01M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z" href="/reservas" />
-        <Stat tone="neutral" label="Cobros del día" value={formatMoney(data.ingresos_hoy.total)} valueTone="ok" note={`Efvo: ${formatMoney(data.ingresos_hoy.efectivo)} · Otros: ${formatMoney(data.ingresos_hoy.otros_medios)}`} icon="M7 17L17 7M9 7h8v8" href="/cobros" />
-        <Stat tone="neutral" label="Gastos del día" value={formatMoney(data.gastos_hoy)} valueTone="danger" note={cash ? `Salidas en efectivo: ${formatMoney(cashOut)}` : "Sin caja abierta"} icon="M7 7l10 10M17 9v8H9" href="/gastos" />
-        <Stat tone="neutral" label="Flujo neto caja (efvo)" value={cash ? formatMoney(cashIn - cashOut) : "—"} note={cash ? `En caja: ${formatMoney(cash.efectivo_esperado)}` : "Caja sin abrir"} icon={icon("/caja")} href="/caja" />
-        <Stat tone="danger" label="Saldos a cobrar" value={formatMoney(saldo)} note={`${st.debts.length} ${st.debts.length === 1 ? "reserva adeudada" : "reservas adeudadas"}`} icon="M12 3v18M16.5 7.5c0-1.7-2-3-4.5-3s-4.5 1.3-4.5 3 2 2.5 4.5 3 4.5 1.3 4.5 3-2 3-4.5 3-4.5-1.3-4.5-3" href="/cobros" />
+      {/* Indicadores, en dos grupos: la playa y la plata del día */}
+      <div data-tour="panel-stats" className="grid gap-4 xl:grid-cols-2">
+        <StatGroup title="Hoy en la playa">
+          <Stat tone="ok" label="Libres" value={String(disponibles)} note={`${pct(disponibles)}% del balneario${mant ? ` · ${mant} en mantenimiento` : ""}`} icon="M20 6L9 17l-5-5" href="/mapa" />
+          <Stat tone="danger" label="Ocupadas" value={String(ocupados)} note={`${pct(ocupados)}% ocupado${(carpa?.cortesias ?? 0) + (sombrilla?.cortesias ?? 0) ? ` · ${(carpa?.cortesias ?? 0) + (sombrilla?.cortesias ?? 0)} cortesía` : ""}`} icon="M3 20h18M6 20V9l6-5 6 5v11" href="/mapa" />
+          <Stat tone="accent" label="Llegan hoy" value={String(data.ingresan_hoy.length)} note="Empiezan su estadía" icon="M12 7v5l3 3M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z" href="/reservas" />
+          <Stat tone="orange" label="Se van hoy" value={String(data.finalizan_hoy.length)} note={endingWithDebt.length ? `${endingWithDebt.length} con deuda` : "Último día"} icon="M12 8v4M12 16h.01M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z" href="/reservas" />
+        </StatGroup>
+        <StatGroup title="La plata de hoy">
+          <Stat tone="ok" label="Cobrado" value={formatMoney(data.ingresos_hoy.total)} note={`Efectivo ${formatMoney(data.ingresos_hoy.efectivo)} · Otros ${formatMoney(data.ingresos_hoy.otros_medios)}`} icon="M7 17L17 7M9 7h8v8" href="/cobros" />
+          <Stat tone="danger" label="Gastado" value={formatMoney(data.gastos_hoy)} note={cash ? `En efectivo ${formatMoney(cashOut)}` : "Sin caja abierta"} icon="M7 7l10 10M17 9v8H9" href="/gastos" />
+          <Stat tone="neutral" label="Efectivo en caja" value={cash ? formatMoney(cash.efectivo_esperado) : "—"} note={cash ? `Movimiento del día ${formatMoney(cashIn - cashOut)}` : "Caja sin abrir"} icon={icon("/caja")} href="/caja" />
+          <Stat tone="warn" label="Falta cobrar" value={formatMoney(saldo)} note={`${st.debts.length} ${st.debts.length === 1 ? "reserva con saldo" : "reservas con saldo"}`} icon="M12 3v18M16.5 7.5c0-1.7-2-3-4.5-3s-4.5 1.3-4.5 3 2 2.5 4.5 3 4.5 1.3 4.5 3-2 3-4.5 3-4.5-1.3-4.5-3" href="/cobros" />
+        </StatGroup>
       </div>
 
       <div data-tour="semana"><WeekAhead /></div>
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
-        {/* Accesos directos */}
-        <section className="rounded-2xl border border-line bg-surface p-4">
-          <h2 className="mb-3 text-xs font-bold uppercase tracking-widest text-muted">Accesos directos operativos</h2>
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            <Shortcut href="/reservas/nueva" tone="accent" icon="M12 5v14M5 12h14" title="Nueva reserva" sub="Asignar carpa o sombrilla" />
-            <Shortcut href="/cobros" tone="ok" icon={icon("/cobros")} title="Registrar cobro" sub="Seña o saldo pendiente" />
-            <Shortcut href="/gastos?nuevo=1" tone="danger" icon="M5 12h14" title="Registrar gasto" sub="Insumos, personal, servicios" />
-            <Shortcut href="/disponibilidad" tone="orange" icon="M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM21 21l-4.3-4.3" title="Consultar disponibilidad" sub="Planificación por fechas" />
-            <Shortcut href="/reservas" tone="violet" icon="M5 12h14M13 6l6 6-6 6" title="Cambiar ubicación" sub="Elegí la reserva y reubicá" />
-            <Shortcut href="/caja" tone="teal" icon={icon("/caja")} title="Caja diaria" sub="Arqueo y movimientos" />
-          </div>
-        </section>
-
-        {/* Notificaciones */}
-        <section className="rounded-2xl border border-line bg-surface p-4">
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-xs font-bold uppercase tracking-widest">Notificaciones operativas</h2>
-            <span className="rounded-full bg-surface-2 px-2 py-0.5 text-xs font-semibold">{st.notices.filter((n) => n.tone !== "info").length} activas</span>
-          </div>
-          <NoticeList notices={st.notices.filter((n) => n.tone !== "info")} />
-        </section>
-      </div>
+      {/* Accesos rápidos: lo que no está en la barra de arriba */}
+      <section className="rounded-2xl border border-line bg-surface p-4">
+        <h2 className="mb-3 text-xs font-bold uppercase tracking-widest text-muted">Accesos rápidos</h2>
+        <div className="grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-6">
+          <Shortcut href="/disponibilidad" tone="orange" icon="M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM21 21l-4.3-4.3" title="Disponibilidad" sub="Qué hay libre y cuándo" />
+          <Shortcut href="/reservas" tone="violet" icon="M5 12h14M13 6l6 6-6 6" title="Cambiar de carpa" sub="Elegí la reserva" />
+          <Shortcut href="/clientes" tone="accent" icon={icon("/clientes")} title="Buscar cliente" sub="Historial y contacto" />
+          <Shortcut href="/renovacion" tone="ok" icon={icon("/renovacion")} title="Renovación" sub="Clientes del año pasado" />
+          <Shortcut href="/reportes" tone="teal" icon={icon("/reportes")} title="Reportes" sub="Ocupación y plata" />
+          <button onClick={() => setSupportOpen(true)} className="flex items-center gap-3 rounded-xl border border-line p-3 text-left hover:bg-surface-2">
+            <span className={cx("flex h-10 w-10 shrink-0 items-center justify-center rounded-lg", SHORTCUT_TONE.slate)}><Icon d={ICON_HELP} /></span>
+            <span className="min-w-0">
+              <span className="block truncate text-sm font-bold">Consultas</span>
+              <span className="block truncate text-xs text-muted">Escribinos</span>
+            </span>
+          </button>
+        </div>
+      </section>
 
       <div className="grid gap-4 lg:grid-cols-2">
         <ResCard title={`Inician hoy (${data.ingresan_hoy.length})`} tone="accent" items={data.ingresan_hoy} empty="No hay ingresos previstos para hoy."
@@ -187,6 +177,7 @@ export default function DashboardPage() {
         <ResCard title={`Finalizan hoy (${data.finalizan_hoy.length})`} tone="orange" items={data.finalizan_hoy} empty="No hay finalizaciones previstas para hoy." right="Liberación de espacios" />
       </div>
 
+      <SupportModal open={supportOpen} onClose={() => setSupportOpen(false)} />
       <OpenCashModal open={openCash} workspaceId={ws.id} onClose={() => setOpenCash(false)} onDone={() => { setOpenCash(false); st.reload(); }} />
       <CloseCashModal open={closing !== null} summary={closing} onClose={() => setClosing(null)} onDone={() => { setClosing(null); st.reload(); }} />
     </div>
@@ -201,7 +192,7 @@ function Stat({ tone, label, value, note, icon, href, valueTone }: { tone: Tone;
         <span className={cx("text-sm font-semibold", t.label)}>{label}</span>
         <Icon d={icon} className={cx("h-5 w-5", t.label)} />
       </div>
-      <div className={cx("tabular mt-2 truncate text-2xl font-extrabold md:text-3xl", TONE[valueTone ?? tone].value)}>{value}</div>
+      <div className={cx("tabular mt-2 truncate text-2xl font-extrabold md:text-3xl xl:text-2xl 2xl:text-3xl", TONE[valueTone ?? tone].value)}>{value}</div>
       {note && <div className="mt-1 text-xs text-muted">{note}</div>}
     </Link>
   );
@@ -214,7 +205,17 @@ const SHORTCUT_TONE: Record<string, string> = {
   orange: "bg-orange-500/15 text-orange-500",
   violet: "bg-violet-500/15 text-violet-500",
   teal: "bg-teal-500/15 text-teal-600 dark:text-teal-400",
+  slate: "bg-surface-2 text-fg",
 };
+
+function StatGroup({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section>
+      <h2 className="mb-2 text-xs font-bold uppercase tracking-widest text-muted">{title}</h2>
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">{children}</div>
+    </section>
+  );
+}
 
 function Shortcut({ href, tone, icon, title, sub }: { href: string; tone: string; icon: string; title: string; sub: string }) {
   return (
@@ -225,25 +226,6 @@ function Shortcut({ href, tone, icon, title, sub }: { href: string; tone: string
         <span className="block truncate text-xs text-muted">{sub}</span>
       </span>
     </Link>
-  );
-}
-
-function NoticeList({ notices }: { notices: Notice[] }) {
-  const { markRead } = useStatus();
-  if (notices.length === 0) return <p className="rounded-lg border border-dashed border-line py-6 text-center text-sm text-muted">Todo en orden: sin avisos pendientes.</p>;
-  const cls = { danger: "border-danger/40 bg-danger-soft", warn: "border-warn/40 bg-warn-soft", info: "border-accent/30 bg-accent-soft" };
-  const dot = { danger: "bg-danger", warn: "bg-warn", info: "bg-accent" };
-  return (
-    <ul className="flex max-h-80 flex-col gap-2 overflow-y-auto">
-      {notices.map((n) => (
-        <li key={n.id}>
-          <Link href={n.href} onClick={() => markRead([n.id])} className={cx("block rounded-xl border p-3 hover:opacity-90", cls[n.tone])}>
-            <div className="flex items-center gap-2 text-sm font-bold"><span className={cx("h-2 w-2 shrink-0 rounded-full", dot[n.tone])} />{n.title}</div>
-            <div className="pl-4 text-xs text-muted">{n.detail}</div>
-          </Link>
-        </li>
-      ))}
-    </ul>
   );
 }
 

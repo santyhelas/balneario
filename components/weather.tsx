@@ -166,7 +166,8 @@ function hhmm(d: Date | string | null | undefined, tz?: string) {
 }
 
 /** Barra con el clima actual: temperatura, viento (de dónde viene y hacia dónde va), lluvia y sol. */
-export function WeatherStrip({ className }: { className?: string }) {
+/** Franja del clima. `onDark`: para ponerla dentro del encabezado azul del panel (texto claro, sin tarjeta blanca). */
+export function WeatherStrip({ className, onDark }: { className?: string; onDark?: boolean }) {
   const { ws, tempUnit } = useWorkspace();
   const w = useWeather();
   const [now, setNow] = useState(() => new Date());
@@ -180,12 +181,12 @@ export function WeatherStrip({ className }: { className?: string }) {
   }, [now, ws.latitude, ws.longitude]);
 
   if (w.noLocation) {
-    return <div className={cx("rounded-xl border border-dashed border-line px-3 py-2 text-sm text-muted", className)}>Para ver el clima, cargá la ubicación del balneario en Configuración.</div>;
+    return <div className={cx("rounded-xl border border-dashed px-3 py-2 text-sm", onDark ? "border-white/30 text-white/80" : "border-line text-muted", className)}>Para ver el clima, cargá la ubicación del balneario en Configuración.</div>;
   }
   if (!w.data) {
     return (
-      <div className={cx("rounded-xl border border-line bg-surface px-3 py-2 text-sm text-muted", className)}>
-        {w.error ? <>Clima no disponible: {w.error} <button className="text-accent underline" onClick={w.reload}>Reintentar</button></> : "Consultando el clima…"}
+      <div className={cx("rounded-xl border px-3 py-2 text-sm", onDark ? "border-white/20 bg-white/10 text-white/80" : "border-line bg-surface text-muted", className)}>
+        {w.error ? <>Clima no disponible: {w.error} <button className={onDark ? "underline" : "text-accent underline"} onClick={w.reload}>Reintentar</button></> : "Consultando el clima…"}
       </div>
     );
   }
@@ -203,7 +204,8 @@ export function WeatherStrip({ className }: { className?: string }) {
           Viento fuerte ({d.viento_kmh} km/h{d.rafagas_kmh ? `, ráfagas de ${d.rafagas_kmh}` : ""}): revisá amarres de carpas y cerrá sombrillas.
         </div>
       )}
-      <div className="flex flex-wrap items-stretch gap-x-6 gap-y-2 rounded-2xl border border-line bg-surface px-4 py-3">
+      <div className={cx("flex flex-wrap items-stretch gap-x-6 gap-y-2 rounded-2xl border px-4 py-3",
+        onDark ? "border-white/20 bg-white/10 text-white [&_.text-accent]:text-cyan-200 [&_.text-muted]:text-white/75" : "border-line bg-surface")}>
         <div className="flex items-center gap-3">
           <span className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-sky-100 dark:bg-slate-700"><WeatherIcon kind={sym.icon} className="h-14 w-14" /></span>
           <div>
