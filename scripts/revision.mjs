@@ -431,11 +431,14 @@ for (const [view, opts] of Object.entries(VIEWS)) {
       const [I0, I1] = pair;
       const pos = async (i) => { const b = await tents.nth(i === 0 ? I0 : i === 1 ? I1 : i).boundingBox(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 }; };
       const a0 = await pos(0), a1 = await pos(1);
-      // Recuadro que encierra las dos primeras (empezando sobre la arena, un poco afuera).
-      const x0 = Math.min(a0.x, a1.x) - 30, y0 = Math.min(a0.y, a1.y) - 30, x1 = Math.max(a0.x, a1.x) + 30, y1 = Math.max(a0.y, a1.y) + 30;
-      await page.mouse.move(x0, y0); await page.mouse.down(); await page.mouse.move((x0 + x1) / 2, (y0 + y1) / 2, { steps: 5 }); await page.mouse.move(x1, y1, { steps: 5 }); await page.mouse.up();
+      // Elegir las dos con Ctrl + clic (en este plano las carpas están muy juntas para un recuadro de prueba).
+      await page.keyboard.down("Control");
+      await page.mouse.click(a0.x, a0.y);
+      await page.waitForTimeout(200);
+      await page.mouse.click(a1.x, a1.y);
+      await page.keyboard.up("Control");
       const chosen = await page.getByText(/\d+ elegidas/).textContent({ timeout: 4000 }).catch(() => null);
-      f6.pasos.push(chosen ? `recuadro: ${chosen.trim()}` : "recuadro: no eligió nada");
+      f6.pasos.push(chosen ? `Ctrl + clic: ${chosen.trim()}` : "Ctrl + clic: no eligió nada");
       // Mover el grupo (se mide de nuevo: el plano pudo correrse)
       await page.waitForTimeout(500);
       const before = await pos(0);
