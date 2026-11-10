@@ -432,6 +432,7 @@ for (const [view, opts] of Object.entries(VIEWS)) {
       // Mover el grupo (se mide de nuevo: el plano pudo correrse)
       await page.waitForTimeout(500);
       const before = await pos(0);
+      const t0 = await tents.nth(0).getAttribute("transform");
       const b0 = before;
       await page.mouse.move(b0.x, b0.y); await page.mouse.down(); await page.mouse.move(b0.x + 20, b0.y + 20, { steps: 6 }); await page.mouse.move(b0.x + 40, b0.y + 25, { steps: 6 }); await page.mouse.up();
       await page.waitForTimeout(2500);
@@ -456,9 +457,9 @@ for (const [view, opts] of Object.entries(VIEWS)) {
       await page.getByRole("dialog").getByRole("button", { name: "Dejar como estaba" }).click();
       await page.getByText("quedó como estaba").waitFor({ timeout: 20000 }).catch(() => {});
       await page.waitForTimeout(1500);
-      const back = await pos(0);
-      const restored = Math.abs(back.x - before.x) < 6 && Math.abs(back.y - before.y) < 6;
-      f6.pasos.push(restored ? "deshacer: volvió a su lugar" : `deshacer: NO volvió (${Math.round(back.x - before.x)}, ${Math.round(back.y - before.y)})`);
+      const t1 = await tents.nth(0).getAttribute("transform");
+      const restored = t0 === t1;
+      f6.pasos.push(restored ? "deshacer: volvió a su lugar" : `deshacer: NO volvió (${t0} → ${t1})`);
       await page.getByRole("button", { name: "Terminar edición" }).click();
       f6.resultado = chosen && Math.abs(after.x - before.x) > 5 && moved1 && n1 === n0 && lim && restored ? "OK" : "Revisar";
     } catch (e) { f6.resultado = `Se cortó: ${String(e).slice(0, 200)}`; }
