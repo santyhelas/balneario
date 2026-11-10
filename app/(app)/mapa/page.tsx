@@ -109,7 +109,6 @@ export default function MapaPage() {
   const [resizing, setResizing] = useState(false);
   /** Mostrar hasta dónde llega el plano si se achica (y qué queda afuera). */
   const [showLimit, setShowLimit] = useState(false);
-  const [hoverShrink, setHoverShrink] = useState(false);
   /** Agranda o achica el plano: lo que está cerca del mar queda cerca del mar; el lugar nuevo va del lado de tierra. */
   async function resize(factor: number, target?: { w: number; h: number; shift: number }) {
     const w = target ? target.w : Math.round(Math.min(20000, Math.max(400, ws.map_width * factor)));
@@ -424,7 +423,7 @@ export default function MapaPage() {
     };
     return { step: plan(W * 0.8, H * 0.8), fit: plan(minW, minH) };
   }, [ws.map_width, ws.map_height, ws.sea_side, data, featuresQ.data]);
-  const limitVisible = editMode && (showLimit || hoverShrink);
+  const limitVisible = editMode && showLimit;
 
   async function moveSpace(id: string, x: number, y: number): Promise<boolean> {
     const s = spaces.find((sp) => sp.space_id === id);
@@ -541,10 +540,8 @@ export default function MapaPage() {
           {isAdmin && (
             <span className="ml-auto flex items-center gap-1.5">
               <span className="text-xs text-muted">Tamaño del plano:</span>
-              <span onMouseEnter={() => setHoverShrink(true)} onMouseLeave={() => setHoverShrink(false)}>
-                <Button variant="secondary" className="py-1.5" disabled={resizing || !shrink?.step.possible} onClick={() => shrink && resize(0.8, shrink.step)}
-                  title="Achicar el plano: la línea roja muestra cómo queda">Achicar</Button>
-              </span>
+              <Button variant="secondary" className="py-1.5" disabled={resizing || !shrink?.step.possible} onClick={() => shrink && resize(0.8, shrink.step)}
+                title="Achicar el plano (con «Ver límite» ves antes cómo queda)">Achicar</Button>
               <Button variant="secondary" className="py-1.5" disabled={resizing || !shrink?.fit.possible} onClick={() => shrink && resize(0.8, shrink.fit)}
                 title="Achica el plano lo justo para que entre todo lo que hay">Ajustar a las carpas</Button>
               <Button variant="ghost" className="py-1.5 text-xs" onClick={() => setShowLimit((v) => !v)} aria-pressed={showLimit}>

@@ -265,7 +265,10 @@ export function BeachMap({
         const pos = spacePos(s);
         const hw = s.kind === "carpa" ? TENT_W / 2 : UMBRELLA_R;
         const hh = s.kind === "carpa" ? TENT_H / 2 + 9 : UMBRELLA_R;
-        return [{ ...g, x: pos.x, y: pos.y, lo: [hw, hh] as [number, number], hi: [width - hw, height - hh] as [number, number] }];
+        // Si ya estaba pegada al borde (o más afuera), su lugar actual sigue valiendo: así el grupo no se traba ni salta.
+        return [{ ...g, x: pos.x, y: pos.y,
+          lo: [Math.max(0, Math.min(hw, pos.x)), Math.max(0, Math.min(hh, pos.y))] as [number, number],
+          hi: [Math.min(width, Math.max(width - hw, pos.x)), Math.min(height, Math.max(height - hh, pos.y))] as [number, number] }];
       }
       const f = features.find((x) => x.id === g.id);
       if (!f) return [];
@@ -391,8 +394,12 @@ export function BeachMap({
       if (!s) return;
       const halfW = s.kind === "carpa" ? TENT_W / 2 : UMBRELLA_R;
       const halfH = s.kind === "carpa" ? TENT_H / 2 + 9 : UMBRELLA_R;
-      const x = Math.round(Math.min(width - halfW, Math.max(halfW, p.x - d.dx)));
-      const y = Math.round(Math.min(height - halfH, Math.max(halfH, p.y - d.dy)));
+      // Tope: que la carpa entre entera; si ya estaba más al borde, no salta (pero nunca sale del plano).
+      const cur = spacePos(s);
+      const loX = Math.max(0, Math.min(halfW, cur.x)), hiX = Math.min(width, Math.max(width - halfW, cur.x));
+      const loY = Math.max(0, Math.min(halfH, cur.y)), hiY = Math.min(height, Math.max(height - halfH, cur.y));
+      const x = Math.round(Math.min(hiX, Math.max(loX, p.x - d.dx)));
+      const y = Math.round(Math.min(hiY, Math.max(loY, p.y - d.dy)));
       setLocalSpaces((prev) => ({ ...prev, [d.id]: { x, y } }));
     } else if (d.type === "feature") {
       const f = features.find((x) => x.id === d.id);
