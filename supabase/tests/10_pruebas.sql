@@ -1323,6 +1323,17 @@ select t.ok((select sum(due_amount) = 0 from public.reservation_balances b join 
   'Grupo en dólares: «todo el saldo» deja las dos carpas en cero aunque el redondeo dé centavos de más');
 select public.close_cash_session(t.uid('session'), 0, (select version from public.cash_sessions where id = t.uid('session')), null);
 
+-- 48. Redondeo del total a $500 para abajo
+select t.ok((public.quote_reservation(t.uid('ws'), '2027-07-01', '2027-07-01',
+  jsonb_build_array(jsonb_build_object('space_id', t.space('66'), 'start_date', '2027-07-01', 'end_date', '2027-07-01')), '{"manual_base": 23730, "round": true}'::jsonb) ->> 'total')::numeric = 23500,
+  'Redondeo: $23.730 queda en $23.500');
+select t.set('rr', (public.create_reservation_v3(t.uid('ws'), gen_random_uuid(), t.uid('juan'), '2027-07-02', '2027-07-02',
+  jsonb_build_array(jsonb_build_object('space_id', t.space('66'), 'start_date', '2027-07-02', 'end_date', '2027-07-02')),
+  '{"manual_base": 400040, "round": true}'::jsonb, null, null, '[]'::jsonb) ->> 'reservation_id'));
+select t.ok((select total_amount = 400000 from public.reservations where id = t.uid('rr'))
+        and exists (select 1 from public.reservation_discounts where reservation_id = t.uid('rr') and kind = 'redondeo' and amount = 40 and label = 'Redondeo'),
+  'Redondeo: $400.040 se guarda en $400.000 con el descuento «Redondeo» de $40');
+
 reset role;
 \o
 -- Resultado ----------------------------------------------------------

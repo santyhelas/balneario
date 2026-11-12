@@ -269,6 +269,7 @@ export default function NuevaReservaPage() {
   const [useManualBase, setUseManualBase] = useState(false);
   const [manualBase, setManualBase] = useState("");
   const [notes, setNotes] = useState("");
+  const [roundTotal, setRoundTotal] = useState(false);
 
   useEffect(() => {
     if (agreementId && !validAgreements.some((a) => a.id === agreementId)) setAgreementId("");
@@ -283,13 +284,14 @@ export default function NuevaReservaPage() {
       if (cash) o.cash = true;
       const mv = manualType === "monto" ? parseMoney(manualValue) : Number(manualValue.replace(",", "."));
       if (isAdmin && mv && mv > 0) o.manual = { type: manualType, value: mv, reason: manualReason };
+      if (roundTotal) o.round = true;
     }
     if (isAdmin && useManualBase) {
       const b = parseMoney(manualBase);
       if (b !== null) o.manual_base = b;
     }
     return o;
-  }, [courtesy, beneficiary, agreementId, cash, manualType, manualValue, manualReason, isAdmin, useManualBase, manualBase]);
+  }, [courtesy, beneficiary, agreementId, cash, manualType, manualValue, manualReason, isAdmin, useManualBase, manualBase, roundTotal]);
 
   const [quote, setQuote] = useState<Quote | null>(null);
   const [quoteError, setQuoteError] = useState<string | null>(null);
@@ -912,6 +914,12 @@ export default function NuevaReservaPage() {
                 )}
                 {!courtesy && extrasTotal > 0 && <div className="flex justify-between gap-3"><span>Extras</span><span className="tabular">+ {formatMoney(extrasTotal)}</span></div>}
                 <div className="mt-1 flex justify-between gap-3 border-t border-line pt-2 text-base font-semibold"><span>Total</span><span className="tabular">{formatMoney(total)}</span></div>
+                {!courtesy && (
+                  <label className="flex items-center gap-2 text-xs text-muted">
+                    <input type="checkbox" checked={roundTotal} onChange={(e) => setRoundTotal(e.target.checked)} />
+                    Redondear para abajo a $500 (ej. $400.040 → $400.000 · $23.730 → $23.500)
+                  </label>
+                )}
                 {cashTotal !== null && cashTotal < Number(quote.total) && (
                   <div className="flex justify-between gap-3 text-xs text-muted"><span>Pagando en efectivo</span><span className="tabular">{formatMoney(cashTotal + (isGroup && groupQuote ? (groupQuote.cash ?? groupQuote.total) * groupSpaces.length : 0) + (courtesy ? 0 : extrasTotal))}</span></div>
                 )}
@@ -1060,6 +1068,7 @@ function discountLabel(d: Quote["discounts"][number], agreements: Agreement[]): 
     case "convenio": return `Convenio ${agreements.find((a) => a.id === d.agreement_id)?.name ?? ""}${pct}`;
     case "efectivo": return `Pago en efectivo${pct}`;
     case "manual": return `Descuento manual${pct}${d.reason ? ` · ${d.reason}` : ""}`;
+    case "redondeo": return "Redondeo";
     default: return d.kind;
   }
 }
