@@ -128,12 +128,12 @@ export default function TarifasPage() {
 
         <div className="flex flex-col gap-4">
           <Card title="Descuentos y convenios">
-            <p className="text-sm text-muted">Los descuentos por paquete, el porcentaje por efectivo y los convenios se editan en <Link className="text-accent underline" href="/convenios">Convenios y descuentos</Link>.</p>
+            <p className="text-sm text-muted">Los descuentos por paquete, el porcentaje por efectivo y los convenios se editan en <Link className="text-accent underline" href="/convenios">Descuentos y convenios</Link>.</p>
           </Card>
           <Card title="Cómo se calcula el precio">
             <ol className="list-decimal space-y-1 pl-5 text-sm text-muted">
               <li>Precio base: cada día al precio de su quincena.</li>
-              <li>Descuentos que correspondan (paquete por días, convenio, pago en efectivo), combinados como elegiste en <Link className="text-accent underline" href="/convenios">Convenios y descuentos</Link>: en cascada, sumados o no acumulables.</li>
+              <li>Descuentos que correspondan (paquete por días, convenio, pago en efectivo), combinados como elegiste en <Link className="text-accent underline" href="/convenios">Descuentos y convenios</Link>: en cascada, sumados o no acumulables.</li>
               <li>Descuento manual (solo administradores, con motivo), al final.</li>
             </ol>
             <p className="mt-2 text-xs text-muted">Cada descuento se redondea hacia abajo al peso entero. Las reservas ya hechas conservan el precio con el que se contrataron.</p>

@@ -344,3 +344,101 @@ export function DiscountCapCard({ cap, wsVersion, editable, onChanged }: { cap: 
     </Card>
   );
 }
+
+export type PackagePrice = {
+  id: string; space_kind: "carpa" | "sombrilla"; days: number; price: number; extra_day_price: number;
+  valid_from: string | null; valid_to: string | null; active: boolean; version: number;
+};
+
+/** Paquetes con precio fijo (ej. carpa 5 días = $90.000, cada día extra $20.000 hasta el próximo paquete). */
+export async function loadPackagePrices(sb: SupabaseClient, wsId: string): Promise<PackagePrice[] | null> {
+  const r = await sb.from("package_prices").select("id, space_kind, days, price, extra_day_price, valid_from, valid_to, active, version")
+    .eq("workspace_id", wsId).eq("active", true).order("space_kind").order("days");
+  if (r.error && (r.error.code === "42P01" || r.error.code === "PGRST205")) return null; // falta la actualización 0047
+  if (r.error) throw r.error;
+  return (r.data ?? []) as PackagePrice[];
+}
+
+export function PackagePricesCard({ rows, editable, onChanged }: { rows: PackagePrice[] | null; editable: boolean; onChanged: () => void }) {
+  const { ws } = useWorkspace();
+  const sb = getSupabase();
+  const [kind, setKind] = useState<"carpa" | "sombrilla">("carpa");
+  const [days, setDays] = useState("");
+  const [price, setPrice] = useState("");
+  const [extra, setExtra] = useState("");
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [removing, setRemoving] = useState<PackagePrice | null>(null);
+  const money = (v: string) => { const n = Number(v.replace(/\./g, "").replace(",", ".")); return Number.isFinite(n) && v.trim() !== "" ? n : null; };
+
+  async function add(e: FormEvent) {
+    e.preventDefault();
+    const d = Number(days), p = money(price), x = money(extra);
+    if (!Number.isInteger(d) || d < 1 || d > 366) return setError("Los días deben ser un número entero entre 1 y 366.");
+    if (p === null || p < 0) return setError("Ingresá el precio del paquete.");
+    if (x === null || x < 0) return setError("Ingresá el precio de cada día extra.");
+    if (from && to && to < from) return setError("La fecha «hasta» no puede ser anterior a «desde».");
+    setBusy(true);
+    setError(null);
+    const { error } = await sb.from("package_prices").insert({ workspace_id: ws.id, space_kind: kind, days: d, price: p, extra_day_price: x, valid_from: from || null, valid_to: to || null }).select("id");
+    setBusy(false);
+    if (error) return setError(friendlyError(error));
+    setDays(""); setPrice(""); setExtra(""); setFrom(""); setTo("");
+    onChanged();
+  }
+
+  if (rows === null) {
+    return <Card title="Paquetes con precio fijo"><p className="text-sm text-muted">Para usar paquetes con precio fijo hay que aplicar la actualización 0047 de la base de datos.</p></Card>;
+  }
+  const validity = (r: PackagePrice) => !r.valid_from && !r.valid_to ? "Siempre" : `${r.valid_from ? formatDate(r.valid_from) : "…"} al ${r.valid_to ? formatDate(r.valid_to) : "…"}`;
+  return (
+    <Card title="Paquetes con precio fijo">
+      <p className="mb-3 text-xs text-muted">
+        Ponés el precio total de un paquete y cuánto vale cada día que se pasa, hasta llegar al próximo paquete.
+        Ej.: 5 días $90.000 y día extra $20.000 → 6 días $110.000. Si la estadía entra en un paquete fijo, se usa este precio en vez del tarifario
+        y del paquete en %; el efectivo y los convenios se suman igual.
+      </p>
+      {rows.length === 0 ? <EmptyState>Sin paquetes con precio fijo: mientras no cargues ninguno, el precio sale del tarifario.</EmptyState> : (
+        <ul className="mb-3 divide-y divide-line text-sm">
+          {rows.map((r) => (
+            <li key={r.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
+              <span>
+                <Badge tone="info">{r.space_kind === "carpa" ? "Carpa" : "Sombrilla"}</Badge>{" "}
+                <strong>{r.days} {r.days === 1 ? "día" : "días"} · {formatMoney(r.price)}</strong>
+                <span className="text-muted"> · día extra {formatMoney(r.extra_day_price)} · {validity(r)}</span>
+              </span>
+              {editable && <button type="button" className="text-xs text-danger hover:underline" onClick={() => setRemoving(r)}>Quitar</button>}
+            </li>
+          ))}
+        </ul>
+      )}
+      {editable && (
+        <form onSubmit={add} className="grid gap-2 border-t border-line pt-3 sm:grid-cols-3">
+          <Field label="Para"><select value={kind} onChange={(e) => setKind(e.target.value as "carpa" | "sombrilla")} className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm"><option value="carpa">Carpas</option><option value="sombrilla">Sombrillas</option></select></Field>
+          <Field label="Días del paquete"><Input inputMode="numeric" value={days} onChange={(e) => setDays(e.target.value.replace(/\D/g, ""))} placeholder="5" /></Field>
+          <Field label="Precio del paquete"><Input inputMode="decimal" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="90.000" /></Field>
+          <Field label="Cada día extra"><Input inputMode="decimal" value={extra} onChange={(e) => setExtra(e.target.value)} placeholder="20.000" /></Field>
+          <Field label="Vale desde (opcional)"><Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></Field>
+          <Field label="Hasta (opcional)"><Input type="date" value={to} min={from || undefined} onChange={(e) => setTo(e.target.value)} /></Field>
+          <div className="sm:col-span-3"><Button type="submit" variant="secondary" loading={busy}>Agregar paquete</Button>
+            <span className="ml-2 text-xs text-muted">Sin fechas vale siempre. Para precios distintos por temporada o mes, cargá el mismo paquete con fechas distintas.</span></div>
+        </form>
+      )}
+      {error && <Alert tone="danger" className="mt-3">{error}</Alert>}
+      <ConfirmDialog open={removing !== null} title="Quitar paquete" confirmLabel="Quitar" danger busy={busy}
+        message={removing ? `Se deja de usar el paquete de ${removing.days} días (${formatMoney(removing.price)}) para nuevas reservas. Las reservas ya hechas no cambian.` : ""}
+        onCancel={() => setRemoving(null)}
+        onConfirm={async () => {
+          if (!removing) return;
+          setBusy(true);
+          const { error } = await sb.from("package_prices").update({ active: false, version: removing.version + 1 }).eq("id", removing.id).select("id");
+          setBusy(false);
+          setRemoving(null);
+          if (error) return setError(friendlyError(error));
+          onChanged();
+        }} />
+    </Card>
+  );
+}

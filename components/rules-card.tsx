@@ -81,7 +81,7 @@ function RulesForm({ row, editable, onSaved }: { row: Row & { capacityReady: boo
         </div>
         <div>
           <TextField label="Tope de descuento (%)" inputMode="decimal" value={cap} onChange={(e) => setCap(e.target.value)} placeholder="Sin tope" disabled={!editable} />
-          <p className="mt-1 text-xs text-muted">Ninguna reserva puede tener, sumando todos sus descuentos, más que este porcentaje del precio. También se cambia en Convenios y descuentos.</p>
+          <p className="mt-1 text-xs text-muted">Ninguna reserva puede tener, sumando todos sus descuentos, más que este porcentaje del precio. También se cambia en Descuentos y convenios.</p>
         </div>
         {editable ? <Button type="submit" loading={busy} className="self-start">Guardar</Button> : <p className="text-xs text-muted">Solo los administradores pueden cambiar esto.</p>}
         {msg && <Alert tone={msg.tone}>{msg.text}</Alert>}

@@ -1286,6 +1286,27 @@ select public.set_reservation_people(t.uid('r1p'), (select version from public.r
 select t.ok((select people = 4 from public.reservations where id = t.uid('r1p')), 'Personas: se puede corregir después');
 select public.close_cash_session(t.uid('session'), 0, (select version from public.cash_sessions where id = t.uid('session')), null);
 
+-- 46. Paquetes con precio fijo (5 días = $90.000, día extra $20.000)
+insert into public.package_prices (workspace_id, space_kind, days, price, extra_day_price) values (t.uid('ws'), 'carpa', 5, 90000, 20000);
+insert into public.package_prices (workspace_id, space_kind, days, price, extra_day_price, valid_from) values (t.uid('ws'), 'carpa', 7, 100000, 15000, '2030-01-01');
+select t.set('qf', public.quote_reservation(t.uid('ws'), '2027-05-10', '2027-05-15',
+  jsonb_build_array(jsonb_build_object('space_id', t.space('66'), 'start_date', '2027-05-10', 'end_date', '2027-05-15')), '{}'::jsonb)::text);
+select t.ok((t.get('qf')::jsonb ->> 'precio_base')::numeric = 110000 and (t.get('qf')::jsonb ->> 'paquete_fijo')::boolean,
+  'Paquete fijo: 6 días = paquete de 5 ($90.000) + 1 día extra ($20.000)');
+select t.ok(not exists (select 1 from jsonb_array_elements(t.get('qf')::jsonb -> 'discounts') d where d ->> 'kind' = 'paquete'),
+  'Paquete fijo: no se suma además el paquete en %');
+select t.ok((public.quote_reservation(t.uid('ws'), '2027-05-10', '2027-05-16',
+  jsonb_build_array(jsonb_build_object('space_id', t.space('66'), 'start_date', '2027-05-10', 'end_date', '2027-05-16')), '{}'::jsonb) ->> 'precio_base')::numeric = 130000,
+  'Paquete fijo: el de 7 días todavía no está vigente, así que 7 días = 90.000 + 2 × 20.000');
+select t.ok((public.quote_reservation(t.uid('ws'), '2027-05-10', '2027-05-15',
+  jsonb_build_array(jsonb_build_object('space_id', t.space('66'), 'start_date', '2027-05-10', 'end_date', '2027-05-15')), '{"cash": true}'::jsonb) ->> 'total')::numeric
+  = 110000 - floor(110000 * (select cash_discount_percent from public.workspaces where id = t.uid('ws')) / 100),
+  'Paquete fijo: el descuento por efectivo se suma');
+select t.ok(not (public.quote_reservation(t.uid('ws'), '2027-05-10', '2027-05-13',
+  jsonb_build_array(jsonb_build_object('space_id', t.space('66'), 'start_date', '2027-05-10', 'end_date', '2027-05-13')), '{}'::jsonb) ->> 'paquete_fijo')::boolean,
+  'Paquete fijo: 4 días (menos que el paquete) usa el tarifario de siempre');
+select t.ok(private.snapshot(t.uid('ws')) ? 'package_prices', 'Paquete fijo: entra en las copias de seguridad');
+
 reset role;
 \o
 -- Resultado ----------------------------------------------------------

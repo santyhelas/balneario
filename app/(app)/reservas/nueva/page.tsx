@@ -357,7 +357,7 @@ export default function NuevaReservaPage() {
   // ---------- Pago ----------
   const [payMode, setPayMode] = useState<PayMode>("pagada");
   const [method, setMethod] = useState("efectivo");
-  // Descuento por efectivo del balneario (Convenios y descuentos). Si paga en efectivo se marca solo;
+  // Descuento por efectivo del balneario (Descuentos y convenios). Si paga en efectivo se marca solo;
   // se puede destildar a mano si en este caso no corresponde.
   const [cashPercent, setCashPercent] = useState<number | null>(null);
   useEffect(() => {
