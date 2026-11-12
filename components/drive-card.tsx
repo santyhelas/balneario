@@ -17,7 +17,13 @@ const MSG: Record<string, { tone: "ok" | "danger" | "warn"; text: string }> = {
   "solo-propietario": { tone: "danger", text: "Solo el propietario puede conectar Google Drive." },
   invitado: { tone: "danger", text: "En la demo no se puede conectar Google Drive." },
   "sin-configurar": { tone: "danger", text: "Falta configurar Google Drive en el servidor (Vercel). Seguí los pasos de configuración." },
-  error: { tone: "danger", text: "No se pudo conectar Google Drive. Volvé a intentar en un rato." },
+  google: { tone: "danger", text: "Google rechazó la conexión antes de pedir el permiso (código: google). Revisá en Google Cloud que la dirección https://mibalneario.com.ar/api/drive/callback esté en «URI de redireccionamiento autorizados»." },
+  token: { tone: "danger", text: "Google no aceptó el código de la conexión (código: token). Suele ser el GOOGLE_CLIENT_SECRET de Vercel que no corresponde al GOOGLE_CLIENT_ID, o la dirección de regreso que no está autorizada." },
+  "api-desactivada": { tone: "danger", text: "La API de Google Drive no está activada en el proyecto de Google Cloud (código: api-desactivada). Activala en «APIs y servicios → Biblioteca → Google Drive API» y volvé a intentar." },
+  carpeta: { tone: "danger", text: "Se dio el permiso, pero no se pudo crear la carpeta en tu Drive (código: carpeta). Volvé a intentar en un rato." },
+  "sin-actualizar": { tone: "danger", text: "Falta una actualización de la base de datos para guardar la conexión (código: sin-actualizar)." },
+  guardar: { tone: "danger", text: "No se pudo guardar la conexión con Drive (código: guardar). Volvé a intentar." },
+  error: { tone: "danger", text: "No se pudo conectar Google Drive (código: error). Volvé a intentar en un rato." },
 };
 
 /** Copias automáticas en el Google Drive del propietario. */

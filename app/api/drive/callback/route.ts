@@ -16,7 +16,10 @@ export async function GET(req: NextRequest) {
   const admin = getAdminSupabase();
   if (!cfg || !admin) return back("sin-configurar");
   const p = req.nextUrl.searchParams;
-  if (p.get("error")) return back("cancelado");
+  if (p.get("error")) {
+    console.error("[drive] Google devolvió error:", p.get("error"), p.get("error_description"));
+    return back(p.get("error") === "access_denied" ? "cancelado" : "google");
+  }
   const raw = verifyState(p.get("state") ?? "", cfg.stateKey);
   if (!raw) return back("error");
   const st = JSON.parse(raw) as { ws: string; u: string; n: string; t: number };
@@ -25,15 +28,33 @@ export async function GET(req: NextRequest) {
   if (req.cookies.get("drive_nonce")?.value !== st.n || Date.now() - st.t > 10 * 60_000) return back("vencido");
   if (!(p.get("scope") ?? "").includes(DRIVE_SCOPE)) return back("sin-permiso");
 
+  // Cada paso devuelve su propio motivo, así se sabe exactamente qué falló (y queda en los registros de Vercel).
+  let tok: Awaited<ReturnType<typeof exchangeCode>>;
   try {
-    const tok = await exchangeCode(p.get("code") ?? "", new URL("/api/drive/callback", req.url).toString());
-    if (!tok.refresh) return back("sin-permiso");
-    const folder = await createFolder(tok.access, `Copias de seguridad - ${me.wsName}`);
-    const { error } = await admin.rpc("drive_save_link", { p_workspace_id: me.ws, p_user: me.user.id, p_token_enc: encryptToken(tok.refresh), p_folder: folder, p_email: tok.email });
-    if (error) return back("error");
+    tok = await exchangeCode(p.get("code") ?? "", new URL("/api/drive/callback", req.url).toString());
+  } catch (e) {
+    console.error("[drive] canje del código:", e);
+    return back("token");
+  }
+  if (!tok.refresh) return back("sin-permiso");
+  let folder: string;
+  try {
+    folder = await createFolder(tok.access, `Copias de seguridad - ${me.wsName}`);
+  } catch (e) {
+    console.error("[drive] crear carpeta:", e);
+    const m = String(e);
+    return back(/has not been used|is disabled|accessNotConfigured|SERVICE_DISABLED/i.test(m) ? "api-desactivada" : "carpeta");
+  }
+  const { error } = await admin.rpc("drive_save_link", { p_workspace_id: me.ws, p_user: me.user.id, p_token_enc: encryptToken(tok.refresh), p_folder: folder, p_email: tok.email });
+  if (error) {
+    console.error("[drive] guardar conexión:", error);
+    return back(error.code === "PGRST202" || error.code === "42883" ? "sin-actualizar" : "guardar");
+  }
+  try {
     const first = await uploadBackup(admin, me.ws);
     return back(first.ok ? "conectado" : "conectado-sin-copia");
-  } catch {
-    return back("error");
+  } catch (e) {
+    console.error("[drive] primera copia:", e);
+    return back("conectado-sin-copia");
   }
 }
