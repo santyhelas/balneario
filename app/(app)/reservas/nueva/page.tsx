@@ -7,7 +7,7 @@ import { friendlyError } from "@/lib/errors";
 import { addDays, formatDate, formatMoney, inclusiveDays, parseMoney, todayISO } from "@/lib/format";
 import { COLLECT_METHODS, METHOD_LABEL } from "@/lib/methods";
 import { DollarFields, type DollarValue } from "@/components/dollar";
-import { buildSegments, candidatesFor, daysOf, indexGrid, isFreeFor, splitDays, type GridRow, type Segment } from "@/lib/stay";
+import { buildSegments, candidatesFor, daysOf, indexGrid, isFreeFor, mapDistance, nearestGroup, splitDays, type GridRow, type Pos, type Segment } from "@/lib/stay";
 import { useWorkspace } from "@/components/workspace";
 import { useStatus } from "@/components/status";
 import { PageHeader } from "@/components/shell";
@@ -92,6 +92,25 @@ export default function NuevaReservaPage() {
   }, [prefill.customer]); // eslint-disable-line react-hooks/exhaustive-deps
   const datesOk = nDays >= 1 && nDays <= 120;
 
+  // ---------- Personas y capacidad ----------
+  const [people, setPeople] = useState("");
+  const peopleN = /^\d+$/.test(people) && Number(people) > 0 ? Number(people) : null;
+  const [caps, setCaps] = useState<{ carpa: number | null; sombrilla: number | null; ready: boolean }>({ carpa: null, sombrilla: null, ready: false });
+  useEffect(() => {
+    sb.from("workspaces").select("tent_capacity, umbrella_capacity").eq("id", ws.id).single().then(({ data, error }) => {
+      if (error) return setCaps({ carpa: null, sombrilla: null, ready: false }); // sin la actualización 0046
+      const d = data as { tent_capacity: number | null; umbrella_capacity: number | null };
+      setCaps({ carpa: d.tent_capacity, sombrilla: d.umbrella_capacity, ready: true });
+    });
+  }, [sb, ws.id]);
+  // Ubicación de cada espacio en el plano, para sugerir carpas pegadas (no por número).
+  const [pos, setPos] = useState<Pos>(new Map());
+  useEffect(() => {
+    sb.from("spaces").select("id, x, y").eq("workspace_id", ws.id).eq("active", true).then(({ data }) => {
+      setPos(new Map(((data ?? []) as { id: string; x: number; y: number }[]).map((r) => [r.id, { x: Number(r.x), y: Number(r.y) }])));
+    });
+  }, [sb, ws.id]);
+
   // ---------- Disponibilidad ----------
   const [kind, setKind] = useState<"carpa" | "sombrilla">("carpa");
   const [grid, setGrid] = useState<GridRow[] | null>(null);
@@ -148,8 +167,33 @@ export default function NuevaReservaPage() {
   // Para cada tramo ocupado, alternativas reales (libres todo ese tramo)
   const busyOptions = useMemo(() => {
     if (!split || !selected) return [];
-    return split.busyRuns.map((run) => ({ run, candidates: candidatesFor(idx, spaces, run, selected.space_id, selected.code) }));
-  }, [split, selected, idx, spaces]);
+    return split.busyRuns.map((run) => ({ run, candidates: candidatesFor(idx, spaces, run, selected.space_id, selected.code, pos) }));
+  }, [split, selected, idx, spaces, pos]);
+
+  // ---------- Grupo: varias carpas juntas ----------
+  const cap = caps[kind];
+  const needed = cap && peopleN ? Math.ceil(peopleN / cap) : 1;
+  const [groupIds, setGroupIds] = useState<string[]>([]);
+  // Si las personas superan el máximo, se preseleccionan las carpas que faltan, pegadas a la elegida en el plano.
+  useEffect(() => {
+    if (!spaceId || !grid) return;
+    const free = fullyFree.map((s) => s.space_id).filter((id) => id !== spaceId);
+    setGroupIds(needed > 1 ? nearestGroup(spaceId, free, needed - 1, pos) : []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [spaceId, needed, start, end, kind, grid === null, pos.size]);
+  const groupSpaces = groupIds.map((id) => spaces.find((s) => s.space_id === id)).filter((s): s is NonNullable<typeof s> => !!s);
+  const isGroup = groupSpaces.length > 0;
+  /** Carpas libres toda la estadía para sumar al grupo, primero las más cercanas a las ya elegidas. */
+  const groupCandidates = useMemo(() => {
+    if (!spaceId) return [];
+    const base = [spaceId, ...groupIds];
+    return fullyFree
+      .filter((s) => !base.includes(s.space_id))
+      .map((s) => ({ ...s, d: Math.min(...base.map((b) => mapDistance(pos, b, s.space_id))) }))
+      .sort((a, b) => a.d - b.d || a.code.localeCompare(b.code, "es", { numeric: true }))
+      .slice(0, 10);
+  }, [fullyFree, spaceId, groupIds, pos]);
+  const capacityTotal = cap ? cap * (1 + groupSpaces.length) : null;
 
   const segments: Segment[] | null = useMemo(() => {
     if (!selected || !split) return null;
@@ -248,6 +292,31 @@ export default function NuevaReservaPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [segKey, optKey, start, end, ws.id]);
 
+  // Precio de cada carpa extra del grupo (toda la estadía; el descuento manual en pesos va solo en la principal).
+  const [groupQuote, setGroupQuote] = useState<{ total: number; cash: number | null } | null>(null);
+  const groupKey = groupSpaces[0]?.space_id ?? "";
+  useEffect(() => {
+    setGroupQuote(null);
+    if (!groupKey || !datesOk) return;
+    const o = { ...options } as Record<string, unknown>;
+    if ((o.manual as { type?: string } | undefined)?.type === "monto") delete o.manual;
+    const seg = [{ space_id: groupKey, start_date: start, end_date: end }];
+    let alive = true;
+    const t = setTimeout(async () => {
+      const [a, b] = await Promise.all([
+        sb.rpc("quote_reservation", { p_workspace_id: ws.id, p_start: start, p_end: end, p_segments: seg, p_options: o }),
+        !courtesy && !cash ? sb.rpc("quote_reservation", { p_workspace_id: ws.id, p_start: start, p_end: end, p_segments: seg, p_options: { ...o, cash: true } }) : Promise.resolve(null),
+      ]);
+      if (!alive) return;
+      const qa = a.error ? null : (a.data as Quote);
+      const qb = b && !b.error ? (b.data as Quote) : null;
+      setGroupQuote(qa?.ok ? { total: Number(qa.total), cash: qb?.ok ? Number(qb.total) : null } : null);
+    }, 300);
+    return () => { alive = false; clearTimeout(t); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [groupKey, optKey, start, end, ws.id, datesOk]);
+  const groupTotal = isGroup && groupQuote ? groupQuote.total * groupSpaces.length : 0;
+
   // ---------- Pago ----------
   const [payMode, setPayMode] = useState<PayMode>("pagada");
   const [method, setMethod] = useState("efectivo");
@@ -257,7 +326,7 @@ export default function NuevaReservaPage() {
   const [extras, setExtras] = useState<ExtraPick[]>([]);
   const extrasForStay = courtesy ? [] : extras.map((x) => ({ ...x, days: Math.min(x.days, Math.max(1, nDays)) }));
   const extrasTotal = useExtrasTotal(extrasForStay);
-  const total = quote?.ok ? Number(quote.total) + extrasTotal : null;
+  const total = quote?.ok && (!isGroup || groupQuote) ? Number(quote.total) + groupTotal + extrasTotal : null;
   const paidNow = courtesy || payMode === "despues" ? 0
     : method === "dolares" ? Math.min(usd.ars ?? 0, total ?? 0)
     : payMode === "pagada" ? total ?? 0 : parseMoney(deposit) ?? 0;
@@ -269,7 +338,7 @@ export default function NuevaReservaPage() {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [done, setDone] = useState<{ id: string; number: number } | null>(null);
+  const [done, setDone] = useState<{ id: string; number: number; group?: { id: string; number: number }[] } | null>(null);
 
   const problems: string[] = [];
   if (!customer) problems.push("Elegí o creá el cliente.");
@@ -279,6 +348,9 @@ export default function NuevaReservaPage() {
   else if (split && split.busy.length > 0 && plan !== "cambiar") problems.push(`${selected.code} está ocupada algunos días: elegí qué hacer en el paso 3.`);
   else if (noAlternative) problems.push("No hay alternativas libres para algunos días: elegí otro espacio o cambiá las fechas.");
   else if (split && split.busy.length > 0 && busyOptions.some((b) => !runChoice[b.run.start])) problems.push("Elegí a qué carpa pasa el cliente los días ocupados.");
+  if (isGroup && split && split.busy.length > 0) problems.push(`Para un grupo, la ${selected?.code ?? "carpa"} principal tiene que estar libre toda la estadía. Elegí otra.`);
+  if (isGroup && !courtesy && payMode !== "despues" && method === "dolares") problems.push("En una reserva de grupo cobrá en pesos; los dólares se registran después desde cada reserva.");
+  if (people && !peopleN) problems.push("Revisá la cantidad de personas.");
   if (quote && !quote.ok) problems.push("Faltan tarifas para esas fechas.");
   if (courtesy && beneficiary.trim().length < 2) problems.push("Indicá el familiar beneficiario de la cortesía.");
   if (!courtesy && payMode !== "despues" && method === "dolares") {
@@ -293,7 +365,7 @@ export default function NuevaReservaPage() {
   if (!courtesy && payMode === "pagada" && total === 0) problems.push("El total es $0: elegí «Cobrar después» o marcá cortesía.");
   const manualDiscountValue = manualType === "monto" ? parseMoney(manualValue) : Number(manualValue.replace(",", "."));
   if (isAdmin && !courtesy && manualDiscountValue && manualDiscountValue > 0 && manualReason.trim().length < 3) problems.push("El descuento manual necesita un motivo.");
-  const canSave = problems.length === 0 && !!quote?.ok && !quoteLoading && !!segments;
+  const canSave = problems.length === 0 && !!quote?.ok && !quoteLoading && !!segments && (!isGroup || !!groupQuote);
 
   async function save() {
     if (!customer || !segments) return;
@@ -305,6 +377,26 @@ export default function NuevaReservaPage() {
         : { amount: paidNow, method, idempotency_key: paymentKey }
       : null;
     const withExtras = extrasForStay.length > 0;
+    // Con personas o con varias carpas se usa la operación de grupo (también sirve para una sola carpa).
+    if (isGroup || peopleN) {
+      const { data, error } = await sb.rpc("create_reservation_group", {
+        p_workspace_id: ws.id, p_request_id: requestId, p_customer_id: customer.id, p_start_date: start, p_end_date: end,
+        p_segments: segments, p_extra_spaces: groupSpaces.map((g) => g.space_id), p_options: options, p_notes: notes.trim() || null,
+        p_payment: payment, p_extras: extrasForStay, p_people: peopleN,
+      });
+      setSaving(false);
+      if (error) {
+        if (error.code === "PGRST202") { setSaveError("Para guardar personas y grupos hay que aplicar la actualización 0046 de la base de datos."); return; }
+        setSaveError(friendlyError(error));
+        if (error.hint === "CONFLICTO_DISPONIBILIDAD") loadGrid();
+        return;
+      }
+      const res = data as { reservation_id: string; number: number; reservations?: { id: string; number: number }[] };
+      setConfirmOpen(false);
+      setDone({ id: res.reservation_id, number: res.number, group: res.reservations && res.reservations.length > 1 ? res.reservations : undefined });
+      status.reload();
+      return;
+    }
     const { data, error } = await sb.rpc(withExtras ? "create_reservation_v3" : "create_reservation_v2", {
       p_workspace_id: ws.id,
       p_request_id: requestId,
@@ -336,6 +428,8 @@ export default function NuevaReservaPage() {
     setCustomer(null);
     setCustQuery("");
     setSpaceId(null);
+    setGroupIds([]);
+    setPeople("");
     setNotes("");
     setCourtesy(false);
     setBeneficiary("");
@@ -355,12 +449,14 @@ export default function NuevaReservaPage() {
   const quoteText = quote?.ok && segments && !courtesy ? quoteMessage({
     firstName: customer?.first_name ?? null,
     balneario: ws.name,
-    places: segments.length === 1
+    places: isGroup
+      ? `${kind === "carpa" ? "Carpas" : "Sombrillas"} ${[selected?.code ?? "", ...groupSpaces.map((g) => g.code)].join(", ")}`
+      : segments.length === 1
       ? `${kind === "carpa" ? "Carpa" : "Sombrilla"} ${spaces.find((x) => x.space_id === segments[0].space_id)?.code ?? ""}`
       : segments.map((sg) => `${kind === "carpa" ? "Carpa" : "Sombrilla"} ${spaces.find((x) => x.space_id === sg.space_id)?.code ?? ""} (${formatDate(sg.start_date).slice(0, 5)} al ${formatDate(sg.end_date).slice(0, 5)})`).join(", "),
     start, end,
-    total: Number(quote.total) + extrasTotal,
-    cashTotal: cashTotal !== null ? cashTotal + extrasTotal : null,
+    total: Number(quote.total) + groupTotal + extrasTotal,
+    cashTotal: cashTotal !== null ? cashTotal + (isGroup && groupQuote ? (groupQuote.cash ?? groupQuote.total) * groupSpaces.length : 0) + extrasTotal : null,
     discounts: quote.discounts.map((d) => clientDiscountLabel(d, agreements)),
   }) : null;
 
@@ -368,7 +464,9 @@ export default function NuevaReservaPage() {
     return (
       <div className="mx-auto max-w-lg">
         <Alert tone="ok" className="mb-4 text-base">
-          <strong>Reserva #{done.number} guardada.</strong> Ya figura en el mapa, en la caja (si hubo cobro) y en todas las computadoras.
+          {done.group
+            ? <><strong>Grupo guardado: reservas {done.group.map((g) => `#${g.number}`).join(", ")}.</strong> Las carpas quedaron unidas; el cobro se repartió entre ellas.</>
+            : <><strong>Reserva #{done.number} guardada.</strong> Ya figura en el mapa, en la caja (si hubo cobro) y en todas las computadoras.</>}
         </Alert>
         <div className="flex flex-wrap gap-2">
           <Link href={`/reservas/${done.id}`}><Button>Ver la reserva</Button></Link>
@@ -450,6 +548,15 @@ export default function NuevaReservaPage() {
               {datesOk ? <>Del <strong>{formatDate(start)}</strong> al <strong>{formatDate(end)}</strong> · {nDays} {nDays === 1 ? "día" : "días"}</> : <span className="text-danger">{nDays > 120 ? "Máximo 120 días." : "La salida no puede ser anterior a la entrada."}</span>}
               {start < today && <Badge tone="warn">Fecha pasada</Badge>}
             </p>
+            <div className="mt-3 flex flex-wrap items-end gap-3 border-t border-line pt-3">
+              <Field label="Personas">
+                <Input inputMode="numeric" value={people} onChange={(e) => setPeople(e.target.value.replace(/\D/g, "").slice(0, 3))} placeholder="Opcional" className="w-28" aria-label="Cantidad de personas" />
+              </Field>
+              <p className="pb-2 text-xs text-muted">
+                {cap ? <>Máximo {cap} por {kind}.{needed > 1 && <strong className="text-fg"> Son {peopleN}: hacen falta {needed} {kind === "carpa" ? "carpas" : "sombrillas"}.</strong>}</>
+                  : caps.ready ? <>Sin máximo de personas. {isAdmin && <Link href="/configuracion#reglas" className="text-accent underline">Fijarlo en Configuración</Link>}</> : null}
+              </p>
+            </div>
           </Card>
 
           {/* 3. Espacio */}
@@ -572,6 +679,40 @@ export default function NuevaReservaPage() {
                     )}
                   </div>
                 )}
+                {spaceId && grid && !isGroup && needed <= 1 && groupCandidates.length > 0 && split?.busy.length === 0 && (
+                  <button type="button" onClick={() => setGroupIds([groupCandidates[0].space_id])} className="mt-3 text-sm text-accent hover:underline">
+                    + ¿Son varios? Sumar la {groupCandidates[0].code}, que está pegada
+                  </button>
+                )}
+                {spaceId && grid && (isGroup || needed > 1) && (
+                  <div className="mt-3 rounded-lg border border-accent/40 bg-accent-soft/40 p-3">
+                    <div className="mb-1 font-medium">
+                      {isGroup ? <>Grupo: {[selected?.code, ...groupSpaces.map((g) => g.code)].join(" + ")}</> : `Hacen falta ${needed} ${kind === "carpa" ? "carpas" : "sombrillas"}`}
+                    </div>
+                    {isGroup && <p className="mb-2 text-xs text-muted">Se guardan juntas, mismas fechas y mismo cliente. Un solo cobro que se reparte entre las {1 + groupSpaces.length}.</p>}
+                    {capacityTotal !== null && peopleN !== null && peopleN > capacityTotal && (
+                      <Alert tone="warn" className="mb-2">Son {peopleN} personas y {1 + groupSpaces.length === 1 ? "esta carpa alcanza" : `estas ${1 + groupSpaces.length} alcanzan`} para {capacityTotal}. Sumá otra.</Alert>
+                    )}
+                    {needed > 1 && groupSpaces.length < needed - 1 && groupCandidates.length === 0 && (
+                      <Alert tone="danger" className="mb-2">No hay más {kind === "carpa" ? "carpas" : "sombrillas"} libres toda la estadía para el grupo.</Alert>
+                    )}
+                    <div className="flex flex-wrap gap-1.5">
+                      {groupSpaces.map((g) => (
+                        <button key={g.space_id} type="button" onClick={() => setGroupIds((p) => p.filter((x) => x !== g.space_id))}
+                          className="rounded-md border border-accent bg-accent px-2.5 py-1 text-sm font-semibold tabular text-accent-fg" title="Sacar del grupo">
+                          {g.code} ✕
+                        </button>
+                      ))}
+                      {groupSpaces.length < 9 && groupCandidates.slice(0, 6).map((c) => (
+                        <button key={c.space_id} type="button" onClick={() => setGroupIds((p) => [...p, c.space_id])}
+                          className="rounded-md border border-ok/50 bg-ok-soft px-2.5 py-1 text-sm font-semibold tabular text-ok hover:bg-ok/20" title="Sumar al grupo">
+                          + {c.code}
+                        </button>
+                      ))}
+                    </div>
+                    {groupCandidates.length > 0 && <p className="mt-1 text-xs text-muted">Primero las más cercanas en el plano. Todas libres toda la estadía.</p>}
+                  </div>
+                )}
                 {segments && segments.length > 1 && (
                   <div className="mt-3">
                     <div className="mb-1 text-xs font-medium text-muted">Así queda la reserva (una sola):</div>
@@ -675,10 +816,16 @@ export default function NuevaReservaPage() {
                   </div>
                 )}
                 {courtesy && <div className="flex justify-between gap-3 text-ok"><span>Cortesía familiar</span><span className="tabular">− {formatMoney(quote.precio_base)}</span></div>}
+                {isGroup && (
+                  <div className="flex justify-between gap-3">
+                    <span>{groupSpaces.length === 1 ? `Carpa ${groupSpaces[0].code} del grupo` : `${groupSpaces.length} carpas más del grupo`}</span>
+                    <span className="tabular">{groupQuote ? `+ ${formatMoney(groupTotal)}` : "…"}</span>
+                  </div>
+                )}
                 {!courtesy && extrasTotal > 0 && <div className="flex justify-between gap-3"><span>Extras</span><span className="tabular">+ {formatMoney(extrasTotal)}</span></div>}
                 <div className="mt-1 flex justify-between gap-3 border-t border-line pt-2 text-base font-semibold"><span>Total</span><span className="tabular">{formatMoney(total)}</span></div>
                 {cashTotal !== null && cashTotal < Number(quote.total) && (
-                  <div className="flex justify-between gap-3 text-xs text-muted"><span>Pagando en efectivo</span><span className="tabular">{formatMoney(cashTotal + (courtesy ? 0 : extrasTotal))}</span></div>
+                  <div className="flex justify-between gap-3 text-xs text-muted"><span>Pagando en efectivo</span><span className="tabular">{formatMoney(cashTotal + (isGroup && groupQuote ? (groupQuote.cash ?? groupQuote.total) * groupSpaces.length : 0) + (courtesy ? 0 : extrasTotal))}</span></div>
                 )}
                 {!courtesy && quoteText && (
                   <div className="mt-3 border-t border-line pt-3">
@@ -796,7 +943,11 @@ export default function NuevaReservaPage() {
             <dt className="text-muted">Cliente</dt><dd className="font-medium">{customer.first_name} {customer.last_name}</dd>
             <dt className="text-muted">Estadía</dt><dd>{formatDate(start)} al {formatDate(end)} ({nDays} días)</dd>
             <dt className="text-muted">Lugar</dt>
-            <dd>{segments.map((s) => `${spaces.find((x) => x.space_id === s.space_id)?.code} (${formatDate(s.start_date)}–${formatDate(s.end_date)})`).join(" → ")}</dd>
+            <dd>
+              {segments.map((s) => `${spaces.find((x) => x.space_id === s.space_id)?.code} (${formatDate(s.start_date)}–${formatDate(s.end_date)})`).join(" → ")}
+              {isGroup && <> + {groupSpaces.map((g) => g.code).join(", ")} <span className="text-muted">(grupo)</span></>}
+            </dd>
+            {peopleN && <><dt className="text-muted">Personas</dt><dd>{peopleN}</dd></>}
             <dt className="text-muted">Total</dt><dd className="font-semibold tabular">{formatMoney(total)}{!courtesy && extrasTotal > 0 ? ` (con ${formatMoney(extrasTotal)} de extras)` : ""}{courtesy ? ` · Cortesía para ${beneficiary}` : ""}</dd>
             {!courtesy && (
               <>

@@ -51,7 +51,7 @@ export const CONFIG_SECTIONS: { id: keyof typeof CONFIG_ICONS; label: string; ow
   { id: "perfil", label: "Mi perfil" },
   { id: "balneario", label: "Datos del balneario" },
   { id: "mensajes", label: "Mensajes a clientes" },
-  { id: "reglas", label: "Caja y descuentos" },
+  { id: "reglas", label: "Caja, descuentos y reservas" },
   { id: "cuentas", label: "Cuentas vinculadas", owners: true },
   { id: "usuarios", label: "Usuarios", owners: true },
   { id: "plan", label: "Mi plan", owners: true },

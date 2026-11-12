@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildSegments, candidatesFor, daysOf, indexGrid, splitDays, toRuns, type GridRow } from "./stay.ts";
+import { buildSegments, candidatesFor, daysOf, indexGrid, nearestGroup, splitDays, toRuns, type GridRow } from "./stay.ts";
 
 // Carpa 17 ocupada desde el 4/1; carpa 24 libre todo; carpa 30 ocupada el 5/1.
 const days = daysOf("2027-01-01", "2027-01-05");
@@ -37,4 +37,9 @@ test("una sola reserva con dos tramos contiguos", () => {
 
 test("tramos separados por un hueco quedan como tramos distintos", () => {
   assert.deepEqual(toRuns(["2027-01-01", "2027-01-02", "2027-01-05"]).map((r) => r.days), [2, 1]);
+});
+
+test("grupo: elige las carpas pegadas en el plano, no las de número parecido", () => {
+  const pos = new Map([["c25", { x: 0, y: 0 }], ["c26", { x: 900, y: 0 }], ["c40", { x: 60, y: 0 }], ["c41", { x: 120, y: 0 }]]);
+  assert.deepEqual(nearestGroup("c25", ["c26", "c40", "c41"], 2, pos), ["c40", "c41"]);
 });

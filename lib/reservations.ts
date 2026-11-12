@@ -22,6 +22,9 @@ export type ReservationDetail = {
   /** undefined si todavía no se aplicó la actualización 0025. */
   arrival_status?: "llego" | "no_vino" | null;
   arrival_at?: string | null;
+  /** undefined si todavía no se aplicó la actualización 0046. */
+  people?: number | null;
+  group_id?: string | null;
   customers: { id: string; first_name: string; last_name: string; phone: string | null; email: string | null; locality: string | null };
 };
 export type SegmentRow = { id: string; space_id: string; start_date: string; end_date: string; spaces: { code: string; kind: "carpa" | "sombrilla" } };

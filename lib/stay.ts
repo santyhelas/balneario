@@ -61,18 +61,33 @@ export function splitDays(idx: Map<string, Map<string, boolean>>, spaceId: strin
  * Espacios que pueden cubrir un tramo completo, ordenados por cercanía de número al preferido
  * (los números cercanos suelen estar en la misma fila del plano).
  */
+export type Pos = Map<string, { x: number; y: number }>;
+
+/** Distancia en el plano entre dos espacios (Infinity si falta la ubicación de alguno). */
+export function mapDistance(pos: Pos | undefined, a: string, b: string): number {
+  const p = pos?.get(a), q = pos?.get(b);
+  return p && q ? Math.hypot(p.x - q.x, p.y - q.y) : Infinity;
+}
+
 export function candidatesFor(
   idx: Map<string, Map<string, boolean>>,
   spaces: { space_id: string; code: string }[],
   run: Run,
   excludeId: string | null,
   preferredCode: string | null,
+  pos?: Pos,
 ): { space_id: string; code: string }[] {
   const days = daysOf(run.start, run.end);
   const pref = preferredCode ? Number(preferredCode) : NaN;
+  const byMap = !!excludeId && !!pos?.get(excludeId);
   return spaces
     .filter((s) => s.space_id !== excludeId && isFreeFor(idx, s.space_id, days))
     .sort((a, b) => {
+      // Con el plano cargado, primero las que están físicamente más cerca (no las de número parecido).
+      if (byMap) {
+        const d = mapDistance(pos, excludeId!, a.space_id) - mapDistance(pos, excludeId!, b.space_id);
+        if (Number.isFinite(d) && d !== 0) return d;
+      }
       const da = Number.isFinite(pref) && Number.isFinite(Number(a.code)) ? Math.abs(Number(a.code) - pref) : 0;
       const db = Number.isFinite(pref) && Number.isFinite(Number(b.code)) ? Math.abs(Number(b.code) - pref) : 0;
       return da - db || a.code.localeCompare(b.code, "es", { numeric: true });
@@ -92,4 +107,26 @@ export function buildSegments(assign: { day: string; space_id: string }[]): Segm
     }
   }
   return segs;
+}
+
+/**
+ * Para un grupo que necesita varias carpas: elige las libres que quedan pegadas a la principal en el plano.
+ * Va sumando de a una la más cercana a cualquiera de las ya elegidas (así forman una fila o un bloque),
+ * y ante empate la más cercana a la principal.
+ */
+export function nearestGroup(mainId: string, freeIds: string[], count: number, pos: Pos): string[] {
+  const chosen: string[] = [];
+  const pool = freeIds.filter((id) => id !== mainId && pos.has(id));
+  while (chosen.length < count && pool.length > 0) {
+    let best = -1, bestD = Infinity, bestMain = Infinity;
+    pool.forEach((id, i) => {
+      const d = Math.min(...[mainId, ...chosen].map((c) => mapDistance(pos, c, id)));
+      const dm = mapDistance(pos, mainId, id);
+      if (d < bestD - 1e-6 || (Math.abs(d - bestD) <= 1e-6 && dm < bestMain)) { best = i; bestD = d; bestMain = dm; }
+    });
+    if (best < 0) break;
+    chosen.push(pool[best]);
+    pool.splice(best, 1);
+  }
+  return chosen;
 }

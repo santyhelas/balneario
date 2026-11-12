@@ -1249,6 +1249,43 @@ select t.ok(exists (select 1 from private.deleted_workspaces where id = t.uid('w
 select t.ok(exists (select 1 from public.workspaces where id = t.uid('ws')), 'Borrar balneario: los demás balnearios siguen intactos');
 set role authenticated;
 
+-- 45. Personas y reservas de grupo (varias carpas juntas, un solo cobro)
+select public.reopen_cash_session(t.uid('session'), (select version from public.cash_sessions where id = t.uid('session')), 'Prueba de grupos');
+select t.set('rqg', gen_random_uuid()::text);
+select t.set('pkg', gen_random_uuid()::text);
+select t.set('g1', (public.create_reservation_group(t.uid('ws'), t.uid('rqg'), t.uid('juan'), '2027-04-20', '2027-04-22',
+  jsonb_build_array(jsonb_build_object('space_id', t.space('63'), 'start_date', '2027-04-20', 'end_date', '2027-04-22')),
+  array[t.space('64'), t.space('65')], '{"manual_base": 30000, "manual": {"type": "monto", "value": 5000, "reason": "Grupo grande"}}'::jsonb, 'Familia grande',
+  jsonb_build_object('amount', 50000, 'method', 'efectivo', 'idempotency_key', t.get('pkg')), '[]'::jsonb, 7) ->> 'group_id'));
+select t.ok((select count(*) = 3 from public.reservations where group_id = t.uid('g1')), 'Grupo: se crean tres reservas unidas');
+select t.ok((select array_agg(people order by people desc) = array[3,2,2] from public.reservations where group_id = t.uid('g1')), 'Grupo: las 7 personas se reparten 3 + 2 + 2');
+select t.ok((select sum(total_amount) = 85000 from public.reservations where group_id = t.uid('g1')), 'Grupo: el descuento manual en pesos se aplica una sola vez (30.000 × 3 − 5.000)');
+select t.ok((select sum(paid_amount) = 50000 and sum(due_amount) = 35000 from public.reservation_balances b join public.reservations r on r.id = b.reservation_id where r.group_id = t.uid('g1')),
+  'Grupo: el cobro de $50.000 se reparte y queda el saldo justo');
+select t.ok((public.create_reservation_group(t.uid('ws'), t.uid('rqg'), t.uid('juan'), '2027-04-20', '2027-04-22',
+  jsonb_build_array(jsonb_build_object('space_id', t.space('63'), 'start_date', '2027-04-20', 'end_date', '2027-04-22')),
+  array[t.space('64'), t.space('65')], '{"manual_base": 30000}'::jsonb, null,
+  jsonb_build_object('amount', 50000, 'method', 'efectivo', 'idempotency_key', t.get('pkg')), '[]'::jsonb, 7) ->> 'repetida')::boolean, 'Grupo: reintentar no lo duplica');
+select t.ok((select count(*) = 3 from public.reservations where group_id = t.uid('g1')) and (select count(*) = 2 from public.payments p join public.reservations r on r.id = p.reservation_id where r.group_id = t.uid('g1')),
+  'Grupo: tras reintentar siguen 3 reservas y 2 cobros');
+select t.throws(format($$select public.create_reservation_group(%L, gen_random_uuid(), %L, '2027-04-21', '2027-04-23',
+  jsonb_build_array(jsonb_build_object('space_id', %L, 'start_date', '2027-04-21', 'end_date', '2027-04-23')),
+  array[%L::uuid], '{"manual_base": 1000}'::jsonb, null, null, '[]'::jsonb, 4)$$, t.get('ws'), t.get('juan'), t.space('66'), t.space('64')), '',
+  'Grupo: si una carpa del grupo está ocupada no se guarda nada');
+select t.ok(not exists (select 1 from public.reservations r join public.reservation_segments s on s.reservation_id = r.id where s.space_id = t.space('66') and r.start_date = '2027-04-21'),
+  'Grupo: tras el conflicto la carpa principal quedó libre');
+select t.throws(format($$select public.create_reservation_group(%L, gen_random_uuid(), %L, '2027-05-01', '2027-05-02',
+  jsonb_build_array(jsonb_build_object('space_id', %L, 'start_date', '2027-05-01', 'end_date', '2027-05-02')),
+  array[%L::uuid], '{"manual_base": 1000}'::jsonb, null, null, '[]'::jsonb, null)$$, t.get('ws'), t.get('juan'), t.space('66'), t.space('66')), 'mismo que el principal',
+  'Grupo: no se puede repetir la carpa principal');
+select t.set('r1p', (public.create_reservation_group(t.uid('ws'), gen_random_uuid(), t.uid('juan'), '2027-05-03', '2027-05-04',
+  jsonb_build_array(jsonb_build_object('space_id', t.space('66'), 'start_date', '2027-05-03', 'end_date', '2027-05-04')),
+  '{}'::uuid[], '{"manual_base": 1000}'::jsonb, null, null, '[]'::jsonb, 5) ->> 'reservation_id'));
+select t.ok((select people = 5 and group_id is null from public.reservations where id = t.uid('r1p')), 'Personas: una sola carpa guarda las personas sin grupo');
+select public.set_reservation_people(t.uid('r1p'), (select version from public.reservations where id = t.uid('r1p')), 4);
+select t.ok((select people = 4 from public.reservations where id = t.uid('r1p')), 'Personas: se puede corregir después');
+select public.close_cash_session(t.uid('session'), 0, (select version from public.cash_sessions where id = t.uid('session')), null);
+
 reset role;
 \o
 -- Resultado ----------------------------------------------------------

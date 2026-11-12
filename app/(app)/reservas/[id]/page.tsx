@@ -27,7 +27,7 @@ export default function ReservaPage() {
   const today = todayISO(ws.timezone);
   const q = useLoader<Full>(() => loadReservation(id), [id]);
   const templates = useMessageTemplates();
-  const [modal, setModal] = useState<null | "pago" | "reubicar" | "cancelar" | "devolucion" | "notas">(null);
+  const [modal, setModal] = useState<null | "pago" | "reubicar" | "cancelar" | "devolucion" | "notas" | "personas">(null);
   const [voiding, setVoiding] = useState<PaymentRow | null>(null);
   const [reverting, setReverting] = useState<string | null>(null);
   const [msg, setMsg] = useState<{ tone: "ok" | "danger"; text: string } | null>(null);
@@ -120,6 +120,13 @@ export default function ReservaPage() {
                 )}
               </div>
             )}
+            {r.people !== undefined && (
+              <div>
+                <dt className="flex items-center gap-2 text-xs text-muted">Personas {confirmed && <button className="text-accent hover:underline" onClick={() => setModal("personas")}>Editar</button>}</dt>
+                <dd>{r.people ?? "—"}</dd>
+              </div>
+            )}
+            {r.group_id && <GroupInfo groupId={r.group_id} currentId={r.id} />}
             {r.is_courtesy && <div className="col-span-2"><dt className="text-xs text-muted">Cortesía familiar para</dt><dd>{r.courtesy_beneficiary ?? "—"}</dd></div>}
             <div className="col-span-2">
               <dt className="flex items-center justify-between text-xs text-muted">Observaciones {confirmed && <button className="text-accent hover:underline" onClick={() => setModal("notas")}>Editar</button>}</dt>
@@ -223,6 +230,7 @@ export default function ReservaPage() {
       <RelocateModal open={modal === "reubicar"} full={q.data} today={today} onClose={() => setModal(null)} onDone={done} />
       <CancelModal open={modal === "cancelar"} full={q.data} onClose={() => setModal(null)} onDone={done} />
       <NotesModal open={modal === "notas"} full={q.data} onClose={() => setModal(null)} onDone={done} />
+      <PeopleModal open={modal === "personas"} full={q.data} onClose={() => setModal(null)} onDone={done} />
       <VoidModal payment={voiding} onClose={() => setVoiding(null)} onDone={done} />
       <RevertModal changeId={reverting} description={changes.find((c) => c.id === reverting)?.description ?? ""} onClose={() => setReverting(null)} onDone={done} />
     </>
@@ -354,6 +362,50 @@ function NotesModal({ open, full, onClose, onDone }: { open: boolean; full: Full
         )}>Guardar</Button>
       </div>
     </Modal>
+  );
+}
+
+function PeopleModal({ open, full, onClose, onDone }: { open: boolean; full: Full; onClose: () => void; onDone: (t: string) => void }) {
+  const [people, setPeople] = useState(full.r.people ? String(full.r.people) : "");
+  const a = useAction();
+  const n = people.trim() === "" ? null : Number(people);
+  return (
+    <Modal open={open} onClose={onClose} title="Personas" busy={a.busy}>
+      <TextField label="Cuántas personas ocupan este espacio" inputMode="numeric" value={people} onChange={(e) => setPeople(e.target.value.replace(/\D/g, "").slice(0, 3))} placeholder="Sin dato" />
+      {a.error && <Alert tone="danger">{a.error}</Alert>}
+      <div className="flex justify-end gap-2">
+        <Button variant="secondary" onClick={onClose} disabled={a.busy}>Cancelar</Button>
+        <Button loading={a.busy} disabled={n !== null && n < 1} onClick={() => a.run(
+          () => getSupabase().rpc("set_reservation_people", { p_reservation_id: full.r.id, p_expected_version: full.r.version, p_people: n }),
+          () => onDone("Personas guardadas."),
+        )}>Guardar</Button>
+      </div>
+    </Modal>
+  );
+}
+
+/** Las otras carpas del mismo grupo (se reservaron juntas). */
+function GroupInfo({ groupId, currentId }: { groupId: string; currentId: string }) {
+  const q = useLoader(async () => {
+    const { data, error } = await getSupabase().from("reservations")
+      .select("id, number, status, people, reservation_segments(active, spaces(code))").eq("group_id", groupId).order("number");
+    if (error) throw error;
+    return (data ?? []) as unknown as { id: string; number: number; status: string; people: number | null; reservation_segments: { active: boolean; spaces: { code: string } }[] }[];
+  }, [groupId], 0);
+  const rows = q.data ?? [];
+  const total = rows.filter((x) => x.status === "confirmada").reduce((a, x) => a + (x.people ?? 0), 0);
+  return (
+    <div className="col-span-2 rounded-lg bg-surface-2 p-2">
+      <dt className="text-xs text-muted">Grupo · {rows.length} espacios{total > 0 ? ` · ${total} personas en total` : ""}</dt>
+      <dd className="mt-1 flex flex-wrap gap-1.5">
+        {rows.map((x) => {
+          const code = x.reservation_segments.find((sg) => sg.active)?.spaces.code ?? "—";
+          return x.id === currentId
+            ? <span key={x.id} className="rounded-md bg-accent px-2 py-0.5 text-sm font-semibold text-accent-fg">#{x.number} · {code}</span>
+            : <Link key={x.id} href={`/reservas/${x.id}`} className={cx("rounded-md border border-line px-2 py-0.5 text-sm hover:bg-surface", x.status !== "confirmada" && "line-through opacity-60")}>#{x.number} · {code}</Link>;
+        })}
+      </dd>
+    </div>
   );
 }
 

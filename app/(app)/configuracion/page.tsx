@@ -42,7 +42,7 @@ export default function ConfiguracionPage() {
           <ConfigSection id="mensajes" title="Mensajes a clientes" sub="Textos de WhatsApp y correo para recordatorios y comprobantes" icon={CONFIG_ICONS.mensajes}>
             <MessagesCard key={`m${q.data.row.version}`} editable={isAdmin} onSaved={q.reload} />
           </ConfigSection>
-          <ConfigSection id="reglas" title="Caja y descuentos" sub="Límite de efectivo en caja y tope de descuento" icon={CONFIG_ICONS.reglas}>
+          <ConfigSection id="reglas" title="Caja, descuentos y reservas" sub="Límite de efectivo, tope de descuento y personas por carpa" icon={CONFIG_ICONS.reglas}>
             <div data-tour="config-reglas"><RulesCard /></div>
           </ConfigSection>
           {!isGuest && (
