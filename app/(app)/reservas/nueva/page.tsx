@@ -397,7 +397,6 @@ export default function NuevaReservaPage() {
   else if (noAlternative) problems.push("No hay alternativas libres para algunos días: elegí otro espacio o cambiá las fechas.");
   else if (split && split.busy.length > 0 && busyOptions.some((b) => !runChoice[b.run.start])) problems.push("Elegí a qué carpa pasa el cliente los días ocupados.");
   if (isGroup && split && split.busy.length > 0) problems.push(`Para un grupo, la ${selected?.code ?? "carpa"} principal tiene que estar libre toda la estadía. Elegí otra.`);
-  if (isGroup && !courtesy && payMode !== "despues" && method === "dolares") problems.push("En una reserva de grupo cobrá en pesos; los dólares se registran después desde cada reserva.");
   if (people && !peopleN) problems.push("Revisá la cantidad de personas.");
   if (quote && !quote.ok) problems.push("Faltan tarifas para esas fechas.");
   if (courtesy && beneficiary.trim().length < 2) problems.push("Indicá el familiar beneficiario de la cortesía.");
@@ -435,6 +434,7 @@ export default function NuevaReservaPage() {
       setSaving(false);
       if (error) {
         if (error.code === "PGRST202") { setSaveError("Para guardar personas y grupos hay que aplicar la actualización 0046 de la base de datos."); return; }
+        if (/cobrá en pesos/.test(error.message)) { setSaveError("Para cobrar un grupo en dólares hay que aplicar la actualización 0048 de la base de datos."); return; }
         setSaveError(friendlyError(error));
         if (error.hint === "CONFLICTO_DISPONIBILIDAD") loadGrid();
         return;

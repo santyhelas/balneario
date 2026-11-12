@@ -1307,6 +1307,22 @@ select t.ok(not (public.quote_reservation(t.uid('ws'), '2027-05-10', '2027-05-13
   'Paquete fijo: 4 días (menos que el paquete) usa el tarifario de siempre');
 select t.ok(private.snapshot(t.uid('ws')) ? 'package_prices', 'Paquete fijo: entra en las copias de seguridad');
 
+-- 47. Grupo cobrado en dólares (seña y todo el saldo)
+select public.reopen_cash_session(t.uid('session'), (select version from public.cash_sessions where id = t.uid('session')), 'Prueba de dólares');
+select t.set('gu', (public.create_reservation_group(t.uid('ws'), gen_random_uuid(), t.uid('juan'), '2027-06-01', '2027-06-02',
+  jsonb_build_array(jsonb_build_object('space_id', t.space('63'), 'start_date', '2027-06-01', 'end_date', '2027-06-02')),
+  array[t.space('64')], '{"manual_base": 30000}'::jsonb, null,
+  jsonb_build_object('amount', 45000, 'method', 'dolares', 'usd_amount', 45, 'exchange_rate', 1000, 'idempotency_key', gen_random_uuid()), '[]'::jsonb, 6) ->> 'group_id'));
+select t.ok((select sum(paid_amount) = 45000 and sum(due_amount) = 15000 from public.reservation_balances b join public.reservations r on r.id = b.reservation_id where r.group_id = t.uid('gu')),
+  'Grupo en dólares: una seña de US$ 45 se reparte (queda $15.000)');
+select t.set('gu2', (public.create_reservation_group(t.uid('ws'), gen_random_uuid(), t.uid('juan'), '2027-06-05', '2027-06-06',
+  jsonb_build_array(jsonb_build_object('space_id', t.space('63'), 'start_date', '2027-06-05', 'end_date', '2027-06-06')),
+  array[t.space('64')], '{"manual_base": 30000}'::jsonb, null,
+  jsonb_build_object('amount', 60000, 'method', 'dolares', 'usd_amount', 46.16, 'exchange_rate', 1300, 'idempotency_key', gen_random_uuid()), '[]'::jsonb, null) ->> 'group_id'));
+select t.ok((select sum(due_amount) = 0 from public.reservation_balances b join public.reservations r on r.id = b.reservation_id where r.group_id = t.uid('gu2')),
+  'Grupo en dólares: «todo el saldo» deja las dos carpas en cero aunque el redondeo dé centavos de más');
+select public.close_cash_session(t.uid('session'), 0, (select version from public.cash_sessions where id = t.uid('session')), null);
+
 reset role;
 \o
 -- Resultado ----------------------------------------------------------

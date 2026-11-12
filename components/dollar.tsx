@@ -48,6 +48,11 @@ export function DollarFields({ due, onChange }: { due: number; onChange: (v: Dol
   const over = ars !== null && rate !== null && rate !== undefined && ars - due >= Math.max(1, rate * 0.01);
 
   useEffect(() => { onChange({ usd: usd ?? null, rate: rate ?? null, ars }); }, [usd, rate, ars]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Al llegar la cotización del banco, queda escrita en «Cotización usada» (compra), así se ve cuál se aplica.
+  const rateText = (n: number) => String(n).replace(".", ",");
+  useEffect(() => {
+    if (q.data && !manualRate.trim()) setManualRate(rateText(q.data[which]));
+  }, [q.data]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function coverAll() {
     if (!rate) return;
@@ -64,8 +69,8 @@ export function DollarFields({ due, onChange }: { due: number; onChange: (v: Dol
             <div className="font-medium">Dólar Banco Nación{d.fecha ? ` (${d.fecha.split("-").reverse().join("/")})` : ""}</div>
             <div className="mt-1 flex flex-wrap gap-2">
               {(["compra", "venta"] as const).map((k) => (
-                <button key={k} type="button" onClick={() => { setWhich(k); setManualRate(""); }}
-                  className={`rounded-lg border px-2 py-1 text-xs ${which === k && !manualRate ? "border-accent bg-accent-soft font-semibold" : "border-line"}`}>
+                <button key={k} type="button" onClick={() => { setWhich(k); setManualRate(rateText(d[k])); }}
+                  className={`rounded-lg border px-2 py-1 text-xs ${rate === d[k] ? "border-accent bg-accent-soft font-semibold" : "border-line"}`}>
                   {k === "compra" ? "Compra" : "Venta"} {formatMoney(d[k])}
                 </button>
               ))}
@@ -76,7 +81,7 @@ export function DollarFields({ due, onChange }: { due: number; onChange: (v: Dol
           <Alert tone="warn">{q.error} Cargá la cotización a mano.</Alert>
         )}
       </div>
-      <TextField label={q.data ? "Cotización usada (opcional, para corregirla a mano)" : "Cotización (pesos por dólar)"} inputMode="decimal"
+      <TextField label={q.data ? "Cotización usada (tocá Compra o Venta, o corregila a mano)" : "Cotización (pesos por dólar)"} inputMode="decimal"
         placeholder={bankRate ? String(bankRate).replace(".", ",") : "Ej: 1405"} value={manualRate} onChange={(e) => setManualRate(e.target.value)} />
       <div className="flex items-end gap-2">
         <div className="flex-1">
