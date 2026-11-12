@@ -194,6 +194,43 @@ export default function NuevaReservaPage() {
       .slice(0, 10);
   }, [fullyFree, spaceId, groupIds, pos]);
   const capacityTotal = cap ? cap * (1 + groupSpaces.length) : null;
+  /** Grupos recomendados: conjuntos de carpas libres toda la estadía, pegadas entre sí en el plano. */
+  const groupSuggestions = useMemo(() => {
+    if (needed <= 1 || pos.size === 0) return [];
+    const free = fullyFree.map((s) => s.space_id).filter((id) => pos.has(id));
+    const seen = new Set<string>();
+    const out: { ids: string[]; cost: number }[] = [];
+    for (const seed of free) {
+      const rest = nearestGroup(seed, free, needed - 1, pos);
+      if (rest.length < needed - 1) continue;
+      const ids = [seed, ...rest];
+      const key = [...ids].sort().join(",");
+      if (seen.has(key)) continue;
+      seen.add(key);
+      let cost = 0;
+      rest.forEach((id, i) => { cost += Math.min(...ids.slice(0, i + 1).map((c) => mapDistance(pos, c, id))); });
+      out.push({ ids, cost });
+    }
+    const code = (id: string) => spaces.find((s) => s.space_id === id)?.code ?? "";
+    return out
+      .sort((a, b) => a.cost - b.cost || code(a.ids[0]).localeCompare(code(b.ids[0]), "es", { numeric: true }))
+      .slice(0, 5)
+      .map((g) => ({ ...g, ids: [...g.ids].sort((a, b) => code(a).localeCompare(code(b), "es", { numeric: true })) }));
+  }, [needed, fullyFree, pos, spaces]);
+  const groupMode = needed > 1 || isGroup;
+  const [gridNote, setGridNote] = useState<string | null>(null);
+  function pickSpace(id: string, tone: "free" | "partial" | "none") {
+    setGridNote(null);
+    if (groupMode && spaceId) {
+      if (id === spaceId) { setSpaceId(null); setGroupIds([]); return; } // tocar la principal: empezar de nuevo
+      if (groupIds.includes(id)) { setGroupIds((p) => p.filter((x) => x !== id)); return; }
+      if (tone !== "free") { setGridNote("Para el grupo, elegí carpas libres toda la estadía (en verde)."); return; }
+      if (groupIds.length >= 9) { setGridNote("Un grupo puede tener hasta 10 espacios."); return; }
+      setGroupIds((p) => [...p, id]);
+      return;
+    }
+    setSpaceId(id);
+  }
 
   const segments: Segment[] | null = useMemo(() => {
     if (!selected || !split) return null;
@@ -320,6 +357,17 @@ export default function NuevaReservaPage() {
   // ---------- Pago ----------
   const [payMode, setPayMode] = useState<PayMode>("pagada");
   const [method, setMethod] = useState("efectivo");
+  // Descuento por efectivo del balneario (Convenios y descuentos). Si paga en efectivo se marca solo;
+  // se puede destildar a mano si en este caso no corresponde.
+  const [cashPercent, setCashPercent] = useState<number | null>(null);
+  useEffect(() => {
+    sb.from("workspaces").select("cash_discount_percent").eq("id", ws.id).single()
+      .then(({ data }) => setCashPercent(data ? Number((data as { cash_discount_percent: number }).cash_discount_percent) : null));
+  }, [sb, ws.id]);
+  useEffect(() => {
+    if (courtesy || cashPercent === null) return;
+    setCash(cashPercent > 0 && method === "efectivo" && payMode !== "despues");
+  }, [method, payMode, cashPercent, courtesy]);
   const [deposit, setDeposit] = useState("");
   const [usd, setUsd] = useState<DollarValue>({ usd: null, rate: null, ars: null });
   // Extras elegidos (reposeras, estacionamiento…): se suman al total y al cobro.
@@ -575,6 +623,34 @@ export default function NuevaReservaPage() {
               <div className="flex items-center gap-2 text-sm text-muted"><Spinner small /> Consultando disponibilidad…</div>
             ) : grid && (
               <>
+                {groupMode && (
+                  <div className="mb-3 rounded-lg border border-accent/40 bg-accent-soft/40 p-3 text-sm">
+                    <div className="font-medium">
+                      {needed > 1 ? `Son ${peopleN} personas: hacen falta ${needed} ${kind === "carpa" ? "carpas" : "sombrillas"}.` : "Grupo de varias carpas."}{" "}
+                      <span className="font-normal text-muted">Tocá en la lista las que quieras (la primera es la principal; tocala de nuevo para empezar otra vez).</span>
+                    </div>
+                    {groupSuggestions.length > 0 && (
+                      <div className="mt-2">
+                        <div className="mb-1 text-xs text-muted">Recomendadas, pegadas en el plano y libres toda la estadía:</div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {groupSuggestions.map((g) => {
+                            const on = spaceId === g.ids[0] && g.ids.slice(1).every((id) => groupIds.includes(id)) && groupIds.length === g.ids.length - 1;
+                            return (
+                              <button key={g.ids.join(",")} type="button" onClick={() => { setGridNote(null); setSpaceId(g.ids[0]); setGroupIds(g.ids.slice(1)); }}
+                                className={cx("rounded-md border px-2.5 py-1 font-semibold tabular", on ? "border-accent bg-accent text-accent-fg" : "border-ok/50 bg-ok-soft text-ok hover:bg-ok/20")}>
+                                {g.ids.map((id) => spaces.find((x) => x.space_id === id)?.code).join(" + ")}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                    {needed > 1 && groupSuggestions.length === 0 && pos.size > 0 && (
+                      <p className="mt-1 text-xs text-warn">No hay {needed} {kind === "carpa" ? "carpas" : "sombrillas"} libres toda la estadía para armar el grupo.</p>
+                    )}
+                  </div>
+                )}
+                {gridNote && <Alert tone="warn" className="mb-2">{gridNote}</Alert>}
                 <p className="mb-2 text-xs text-muted">
                   Verde: libre todos los días · Ámbar: libre solo algunos días · Gris: sin días libres. {fullyFree.length} {kind === "carpa" ? "carpas" : "sombrillas"} libres toda la estadía.
                 </p>
@@ -586,7 +662,7 @@ export default function NuevaReservaPage() {
                       <button
                         key={s.space_id}
                         type="button"
-                        onClick={() => setSpaceId(s.space_id)}
+                        onClick={() => pickSpace(s.space_id, tone)}
                         title={tone === "free" ? "Libre toda la estadía" : tone === "partial" ? `Libre ${sp.free.length} de ${days.length} días` : "Sin días libres"}
                         className={cx(
                           "rounded-md border py-1.5 text-sm font-semibold tabular",
@@ -594,6 +670,7 @@ export default function NuevaReservaPage() {
                           tone === "partial" && "border-warn/50 bg-warn-soft text-warn",
                           tone === "none" && "border-line bg-surface-2 text-muted opacity-60",
                           spaceId === s.space_id && "ring-2 ring-accent",
+                          groupIds.includes(s.space_id) && "ring-2 ring-accent ring-offset-1 ring-offset-surface",
                         )}
                       >
                         {s.code}
@@ -743,10 +820,12 @@ export default function NuevaReservaPage() {
                     {validAgreements.map((a) => <option key={a.id} value={a.id}>{a.name} ({Number(a.percent)}%)</option>)}
                   </Select>
                 </Field>
-                <label className="flex items-center gap-2 self-end pb-2 text-sm">
-                  <input type="checkbox" checked={cash} onChange={(e) => setCash(e.target.checked)} />
-                  Paga en efectivo (descuento)
-                </label>
+                {cashPercent !== 0 && (
+                  <label className="flex items-center gap-2 self-end pb-2 text-sm">
+                    <input type="checkbox" checked={cash} onChange={(e) => setCash(e.target.checked)} />
+                    <span>Paga en efectivo ({cashPercent ?? 10}% de descuento){cash && method === "efectivo" && payMode !== "despues" && <span className="block text-xs text-muted">Se marcó solo porque el pago es en efectivo.</span>}</span>
+                  </label>
+                )}
                 {isAdmin && (
                   <>
                     <Field label="Descuento manual (opcional)">
@@ -879,8 +958,8 @@ export default function NuevaReservaPage() {
                   </Field>
                 </div>
               )}
-              {method === "efectivo" && payMode !== "despues" && !cash && (
-                <p className="mt-2 text-xs text-warn">Paga en efectivo: ¿corresponde marcar el descuento por efectivo en el paso 4?</p>
+              {method === "efectivo" && payMode !== "despues" && !cash && !!cashPercent && (
+                <p className="mt-2 text-xs text-warn">Paga en efectivo pero el descuento está destildado en el paso 4.</p>
               )}
               {debt !== null && (
                 <div className="mt-3 flex justify-between rounded-lg bg-surface-2 p-2 text-sm">

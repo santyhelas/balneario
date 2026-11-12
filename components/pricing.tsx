@@ -73,10 +73,17 @@ export function PackagesCard({ pkgs, cashPercent, wsVersion, editable, onChanged
           <Button type="submit" variant="secondary" loading={busy}>Agregar</Button>
         </form>
       )}
-      <div className="flex flex-wrap items-end gap-2 border-t border-line pt-3">
-        <Field label="Descuento por pago en efectivo (%)">
-          <Input inputMode="decimal" value={cash} onChange={(e) => setCash(e.target.value)} disabled={!editable} className="w-24" />
-        </Field>
+      <div className="flex flex-wrap items-end gap-3 border-t border-line pt-3">
+        <label className="flex items-center gap-2 pb-2 text-sm">
+          <input type="checkbox" disabled={!editable} checked={Number(cash.replace(",", ".")) > 0}
+            onChange={(e) => setCash(e.target.checked ? (Number(cashPercent) > 0 ? String(Number(cashPercent)) : "10") : "0")} />
+          <span><strong>Descuento por pago en efectivo</strong><span className="block text-xs text-muted">Se aplica solo en Nueva reserva cuando el cobro es en efectivo.</span></span>
+        </label>
+        {Number(cash.replace(",", ".")) > 0 && (
+          <Field label="Porcentaje (%)">
+            <Input inputMode="decimal" value={cash} onChange={(e) => setCash(e.target.value)} disabled={!editable} className="w-24" />
+          </Field>
+        )}
         {editable && Number(cash.replace(",", ".")) !== Number(cashPercent) && (
           <Button variant="secondary" loading={busy} onClick={() => {
             const n = Number(cash.replace(",", "."));
