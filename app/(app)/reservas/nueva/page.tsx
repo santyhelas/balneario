@@ -877,6 +877,7 @@ export default function NuevaReservaPage() {
               </Alert>
             ) : quote && (
               <div className={cx("flex flex-col gap-1 text-sm", quoteLoading && "opacity-60")}>
+                {isGroup && <div className="text-xs font-semibold uppercase tracking-wide text-muted">Precio de cada carpa</div>}
                 {quote.charges.map((c, i) => (
                   <div key={i} className="flex justify-between gap-3"><span className="text-muted">{c.description}</span><span className="tabular">{formatMoney(c.amount)}</span></div>
                 ))}
@@ -896,10 +897,18 @@ export default function NuevaReservaPage() {
                 )}
                 {courtesy && <div className="flex justify-between gap-3 text-ok"><span>Cortesía familiar</span><span className="tabular">− {formatMoney(quote.precio_base)}</span></div>}
                 {isGroup && (
-                  <div className="flex justify-between gap-3">
-                    <span>{groupSpaces.length === 1 ? `Carpa ${groupSpaces[0].code} del grupo` : `${groupSpaces.length} carpas más del grupo`}</span>
-                    <span className="tabular">{groupQuote ? `+ ${formatMoney(groupTotal)}` : "…"}</span>
-                  </div>
+                  <>
+                    <div className="mt-1 flex justify-between gap-3 border-t border-line pt-1">
+                      <span>{kind === "carpa" ? "Carpa" : "Sombrilla"} {selected?.code}</span><span className="tabular">{formatMoney(quote.total)}</span>
+                    </div>
+                    <div className="flex justify-between gap-3">
+                      <span>
+                        {groupSpaces.map((g) => g.code).join(", ")}{" "}
+                        <span className="text-xs text-muted">({groupSpaces.length} × {groupQuote ? formatMoney(groupQuote.total) : "…"}, con los mismos descuentos{options.manual && (options.manual as { type?: string }).type === "monto" ? "; el descuento manual en pesos va una sola vez" : ""})</span>
+                      </span>
+                      <span className="tabular">{groupQuote ? formatMoney(groupTotal) : "…"}</span>
+                    </div>
+                  </>
                 )}
                 {!courtesy && extrasTotal > 0 && <div className="flex justify-between gap-3"><span>Extras</span><span className="tabular">+ {formatMoney(extrasTotal)}</span></div>}
                 <div className="mt-1 flex justify-between gap-3 border-t border-line pt-2 text-base font-semibold"><span>Total</span><span className="tabular">{formatMoney(total)}</span></div>
