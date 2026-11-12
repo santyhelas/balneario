@@ -65,16 +65,16 @@ export function MobileMenu({ links }: { links: { href: string; label: string }[]
   return (
     <div className="md:hidden">
       <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} aria-label="Menú"
-        className="flex h-10 w-10 items-center justify-center rounded-lg border border-line bg-surface">
+        className="flex h-10 w-10 items-center justify-center rounded-lg border border-[var(--sand-2)] bg-[#fbf7ee] text-[var(--tinta)]">
         <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" aria-hidden>
           {open ? <path d="M6 6l12 12M18 6L6 18" /> : <path d="M4 7h16M4 12h16M4 17h16" />}
         </svg>
       </button>
       {open && (
-        <nav className="absolute inset-x-0 top-full border-b border-line bg-surface px-4 py-3 shadow-lg">
+        <nav className="absolute inset-x-0 top-full border-b border-[var(--sand-2)] bg-[#fbf7ee] px-4 py-3 text-[var(--tinta)] shadow-lg">
           <ul className="flex flex-col gap-1">
             {links.map((l) => (
-              <li key={l.href}><a href={l.href} onClick={() => setOpen(false)} className="block rounded-lg px-3 py-2 font-medium hover:bg-surface-2">{l.label}</a></li>
+              <li key={l.href}><a href={l.href} onClick={() => setOpen(false)} className="block rounded-lg px-3 py-2 font-medium hover:bg-[var(--foam)]">{l.label}</a></li>
             ))}
           </ul>
         </nav>
@@ -108,7 +108,7 @@ export function DemoEndedNotice() {
           ? <>No pudimos verificar si {account ? <strong>{account}</strong> : "tu cuenta"} tiene un balneario habilitado. Probá de nuevo en un rato o escribinos.</>
           : <>{account ? <>La cuenta <strong>{account}</strong></> : "Esa cuenta"} todavía no tiene un balneario habilitado. Si ya contrataste, fijate de entrar con el mismo correo que nos pasaste. Si no, <a href="#planes" className="font-semibold underline">pedí tu presupuesto</a>.</>
         : <>Saliste de la demo y se borró todo lo que cargaste. ¿Te gustó? <a href="#planes" className="font-semibold text-accent underline">Pedí tu presupuesto</a>.</>}
-      <button type="button" onClick={() => setShow(null)} className="ml-3 text-muted hover:text-fg" aria-label="Cerrar aviso">×</button>
+      <button type="button" onClick={() => setShow(null)} className="ml-3 text-white/70 hover:text-white" aria-label="Cerrar aviso">×</button>
     </div>
   );
 }
