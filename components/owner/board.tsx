@@ -98,7 +98,11 @@ const FILTERS: { key: FilterKey; label: string; test: (b: Balneario, hoy: string
 export type OwnerView = "resumen" | "balnearios" | "altas" | "precios";
 
 /** Panel del dueño (se usa en /dueno). `view` elige qué parte se muestra; `mineId` es el balneario propio (para no pausarlo ni borrarlo). */
-export function OwnerBoard({ view, mineId, onSupport, prefill }: { view: OwnerView; mineId: string | null; onSupport?: (id: string) => void; prefill?: { email: string; note: string } | null }) {
+export function OwnerBoard({ view, mineId, onSupport, prefill, kpisExtra, lead, side }: {
+  view: OwnerView; mineId: string | null; onSupport?: (id: string) => void; prefill?: { email: string; note: string } | null;
+  /** Solo en el resumen: más indicadores en la misma fila, algo arriba de los avisos y la columna de la derecha (gráficos). */
+  kpisExtra?: ReactNode; lead?: ReactNode; side?: ReactNode;
+}) {
   const sb = getSupabase();
   const notes = useLoader(async () => (view === "balnearios" ? ((await sb.rpc("admin_notes")).data as Record<string, number> | null) ?? {} : {}), [view], 300_000);
   const [notesFor, setNotesFor] = useState<Balneario | null>(null);
@@ -163,16 +167,21 @@ export function OwnerBoard({ view, mineId, onSupport, prefill }: { view: OwnerVi
       {msg && <Alert tone={msg.tone} className="mb-3">{msg.text}</Alert>}
       {!d ? (q.loading && <div className="flex items-center gap-2 text-muted"><Spinner small /> Cargando…</div>) : (
         <div className="flex flex-col gap-4">
-          {view === "resumen" && <><div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-            <Kpi icon={KPI_ICON.casa} label="Balnearios" value={String(d.balnearios.length)} note={`${usados7} usados esta semana · ${d.balnearios.length - activos.length} en pausa`} />
-            <Kpi icon={KPI_ICON.ok} tone="green" label="Planes al día" value={String(conPlan.length - vencidos.length)} note={`${conPlan.filter((b) => b.plan!.debito).length} con débito automático`} />
-            <Kpi label="Vencidos / por vencer" value={`${vencidos.length} / ${porVencer.length}`} note="por vencer: en 7 días y sin débito" icon={KPI_ICON.reloj} tone={vencidos.length ? "red" : "sand"} />
-            <Kpi icon={KPI_ICON.plata} tone="green" label="Ingreso por año (aprox.)" value={formatMoney(anualizado)} note="anuales + temporadas al día" />
+          {view === "resumen" && <><div className="grid grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-8">
+            <Kpi small icon={KPI_ICON.casa} label="Balnearios" value={String(d.balnearios.length)} note={`${usados7} usados esta semana · ${d.balnearios.length - activos.length} en pausa`} />
+            <Kpi small icon={KPI_ICON.ok} tone="green" label="Planes al día" value={String(conPlan.length - vencidos.length)} note={`${conPlan.filter((b) => b.plan!.debito).length} con débito automático`} />
+            <Kpi small label="Vencidos / por vencer" value={`${vencidos.length} / ${porVencer.length}`} note="por vencer: en 7 días y sin débito" icon={KPI_ICON.reloj} tone={vencidos.length ? "red" : "sand"} />
+            <Kpi small icon={KPI_ICON.plata} tone="green" label="Ingreso por año (aprox.)" value={formatMoney(anualizado)} note="anuales + temporadas al día" />
+            {kpisExtra}
           </div>
+          <div className="grid gap-3 lg:grid-cols-4">
+          <div className="flex min-w-0 flex-col gap-3">
+          {lead}
 
-          {(d.avisos.length > 0 || vencidos.length > 0 || porVencer.length > 0) && (
-            <Card title="Avisos">
-              <ul className="divide-y divide-line text-sm">
+          {(d.avisos.length > 0 || vencidos.length > 0 || porVencer.length > 0) ? (
+            <section className="rounded-2xl border border-line bg-surface p-3">
+              <h2 className="mb-1 text-sm font-semibold">Avisos</h2>
+              <ul className="max-h-60 divide-y divide-line overflow-y-auto text-sm">
                 {vencidos.map((b) => (
                   <li key={`v${b.id}`} className="flex flex-wrap items-center justify-between gap-2 py-2">
                     <span><Badge tone="danger">Solo lectura</Badge> <strong>{b.nombre}</strong>: plan vencido el {formatDate(b.plan!.pago_hasta)}.</span>
@@ -193,8 +202,11 @@ export function OwnerBoard({ view, mineId, onSupport, prefill }: { view: OwnerVi
                   <li key={`p${b.id}`} className="py-2"><Badge tone="warn">Vence pronto</Badge> <strong>{b.nombre}</strong>: pago hasta el {formatDate(b.plan!.pago_hasta)}, sin débito automático.</li>
                 ))}
               </ul>
-            </Card>
-          )}
+            </section>
+          ) : <p className="rounded-2xl border border-dashed border-line p-3 text-sm text-muted">Sin avisos de planes ni pagos.</p>}
+          </div>
+          {side && <div className="min-w-0 lg:col-span-3">{side}</div>}
+          </div>
 
           </>}
 
@@ -286,18 +298,18 @@ const KPI_TONE = {
   green: "bg-emerald-50 text-emerald-900 ring-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-100 dark:ring-emerald-900",
   red: "bg-rose-50 text-rose-900 ring-rose-200 dark:bg-rose-950/40 dark:text-rose-100 dark:ring-rose-900",
 } as const;
-export function Kpi({ label, value, note, tone = "sea", icon }: { label: string; value: string; note?: string; tone?: keyof typeof KPI_TONE; icon?: string }) {
+export function Kpi({ label, value, note, tone = "sea", icon, small }: { label: string; value: string; note?: string; tone?: keyof typeof KPI_TONE; icon?: string; small?: boolean }) {
   return (
-    <div className={cx("flex gap-3 rounded-2xl p-4 ring-1", KPI_TONE[tone])}>
+    <div className={cx("flex rounded-2xl ring-1", small ? "gap-2 p-2.5" : "gap-3 p-4", KPI_TONE[tone])} title={small && note ? note : undefined}>
       {icon && (
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/70 dark:bg-black/20" aria-hidden>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5"><path d={icon} /></svg>
+        <span className={cx("flex shrink-0 items-center justify-center rounded-xl bg-white/70 dark:bg-black/20", small ? "h-8 w-8" : "h-10 w-10")} aria-hidden>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className={small ? "h-4 w-4" : "h-5 w-5"}><path d={icon} /></svg>
         </span>
       )}
       <div className="min-w-0">
-        <div className="text-xs font-medium opacity-75">{label}</div>
-        <div className="text-2xl font-bold tabular leading-tight">{value}</div>
-        {note && <div className="mt-0.5 text-xs opacity-75">{note}</div>}
+        <div className={cx("truncate font-medium opacity-75", small ? "text-[11px]" : "text-xs")}>{label}</div>
+        <div className={cx("truncate font-bold tabular leading-tight", small ? "text-lg" : "text-2xl")}>{value}</div>
+        {note && <div className={cx("mt-0.5 opacity-75", small ? "truncate text-[11px]" : "text-xs")}>{note}</div>}
       </div>
     </div>
   );

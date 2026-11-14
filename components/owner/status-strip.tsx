@@ -33,7 +33,7 @@ export function OwnerStatusStrip() {
     ...(!d.ok ? ["no se pudo revisar los servicios"] : []),
   ];
   return (
-    <Link href="/dueno/estado" className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border border-line bg-surface px-3 py-2 text-xs hover:bg-surface-2">
+    <Link href="/dueno/estado" className="flex max-w-full flex-wrap items-center gap-x-3 gap-y-1 rounded-full border border-line bg-surface px-3 py-1.5 text-xs hover:bg-surface-2">
       <span className="flex items-center gap-1.5 font-semibold">
         <span className={cx("h-2 w-2 rounded-full", DOT[worst])} />
         {worst === "ok" ? "Sistema: anda todo bien" : "Sistema: revisar"}
@@ -43,7 +43,7 @@ export function OwnerStatusStrip() {
         {d.checks.map((c) => <span key={c.id} title={`${c.nombre}: ${c.detalle}`} className={cx("h-1.5 w-1.5 rounded-full", DOT[c.estado])} />)}
       </span>
       <span className="text-muted">Copias: {d.total - d.sinCopia} de {d.total} al día</span>
-      <span className="ml-auto text-accent">Ver detalle →</span>
+      <span className="text-accent">Detalle →</span>
     </Link>
   );
 }

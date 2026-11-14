@@ -23,17 +23,15 @@ const compact = (n: number) => (n >= 1_000_000 ? `$${(n / 1_000_000).toLocaleStr
 function Bars({ data, format, color, title, summary }: { data: { label: string; value: number }[]; format: (n: number) => string; color: string; title: string; summary: string }) {
   const max = Math.max(1, ...data.map((d) => d.value));
   return (
-    <section className="rounded-2xl border border-line bg-surface p-4">
-      <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
-        <h2 className="text-base font-semibold">{title}</h2>
-        <span className="text-xs text-muted">{summary}</span>
-      </div>
-      <div className="flex h-44 items-end gap-1.5" role="img" aria-label={`${title}: ${data.map((d) => `${d.label} ${format(d.value)}`).join(", ")}`}>
+    <section className="flex min-w-0 flex-col rounded-2xl border border-line bg-surface p-3">
+      <h2 className="text-sm font-semibold">{title}</h2>
+      <span className="mb-2 truncate text-[11px] text-muted" title={summary}>{summary}</span>
+      <div className="flex h-32 items-end gap-1" role="img" aria-label={`${title}: ${data.map((d) => `${d.label} ${format(d.value)}`).join(", ")}`}>
         {data.map((d, i) => (
-          <div key={i} className="flex h-full min-w-0 flex-1 flex-col items-center justify-end gap-1" title={`${d.label}: ${format(d.value)}`}>
-            <span className="text-[10px] tabular text-muted">{d.value ? format(d.value) : ""}</span>
-            <div className="w-full max-w-10 rounded-t-md transition-all" style={{ height: `${Math.max(d.value ? 4 : 1, (d.value / max) * 100)}%`, background: color, opacity: i === data.length - 1 ? 1 : 0.55 }} />
-            <span className="text-[10px] text-muted">{d.label}</span>
+          <div key={i} className="flex h-full min-w-0 flex-1 flex-col items-center justify-end gap-0.5" title={`${d.label}: ${format(d.value)}`}>
+            <span className="text-[9px] tabular text-muted">{d.value && (i === data.length - 1 || d.value === max) ? format(d.value) : ""}</span>
+            <div className="w-full max-w-6 rounded-t" style={{ height: `${Math.max(d.value ? 4 : 1, (d.value / max) * 100)}%`, background: color, opacity: i === data.length - 1 ? 1 : 0.55 }} />
+            <span className="text-[9px] text-muted">{d.label}</span>
           </div>
         ))}
       </div>
@@ -41,35 +39,44 @@ function Bars({ data, format, color, title, summary }: { data: { label: string; 
   );
 }
 
-export function OwnerMetrics() {
+export type MetricsQuery = ReturnType<typeof useOwnerMetrics>;
+export function useOwnerMetrics() {
   const sb = getSupabase();
-  const q = useLoader(async () => unwrap(await sb.rpc("admin_metrics")) as Metrics, [], 5 * 60_000);
-  if (q.error && /admin_metrics|function|schema cache/i.test(q.error) && !q.data) {
-    return <p className="rounded-2xl border border-dashed border-line p-4 text-sm text-muted">Para ver los gráficos falta correr la actualización 0054 en Supabase.</p>;
-  }
+  return useLoader(async () => unwrap(await sb.rpc("admin_metrics")) as Metrics, [], 5 * 60_000);
+}
+const missing = (q: MetricsQuery) => !!q.error && /admin_metrics|function|schema cache/i.test(q.error) && !q.data;
+
+/** Cuatro indicadores chicos (van en la misma fila que los del panel). */
+export function MetricsKpis({ q }: { q: MetricsQuery }) {
   const m = q.data;
-  if (!m) return q.loading ? <div className="flex items-center gap-2 text-muted"><Spinner small /> Cargando métricas…</div> : <SyncNotice error={q.error} stale={q.stale} updatedAt={q.updatedAt} onRetry={q.reload} />;
+  if (!m) return null;
   const t = m.totales;
   const mesActual = m.ingresos_por_mes[m.ingresos_por_mes.length - 1]?.importe ?? 0;
+  return (
+    <>
+      <Kpi small icon={KPI_ICON.plata} tone="green" label={`Cobrado en ${m.hoy.slice(0, 4)}`} value={formatMoney(t.cobrado_anio)} note={`este mes: ${formatMoney(mesActual)}`} />
+      <Kpi small icon={KPI_ICON.carpa} tone="sand" label="Carpas · sombrillas" value={`${t.carpas} · ${t.sombrillas}`} note="que se manejan con el sistema" />
+      <Kpi small icon={KPI_ICON.calendario} label="Reservas" value={t.reservas.toLocaleString("es-AR")} note={`${t.reservas_30d.toLocaleString("es-AR")} en 30 días`} />
+      <Kpi small icon={KPI_ICON.personas} label="Clientes" value={t.clientes.toLocaleString("es-AR")} note={`${t.demo_total.toLocaleString("es-AR")} visitas a la demo`} />
+    </>
+  );
+}
+
+/** Los tres gráficos, uno al lado del otro. */
+export function MetricsCharts({ q }: { q: MetricsQuery }) {
+  if (missing(q)) return <p className="rounded-2xl border border-dashed border-line p-4 text-sm text-muted">Para ver los gráficos falta correr la actualización 0054 en Supabase.</p>;
+  const m = q.data;
+  if (!m) return q.loading ? <div className="flex items-center gap-2 text-muted"><Spinner small /> Cargando métricas…</div> : <SyncNotice error={q.error} stale={q.stale} updatedAt={q.updatedAt} onRetry={q.reload} />;
   const ultimas4 = m.demo_por_semana.slice(-4).reduce((a, d) => a + d.cantidad, 0);
   const altas12 = m.altas_por_mes.reduce((a, d) => a + d.cantidad, 0);
   return (
-    <div className="flex flex-col gap-4">
-      <SyncNotice error={q.error} stale={q.stale} updatedAt={q.updatedAt} onRetry={q.reload} />
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <Kpi icon={KPI_ICON.plata} tone="green" label={`Cobrado en ${m.hoy.slice(0, 4)}`} value={formatMoney(t.cobrado_anio)} note={`este mes: ${formatMoney(mesActual)}`} />
-        <Kpi icon={KPI_ICON.carpa} tone="sand" label="Carpas y sombrillas" value={`${t.carpas} · ${t.sombrillas}`} note="que se manejan con el sistema" />
-        <Kpi icon={KPI_ICON.calendario} label="Reservas cargadas" value={t.reservas.toLocaleString("es-AR")} note={`${t.reservas_30d.toLocaleString("es-AR")} en los últimos 30 días`} />
-        <Kpi icon={KPI_ICON.personas} label="Clientes de los balnearios" value={t.clientes.toLocaleString("es-AR")} note={`${t.demo_total.toLocaleString("es-AR")} visitas a la demo en total`} />
-      </div>
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Bars title="Lo que cobraste por mes" summary="pagos registrados y débitos aprobados · últimos 12 meses" color="var(--color-ok)"
-          data={m.ingresos_por_mes.map((d) => ({ label: mesCorto(d.mes), value: Number(d.importe) }))} format={compact} />
-        <Bars title="Visitas a la demo por semana" summary={`${ultimas4} en las últimas 4 semanas`} color="var(--color-accent)"
-          data={m.demo_por_semana.map((d) => ({ label: diaMes(d.semana), value: d.cantidad }))} format={(n) => String(n)} />
-        <Bars title="Balnearios nuevos por mes" summary={`${altas12} en los últimos 12 meses`} color="#d99a2b"
-          data={m.altas_por_mes.map((d) => ({ label: mesCorto(d.mes), value: d.cantidad }))} format={(n) => String(n)} />
-      </div>
+    <div className="grid gap-3 md:grid-cols-3">
+      <Bars title="Cobrado por mes" summary="últimos 12 meses" color="var(--color-ok)"
+        data={m.ingresos_por_mes.map((d) => ({ label: mesCorto(d.mes), value: Number(d.importe) }))} format={compact} />
+      <Bars title="Visitas a la demo" summary={`por semana · ${ultimas4} en 4 semanas`} color="var(--color-accent)"
+        data={m.demo_por_semana.map((d) => ({ label: diaMes(d.semana), value: d.cantidad }))} format={(n) => String(n)} />
+      <Bars title="Balnearios nuevos" summary={`por mes · ${altas12} en 12 meses`} color="#d99a2b"
+        data={m.altas_por_mes.map((d) => ({ label: mesCorto(d.mes), value: d.cantidad }))} format={(n) => String(n)} />
     </div>
   );
 }

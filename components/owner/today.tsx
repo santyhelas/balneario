@@ -23,9 +23,9 @@ export function OwnerToday() {
   if (!d || (!d.dues.length && !d.leads && !d.rec)) return null;
   const item = "flex items-center justify-between gap-3 rounded-xl bg-white/70 px-3 py-2 text-sm font-medium hover:bg-white dark:bg-black/20 dark:hover:bg-black/30";
   return (
-    <section className="rounded-2xl bg-gradient-to-br from-sky-100 to-amber-50 p-4 text-[#1f2a30] dark:from-sky-950/60 dark:to-amber-950/30 dark:text-sky-50">
-      <h2 className="mb-2 text-base font-semibold">Para hoy</h2>
-      <div className="grid gap-2 sm:grid-cols-3">
+    <section className="rounded-2xl bg-gradient-to-br from-sky-100 to-amber-50 p-3 text-[#1f2a30] dark:from-sky-950/60 dark:to-amber-950/30 dark:text-sky-50">
+      <h2 className="mb-2 text-sm font-semibold">Para hoy</h2>
+      <div className="flex flex-col gap-1.5">
         {d.dues.length > 0 && <Link href="/dueno/cobros" className={item}><span>{d.dues.length} {d.dues.length === 1 ? "cobro vencido" : "cobros vencidos"}</span><span className="tabular">{formatMoney(d.dues.reduce((a, x) => a + x.importe, 0))} →</span></Link>}
         {d.leads > 0 && <Link href="/dueno/interesados" className={item}><span>{d.leads} {d.leads === 1 ? "interesado para contactar" : "interesados para contactar"}</span><span>→</span></Link>}
         {d.rec > 0 && <Link href="/dueno/gastos" className={item}><span>{d.rec} {d.rec === 1 ? "gasto fijo para cargar" : "gastos fijos para cargar"}</span><span>→</span></Link>}

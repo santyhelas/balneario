@@ -61,32 +61,32 @@ export default function OwnerLayout({ children }: { children: ReactNode }) {
     <OwnerContext.Provider value={ctx}>
       <div className="min-h-screen bg-bg text-fg">
         <header className="sticky top-0 z-30 border-b border-line bg-surface/90 backdrop-blur print:hidden">
-          <div className="mx-auto flex max-w-7xl items-center gap-2 px-3 py-1.5">
-            <Link href="/dueno" className="flex shrink-0 items-center gap-2" title="Panel del dueño">
+          <div className="mx-auto flex max-w-7xl items-center gap-2 px-3 pt-1.5">
+            <Link href="/dueno" className="flex min-w-0 flex-1 items-center gap-2">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src="/logo.png" alt="" className="h-7 w-7 rounded-lg" />
-              <span className="hidden text-sm font-bold xl:inline">Panel del dueño</span>
+              <span className="truncate text-sm font-bold">Panel del dueño</span>
             </Link>
-            <nav className="flex min-w-0 flex-1 gap-0.5 overflow-x-auto" aria-label="Secciones">
-              {NAV.map((n) => (
-                <Link key={n.href} href={n.href} aria-current={active(n.href) ? "page" : undefined}
-                  className={cx("flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-[13px] font-medium transition-colors",
-                    active(n.href) ? "bg-accent text-accent-fg" : "text-muted hover:bg-surface-2 hover:text-fg")}>
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5" aria-hidden><path d={n.icon} /></svg>
-                  {n.label}
-                </Link>
-              ))}
-            </nav>
             <button type="button" onClick={toggleTheme} className="shrink-0 rounded-full p-1.5 text-muted hover:bg-surface-2 hover:text-fg" title={theme === "oscuro" ? "Tema claro" : "Tema oscuro"} aria-label="Cambiar tema">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4" aria-hidden>
                 <path d={theme === "oscuro" ? "M12 3v1M12 20v1M4.2 4.2l.7.7M19.1 19.1l.7.7M3 12h1M20 12h1M4.2 19.8l.7-.7M19.1 4.9l.7-.7M12 7a5 5 0 1 0 0 10 5 5 0 0 0 0-10z" : "M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"} />
               </svg>
             </button>
-            {ctx.mineId && <Link href="/" className="shrink-0 rounded-full border border-line px-2.5 py-1 text-[13px] font-medium hover:bg-surface-2"><span className="sm:hidden">Mi balneario</span><span className="hidden sm:inline">Ir a mi balneario</span></Link>}
+            {ctx.mineId && <Link href="/" className="shrink-0 rounded-full border border-line px-2.5 py-1 text-[13px] font-medium hover:bg-surface-2">Mi balneario</Link>}
             <button type="button" onClick={() => setLeaving(true)} className="shrink-0 rounded-full px-2.5 py-1 text-[13px] text-muted hover:bg-surface-2 hover:text-fg" title={ctx.email ?? ""}>Salir</button>
           </div>
+          <nav className="mx-auto flex max-w-7xl gap-0.5 overflow-x-auto px-2 py-1 lg:justify-between lg:overflow-visible" aria-label="Secciones">
+            {NAV.map((n) => (
+              <Link key={n.href} href={n.href} aria-current={active(n.href) ? "page" : undefined}
+                className={cx("flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-[13px] font-medium transition-colors",
+                  active(n.href) ? "bg-accent text-accent-fg" : "text-muted hover:bg-surface-2 hover:text-fg")}>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5" aria-hidden><path d={n.icon} /></svg>
+                {n.label}
+              </Link>
+            ))}
+          </nav>
         </header>
-        <main className="mx-auto max-w-7xl px-4 py-5">{children}</main>
+        <main className="mx-auto max-w-7xl px-4 py-4">{children}</main>
       </div>
       <ConfirmDialog open={leaving} title="Cerrar sesión" confirmLabel="Salir" onCancel={() => setLeaving(false)}
         message="¿Querés cerrar la sesión?"
