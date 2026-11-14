@@ -1371,6 +1371,40 @@ select set_config('request.jwt.claims', '{"sub":"22222222-2222-2222-2222-2222222
 select t.throws($$select public.admin_expenses(2026)$$, '', 'Gastos del dueño: nadie más los ve');
 select set_config('request.jwt.claims', '{"sub":"11111111-1111-1111-1111-111111111111","email":"duenio@test.com"}', false);
 
+-- 51. Panel del dueño 2: recibos, gastos fijos, interesados, notas, avisos y estado
+select set_config('request.jwt.claims', '{"sub":"11111111-1111-1111-1111-111111111111","email":"duenio@test.com"}', false);
+select public.admin_set_billing_info('{"alias":"mi.balneario","titular":"Santiago"}');
+select t.ok((public.admin_billing() -> 'datos' ->> 'alias') = 'mi.balneario' and jsonb_array_length(public.admin_billing() -> 'balnearios') > 0, 'Cobros: datos de cobro y balnearios');
+reset role;
+insert into public.subscription_events (workspace_id, kind, amount, detail) values (t.uid('ws'), 'pago_manual', 300000, 'Cuota') returning id \gset ev_
+select t.set('ev', :'ev_id');
+set role authenticated;
+select t.ok((public.admin_receipt(t.uid('ev')) ->> 'numero') = (public.admin_receipt(t.uid('ev')) ->> 'numero'), 'Recibo: el mismo pago siempre tiene el mismo número');
+select t.ok((public.admin_receipt(t.uid('ev')) ->> 'importe')::numeric = 300000, 'Recibo: importe del pago');
+select t.set('rec', public.admin_save_recurring(null, 'Vercel', 'servidores', 25000, 'mes', private.today_ar() - 3)::text);
+select t.ok((public.admin_recurring() -> 0 ->> 'vencido')::boolean, 'Gasto fijo: aparece vencido para cargar');
+select t.ok(public.admin_apply_recurring(t.uid('rec'), 26000) = ((private.today_ar() - 3) + interval '1 month')::date, 'Gasto fijo: se carga y pasa al mes siguiente');
+reset role;
+select t.ok((select amount = 26000 and spent_on = private.today_ar() - 3 from private.owner_expenses where recurring_id = t.uid('rec')), 'Gasto fijo: quedó el gasto con su fecha e importe');
+set role authenticated;
+select t.throws(format($$select public.admin_apply_recurring(%L)$$, t.get('rec')), 'Todavía no venció', 'Gasto fijo: no se carga dos veces el mismo mes');
+select t.set('lead', public.admin_save_lead(null, null, '{"nombre":"Lucía","balneario":"Marli","origen":"whatsapp"}')::text);
+select public.admin_save_lead(t.uid('lead'), 1, '{"nombre":"Lucía","balneario":"Marli","estado":"cerrado"}');
+select t.ok((select x ->> 'estado' = 'cerrado' and x ->> 'cerrado' is not null from jsonb_array_elements(public.admin_leads() -> 'interesados') x where x ->> 'id' = t.get('lead')), 'Interesados: se cierra y guarda la fecha');
+select t.throws(format($$select public.admin_save_lead(%L, 1, '{"nombre":"Lucía"}')$$, t.get('lead')), 'otro dispositivo', 'Interesados: no se pisa un cambio de otro dispositivo');
+select t.ok(jsonb_array_length(public.admin_leads() -> 'embudo') = 12, 'Embudo: 12 meses');
+select public.admin_add_note(t.uid('ws'), 'Llamé: quiere más sombrillas');
+select t.ok((public.admin_notes() ->> t.get('ws'))::int = 1 and jsonb_array_length(public.admin_notes(t.uid('ws'))) = 1, 'Notas: se guardan por balneario');
+select t.set('anun', public.admin_publish_announcement('Nueva función', 'Ya podés hacer reservas de grupo.', 'novedad', private.today_ar() + 7)::text);
+select t.ok(jsonb_array_length(public.admin_health() -> 'balnearios') > 0, 'Estado: lista los balnearios con sus copias');
+-- El balneario ve el aviso hasta que lo marca como leído
+select t.ok(jsonb_array_length(public.my_announcements()) = 1, 'Avisos: el balneario lo ve');
+select public.dismiss_announcement(t.uid('anun'));
+select t.ok(jsonb_array_length(public.my_announcements()) = 0, 'Avisos: después de «Entendido» no aparece más');
+select set_config('request.jwt.claims', '{"sub":"22222222-2222-2222-2222-222222222222","email":"extranio@test.com"}', false);
+select t.throws($$select public.admin_leads()$$, '', 'Interesados: nadie más los ve');
+select set_config('request.jwt.claims', '{"sub":"11111111-1111-1111-1111-111111111111","email":"duenio@test.com"}', false);
+
 reset role;
 \o
 -- Resultado ----------------------------------------------------------

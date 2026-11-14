@@ -9,29 +9,30 @@ import { SyncNotice } from "@/components/shell";
 import { Alert, Badge, Button, Card, ConfirmDialog, EmptyState, Field, Input, Modal, Select, Spinner, TextField, cx } from "@/components/ui";
 import { PasswordPair } from "@/components/users";
 import { USERNAME_RE, normalizeUsername } from "@/lib/remember";
+import { NotesModal } from "@/components/owner/notes";
 
 /** Panel del dueño de Mi Balneario: balnearios, planes y cobros, altas habilitadas y pausas. */
 
-type PlanKind = "mensual" | "anual" | "temporada";
-type PlanInfo = {
+export type PlanKind = "mensual" | "anual" | "temporada";
+export type PlanInfo = {
   plan: PlanKind; precio: number; estado: string; pago_hasta: string | null; vencido: boolean; debito: boolean;
   entrada?: number | null; cuota?: number | null; cuotas_pagas?: number;
   proximo_debito: string | null; ultimo_estado: "aprobado" | "rechazado" | null; ultimo_pago: string | null;
 };
-type Balneario = {
+export type Balneario = {
   id: string; nombre: string; creado: string; pausado: string | null; motivo_pausa: string | null; propietario: string | null;
   usuarios: number; carpas: number; sombrillas: number; max_carpas?: number | null; max_sombrillas?: number | null; reservas: number; reservas_30d: number; ultimo_uso: string | null;
   plan: PlanInfo | null;
 };
-type Habilitacion = { correo: string; nota: string | null; creado: string; usado: string | null; balneario: string | null; plan: PlanKind | null; precio: number | null; entrada?: number | null; cuota?: number | null; carpas?: number | null; sombrillas?: number | null };
+export type Habilitacion = { correo: string; nota: string | null; creado: string; usado: string | null; balneario: string | null; plan: PlanKind | null; precio: number | null; entrada?: number | null; cuota?: number | null; carpas?: number | null; sombrillas?: number | null };
 type Aviso = { id: string; tipo: "cancelada" | "pago_rechazado"; balneario: string; workspace_id: string; importe: number | null; detalle: string | null; fecha: string };
-type Overview = {
+export type Overview = {
   balnearios: Balneario[]; habilitaciones: Habilitacion[]; avisos: Aviso[]; hoy: string; demos_abiertas: number;
   precios: { mensual: number; temporada: number; anual?: number; entrada?: number; cuota?: number; dias_gracia: number };
 };
 
 const daysAgo = (ts: string | null) => (ts ? Math.floor((Date.now() - new Date(ts).getTime()) / 86_400_000) : null);
-const PLAN_LABEL: Record<PlanKind, string> = { mensual: "Mensual", anual: "Anual", temporada: "Temporada" };
+export const PLAN_LABEL: Record<PlanKind, string> = { mensual: "Mensual", anual: "Anual", temporada: "Temporada" };
 
 /** Lo que se carga de un plan: anual = un precio; temporada = entrada + cuota (2 cuotas iguales que vencen el 1/2 y el 1/3; habilita todo el año). */
 type PlanValue = { plan: "anual" | "temporada"; price: string; entry: string; installment: string };
@@ -52,18 +53,18 @@ const planSummary = (p: { plan: PlanKind; precio: number | null; entrada?: numbe
   p.plan === "temporada" && p.entrada != null && p.cuota != null
     ? `Temporada · entrada ${formatMoney(p.entrada)} + 2 cuotas de ${formatMoney(p.cuota)}`
     : `${PLAN_LABEL[p.plan]}${p.precio != null ? ` ${formatMoney(p.precio)}` : ""}`;
-const daysBetween = (a: string, b: string) => Math.round((new Date(b + "T12:00:00Z").getTime() - new Date(a + "T12:00:00Z").getTime()) / 86_400_000);
+export const daysBetween = (a: string, b: string) => Math.round((new Date(b + "T12:00:00Z").getTime() - new Date(a + "T12:00:00Z").getTime()) / 86_400_000);
 
 /** Temporada: vencimiento de cada cuota (cuota de enero → 1/2, cuota de febrero → 1/3) de la temporada en curso. */
-const seasonYear = (hoy: string) => { const [y, m] = hoy.split("-").map(Number); return m >= 4 ? y + 1 : y; };
-function cuotas(p: PlanInfo, hoy: string) {
+export const seasonYear = (hoy: string) => { const [y, m] = hoy.split("-").map(Number); return m >= 4 ? y + 1 : y; };
+export function cuotas(p: PlanInfo, hoy: string) {
   const y = seasonYear(hoy), paid = p.cuotas_pagas ?? 0;
   return [
     { nombre: "Cuota 1 (enero)", vence: `${y}-02-01`, pagada: paid >= 2 },
     { nombre: "Cuota 2 (febrero)", vence: `${y}-03-01`, pagada: paid >= 3 },
   ].map((c) => ({ ...c, vencida: !c.pagada && hoy > c.vence }));
 }
-const sinPagos = (p: PlanInfo) => !p.ultimo_pago && p.estado !== "exenta" && !p.debito;
+export const sinPagos = (p: PlanInfo) => !p.ultimo_pago && p.estado !== "exenta" && !p.debito;
 
 function planBadge(p: PlanInfo | null, hoy: string) {
   if (!p) return <Badge tone="info">Sin plan</Badge>;
@@ -97,8 +98,10 @@ const FILTERS: { key: FilterKey; label: string; test: (b: Balneario, hoy: string
 export type OwnerView = "resumen" | "balnearios" | "altas" | "precios";
 
 /** Panel del dueño (se usa en /dueno). `view` elige qué parte se muestra; `mineId` es el balneario propio (para no pausarlo ni borrarlo). */
-export function OwnerBoard({ view, mineId, onSupport }: { view: OwnerView; mineId: string | null; onSupport?: (id: string) => void }) {
+export function OwnerBoard({ view, mineId, onSupport, prefill }: { view: OwnerView; mineId: string | null; onSupport?: (id: string) => void; prefill?: { email: string; note: string } | null }) {
   const sb = getSupabase();
+  const notes = useLoader(async () => (view === "balnearios" ? ((await sb.rpc("admin_notes")).data as Record<string, number> | null) ?? {} : {}), [view], 300_000);
+  const [notesFor, setNotesFor] = useState<Balneario | null>(null);
   const q = useLoader(async () => unwrap(await sb.rpc("admin_overview")) as Overview, [], 60_000);
   const [pausing, setPausing] = useState<Balneario | null>(null);
   const [resuming, setResuming] = useState<Balneario | null>(null);
@@ -215,7 +218,7 @@ export function OwnerBoard({ view, mineId, onSupport }: { view: OwnerView; mineI
                 return (
                   <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
                     {list.map((b) => (
-                      <BalnearioCard key={b.id} b={b} hoy={d.hoy} mine={b.id === mineId} onSupport={onSupport ? () => onSupport(b.id) : undefined}
+                      <BalnearioCard key={b.id} b={b} hoy={d.hoy} mine={b.id === mineId} onSupport={onSupport ? () => onSupport(b.id) : undefined} notes={notes.data?.[b.id] ?? 0} onNotes={() => setNotesFor(b)}
                         onPlan={() => setPlanFor(b)} onPay={() => setPayFor(b)} onLimits={() => setLimitsFor(b)}
                         onPause={() => setPausing(b)} onResume={() => setResuming(b)} onDelete={() => setDeleting(b)} onUser={() => setUserFor(b)} />
                     ))}
@@ -230,7 +233,7 @@ export function OwnerBoard({ view, mineId, onSupport }: { view: OwnerView; mineI
           )}
 
           {tab === "altas" && (
-            <SignupsCard rows={d.habilitaciones} busy={busy} prices={d.precios}
+            <SignupsCard rows={d.habilitaciones} busy={busy} prices={d.precios} prefill={prefill}
               onAdd={async (email, note, p, tents, umbrellas) => {
                 const ok = await run(() => sb.rpc("admin_allow_signup", { p_email: email, p_note: note || null, p_plan: p.plan, p_price: p.price, p_tents: tents, p_umbrellas: umbrellas, p_entry: p.entry, p_installment: p.installment }),
                   `Listo: ${email} ya puede crear su balneario.`);
@@ -250,6 +253,7 @@ export function OwnerBoard({ view, mineId, onSupport }: { view: OwnerView; mineI
         </div>
       )}
 
+      {notesFor && <NotesModal ws={notesFor} onClose={() => { setNotesFor(null); notes.reload(); }} />}
       {limitsFor && <LimitsModal b={limitsFor} busy={busy} onClose={() => setLimitsFor(null)}
         onSave={async (t, u) => { if (await run(() => sb.rpc("admin_set_space_limits", { p_workspace_id: limitsFor.id, p_tents: t, p_umbrellas: u }), `Cantidad de ${limitsFor.nombre} guardada.`)) setLimitsFor(null); }} />}
       {userFor && <AdminCreateUserModal b={userFor} onClose={() => setUserFor(null)} onDone={(u) => { setUserFor(null); setMsg({ tone: "ok", text: `Usuario «${u}» creado en ${userFor.nombre}. Ya puede ingresar con su usuario y contraseña.` }); q.reload(); }} />}
@@ -336,15 +340,15 @@ function PlanFields({ v, setV }: { v: PlanValue; setV: (v: PlanValue) => void })
   );
 }
 
-function SignupsCard({ rows, busy, prices, onAdd, onRevoke, onInvite }: {
-  rows: Habilitacion[]; busy: boolean; prices: Overview["precios"];
+function SignupsCard({ rows, busy, prices, onAdd, onRevoke, onInvite, prefill }: {
+  rows: Habilitacion[]; busy: boolean; prices: Overview["precios"]; prefill?: { email: string; note: string } | null;
   onAdd: (email: string, note: string, plan: ReturnType<typeof readPlan> & { ok: true }, tents: number | null, umbrellas: number | null) => Promise<boolean>; onRevoke: (h: Habilitacion) => void;
   onInvite: (email: string) => void;
 }) {
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(prefill?.email ?? "");
   const [tents, setTents] = useState("");
   const [umbrellas, setUmbrellas] = useState("");
-  const [note, setNote] = useState("");
+  const [note, setNote] = useState(prefill?.note ?? "");
   const [pv, setPv] = useState<PlanValue>(() => planDefaults(prices));
   const [err, setErr] = useState<string | null>(null);
   async function submit(e: FormEvent) {
@@ -596,8 +600,8 @@ function DeleteModal({ b, busy, onClose, onConfirm }: { b: Balneario; busy: bool
   );
 }
 
-function BalnearioCard({ b, hoy, mine, onPlan, onPay, onLimits, onPause, onResume, onDelete, onUser, onSupport }: {
-  b: Balneario; hoy: string; mine: boolean; onSupport?: () => void; onPlan: () => void; onPay: () => void; onLimits: () => void; onPause: () => void; onResume: () => void; onDelete: () => void; onUser: () => void;
+function BalnearioCard({ b, hoy, mine, onPlan, onPay, onLimits, onPause, onResume, onDelete, onUser, onSupport, notes, onNotes }: {
+  b: Balneario; hoy: string; mine: boolean; onSupport?: () => void; notes: number; onNotes: () => void; onPlan: () => void; onPay: () => void; onLimits: () => void; onPause: () => void; onResume: () => void; onDelete: () => void; onUser: () => void;
 }) {
   const p = b.plan;
   const ago = daysAgo(b.ultimo_uso);
@@ -666,6 +670,7 @@ function BalnearioCard({ b, hoy, mine, onPlan, onPay, onLimits, onPause, onResum
           : <Button variant="ghost" className="text-danger" onClick={onPause}>Pausar</Button>)}
         <Button variant="ghost" onClick={onUser}>Crear usuario</Button>
         {onSupport && !mine && <Button variant="ghost" onClick={onSupport}>Ver (soporte)</Button>}
+        <Button variant="ghost" onClick={onNotes}>{notes ? `Notas (${notes})` : "Notas"}</Button>
         {!mine && <Button variant="ghost" className="text-danger" onClick={onDelete}>Eliminar</Button>}
       </div>
     </div>

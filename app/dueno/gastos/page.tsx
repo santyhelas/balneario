@@ -97,6 +97,8 @@ export default function OwnerExpenses() {
             </section>
           </div>
 
+          <RecurringCard onChange={(t) => { setMsg({ tone: "ok", text: t }); q.reload(); }} onError={(t) => setMsg({ tone: "danger", text: t })} />
+
           <Card title={`Gastos de ${year}`}>
             {d.gastos.length === 0 ? <EmptyState>Todavía no cargaste gastos de {year}.</EmptyState> : (
               <ul className="divide-y divide-line">
@@ -184,6 +186,110 @@ function VoidModal({ g, onClose, onDone }: { g: Gasto; onClose: () => void; onDo
       <p className="mb-3 text-sm">¿Anular <strong>{g.concepto}</strong> ({formatMoney(g.importe)} del {formatDate(g.fecha)})? Deja de sumar, pero queda en la lista tachado.</p>
       <Field label="Motivo (opcional)" htmlFor="void-reason"><Input id="void-reason" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Ej.: lo cargué dos veces" /></Field>
       {err && <p className="mt-2 text-sm text-danger">{err}</p>}
+    </Modal>
+  );
+}
+
+type Fijo = { id: string; concepto: string; categoria: Cat; importe: number; cada: "mes" | "anio"; proximo: string; activo: boolean; vencido: boolean };
+
+/** Gastos que se repiten (Vercel, dominio…): cuando vencen, se cargan con un clic (o se saltean). */
+function RecurringCard({ onChange, onError }: { onChange: (t: string) => void; onError: (t: string) => void }) {
+  const sb = getSupabase();
+  const q = useLoader(async () => unwrap(await sb.rpc("admin_recurring")) as Fijo[], [], 300_000);
+  const [edit, setEdit] = useState<Fijo | "nuevo" | null>(null);
+  const [amounts, setAmounts] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState<string | null>(null);
+  async function apply(f: Fijo, skip: boolean) {
+    const a = skip ? null : parseMoney(amounts[f.id] ?? String(f.importe));
+    if (!skip && (a == null || a <= 0)) return onError("Poné el importe.");
+    setBusy(f.id);
+    const { error } = await sb.rpc("admin_apply_recurring", { p_id: f.id, p_amount: a, p_skip: skip });
+    setBusy(null);
+    if (error) return onError(friendlyError(error));
+    q.reload();
+    onChange(skip ? `Salteado: «${f.concepto}» del ${formatDate(f.proximo)}.` : `Cargado: «${f.concepto}» ${formatMoney(a)} del ${formatDate(f.proximo)}.`);
+  }
+  if (q.error && /admin_recurring|schema cache|function/i.test(q.error)) return null;
+  const list = q.data ?? [];
+  const due = list.filter((f) => f.vencido);
+  return (
+    <Card title="Gastos fijos" actions={<Button variant="secondary" onClick={() => setEdit("nuevo")}>Agregar gasto fijo</Button>}>
+      {list.length === 0 ? <p className="text-sm text-muted">Los que pagás siempre (servidor, dominio, una suscripción). Cuando vencen te aparecen acá para cargarlos con un clic.</p> : (
+        <div className="flex flex-col gap-3">
+          {due.length > 0 && (
+            <ul className="flex flex-col gap-2">
+              {due.map((f) => (
+                <li key={f.id} className="flex flex-wrap items-center gap-2 rounded-xl border border-warn/50 bg-amber-50 p-3 text-amber-950 dark:bg-amber-950/30 dark:text-amber-50">
+                  <div className="min-w-0 flex-1"><strong>{f.concepto}</strong> <span className="text-xs opacity-75">· venció el {formatDate(f.proximo)}</span></div>
+                  <div className="w-32"><Input aria-label={`Importe de ${f.concepto}`} inputMode="decimal" value={amounts[f.id] ?? String(f.importe)} onChange={(e) => setAmounts({ ...amounts, [f.id]: e.target.value })} /></div>
+                  <Button loading={busy === f.id} onClick={() => apply(f, false)}>Cargar</Button>
+                  <Button variant="ghost" disabled={busy === f.id} onClick={() => apply(f, true)}>Saltear</Button>
+                </li>
+              ))}
+            </ul>
+          )}
+          <ul className="divide-y divide-line text-sm">
+            {list.map((f) => (
+              <li key={f.id} className={cx("flex flex-wrap items-center gap-3 py-2", !f.activo && "opacity-60")}>
+                <span className="h-6 w-1.5 shrink-0 rounded-full" style={{ background: CATS[f.categoria].color }} aria-hidden />
+                <div className="min-w-0 flex-1">
+                  <div className="font-medium">{f.concepto}</div>
+                  <div className="text-xs text-muted">{f.cada === "mes" ? "Todos los meses" : "Todos los años"} · {f.activo ? `próximo: ${formatDate(f.proximo)}` : "pausado"}</div>
+                </div>
+                <span className="tabular">{formatMoney(f.importe)}</span>
+                <Button variant="ghost" onClick={() => setEdit(f)}>Editar</Button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {edit && <RecurringModal f={edit === "nuevo" ? null : edit} onClose={() => setEdit(null)} onSaved={() => { setEdit(null); q.reload(); onChange("Gasto fijo guardado."); }} />}
+    </Card>
+  );
+}
+
+function RecurringModal({ f, onClose, onSaved }: { f: Fijo | null; onClose: () => void; onSaved: () => void }) {
+  const [concept, setConcept] = useState(f?.concepto ?? "");
+  const [cat, setCat] = useState<Cat>(f?.categoria ?? "servidores");
+  const [amount, setAmount] = useState(f ? String(f.importe) : "");
+  const [every, setEvery] = useState<"mes" | "anio">(f?.cada ?? "mes");
+  const [next, setNext] = useState(f?.proximo ?? todayISO());
+  const [active, setActive] = useState(f?.activo ?? true);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  async function save() {
+    const a = parseMoney(amount);
+    if (concept.trim().length < 2) return setErr("Poné el concepto.");
+    if (a == null || a <= 0) return setErr("Poné el importe.");
+    setBusy(true);
+    const { error } = await getSupabase().rpc("admin_save_recurring", { p_id: f?.id ?? null, p_concept: concept.trim(), p_category: cat, p_amount: a, p_every: every, p_next: next, p_active: active });
+    setBusy(false);
+    if (error) return setErr(friendlyError(error));
+    onSaved();
+  }
+  return (
+    <Modal open title={f ? "Editar gasto fijo" : "Nuevo gasto fijo"} onClose={onClose} busy={busy}
+      footer={<><Button variant="secondary" onClick={onClose} disabled={busy}>Cancelar</Button><Button loading={busy} onClick={save}>Guardar</Button></>}>
+      <div className="flex flex-col gap-3">
+        <TextField label="Concepto" value={concept} onChange={(e) => setConcept(e.target.value)} maxLength={120} placeholder="Ej.: Vercel" />
+        <div className="grid grid-cols-2 gap-2">
+          <TextField label="Importe aproximado" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} />
+          <Field label="Se repite" htmlFor="fijo-cada">
+            <Select id="fijo-cada" value={every} onChange={(e) => setEvery(e.target.value as "mes" | "anio")}><option value="mes">Todos los meses</option><option value="anio">Todos los años</option></Select>
+          </Field>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <TextField label="Próximo vencimiento" type="date" value={next} onChange={(e) => setNext(e.target.value)} />
+          <Field label="Categoría" htmlFor="fijo-cat">
+            <Select id="fijo-cat" value={cat} onChange={(e) => setCat(e.target.value as Cat)}>
+              {(Object.keys(CATS) as Cat[]).map((c) => <option key={c} value={c}>{CATS[c].label}</option>)}
+            </Select>
+          </Field>
+        </div>
+        {f && <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={!active} onChange={(e) => setActive(!e.target.checked)} /> Pausado (ya no lo pago)</label>}
+        <p className="text-xs text-muted">Cuando llega la fecha, te aparece arriba para cargarlo con el importe real (si cambió, lo corregís en ese momento).</p>
+        {err && <p className="text-sm text-danger">{err}</p>}
+      </div>
     </Modal>
   );
 }

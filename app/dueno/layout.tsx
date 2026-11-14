@@ -12,10 +12,14 @@ import { Button, ConfirmDialog, Spinner, cx } from "@/components/ui";
 const NAV = [
   { href: "/dueno", label: "Resumen", icon: "M4 13h4v7H4zM10 8h4v12h-4zM16 4h4v16h-4z" },
   { href: "/dueno/balnearios", label: "Balnearios", icon: KPI_ICON.casa },
-  { href: "/dueno/altas", label: "Altas habilitadas", icon: "M12 5v14M5 12h14" },
+  { href: "/dueno/cobros", label: "Cobros", icon: KPI_ICON.calendario },
+  { href: "/dueno/interesados", label: "Interesados", icon: KPI_ICON.personas },
   { href: "/dueno/gastos", label: "Gastos", icon: "M3 17l6-6 4 4 8-8M14 7h7v7" },
-  { href: "/dueno/precios", label: "Precios", icon: KPI_ICON.plata },
+  { href: "/dueno/avisos", label: "Avisos", icon: "M4 10v4h3l5 4V6L7 10H4zM16 9a4 4 0 0 1 0 6" },
   { href: "/dueno/soporte", label: "Soporte", icon: KPI_ICON.ojo },
+  { href: "/dueno/estado", label: "Estado", icon: "M3 12h4l3-7 4 14 3-7h4" },
+  { href: "/dueno/altas", label: "Altas", icon: "M12 5v14M5 12h14" },
+  { href: "/dueno/precios", label: "Precios", icon: KPI_ICON.plata },
 ];
 
 export default function OwnerLayout({ children }: { children: ReactNode }) {
