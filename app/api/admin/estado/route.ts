@@ -55,7 +55,6 @@ export async function GET() {
   if (ow) c.push({ id: "openweather", nombre: "Clima (OpenWeather)", estado: ow.ok ? "ok" : "aviso", detalle: ow.ok ? `responde en ${ow.ms} ms` : `no responde (${ow.status || "sin conexión"})` });
   c.push({ id: "dolar", nombre: "Cotización del dólar", estado: dolar.ok ? "ok" : "aviso", detalle: dolar.ok ? `responde en ${dolar.ms} ms` : "no responde (se puede poner la cotización a mano)" });
   c.push({ id: "drive", nombre: "Google Drive (copias)", estado: driveConfig() ? "ok" : "aviso", detalle: driveConfig() ? "configurado" : "faltan GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET en Vercel" });
-  c.push({ id: "mp", nombre: "Mercado Pago (débito automático)", estado: process.env.MP_ACCESS_TOKEN ? "ok" : "aviso", detalle: process.env.MP_ACCESS_TOKEN ? "configurado" : "sin configurar (los pagos se registran a mano)" });
   const hasDmarc = dmarc.some((t) => t.toLowerCase().startsWith("v=dmarc1"));
   const hasDkim = dkim.some((t) => t.includes("p="));
   const hasSpf = [...spfRoot, ...spfSend].some((t) => t.toLowerCase().startsWith("v=spf1"));
