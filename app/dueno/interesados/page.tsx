@@ -4,7 +4,7 @@ import { useState } from "react";
 import { getSupabase } from "@/lib/supabase/client";
 import { unwrap, useLoader } from "@/lib/data";
 import { friendlyError } from "@/lib/errors";
-import { formatDate } from "@/lib/format";
+import { formatDate, formatMoney } from "@/lib/format";
 import { whatsappLink } from "@/lib/reservations";
 import { SyncNotice } from "@/components/shell";
 import { Alert, Button, EmptyState, Field, Input, Modal, Select, Spinner, TextField, Textarea, cx } from "@/components/ui";
@@ -12,7 +12,8 @@ import { KPI_ICON, Kpi } from "@/components/owner/board";
 
 type Estado = "nuevo" | "contactado" | "propuesta" | "demo" | "cerrado" | "perdido";
 type Lead = { id: string; nombre: string; balneario: string | null; telefono: string | null; correo: string | null; ciudad: string | null; origen: string | null;
-  estado: Estado; notas: string | null; proximo_contacto: string | null; creado: string; actualizado: string; cerrado: string | null; version: number };
+  estado: Estado; notas: string | null; proximo_contacto: string | null; creado: string; actualizado: string; cerrado: string | null; version: number;
+  carpas?: number | null; sombrillas?: number | null; presupuesto?: { anual: number; entrada: number; cuota: number } | null };
 type Data = { hoy: string; interesados: Lead[]; embudo: { mes: string; demo: number; consultas: number; clientes: number }[] };
 
 const ESTADOS: Record<Estado, { label: string; cls: string }> = {
@@ -23,7 +24,7 @@ const ESTADOS: Record<Estado, { label: string; cls: string }> = {
   cerrado: { label: "Cliente", cls: "bg-emerald-100 text-emerald-900 dark:bg-emerald-900/40 dark:text-emerald-100" },
   perdido: { label: "No avanzó", cls: "bg-stone-200 text-stone-700 dark:bg-stone-800 dark:text-stone-300" },
 };
-const ORIGEN: Record<string, string> = { whatsapp: "WhatsApp", instagram: "Instagram", correo: "Correo", demo: "Desde la demo", recomendacion: "Recomendación", visita: "Visita en persona", otro: "Otro" };
+const ORIGEN: Record<string, string> = { whatsapp: "WhatsApp", instagram: "Instagram", correo: "Correo", demo: "Desde la demo", recomendacion: "Recomendación", visita: "Visita en persona", web: "Presupuesto de la web", otro: "Otro" };
 const MESES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
 
 /** Los que piden presupuesto, en qué quedó cada uno y el embudo demo → consulta → cliente. */
@@ -115,6 +116,12 @@ export default function OwnerLeads() {
                       </div>
                       <span className={cx("shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold", ESTADOS[l.estado].cls)}>{ESTADOS[l.estado].label}</span>
                     </div>
+                    {(l.carpas != null || l.presupuesto) && (
+                      <div className="rounded-xl bg-surface-2 px-3 py-1.5 text-xs">
+                        {l.carpas != null && <span>{l.carpas} carpas · {l.sombrillas ?? 0} sombrillas</span>}
+                        {l.presupuesto?.anual != null && <span className="text-muted"> · vio: temporada {formatMoney(Number(l.presupuesto.entrada) + 2 * Number(l.presupuesto.cuota))} / anual {formatMoney(l.presupuesto.anual)}</span>}
+                      </div>
+                    )}
                     {l.notas && <p className="line-clamp-3 whitespace-pre-wrap text-sm text-muted">{l.notas}</p>}
                     <div className="text-xs text-muted">
                       {l.origen ? `${ORIGEN[l.origen]} · ` : ""}desde el {formatDate(l.creado.slice(0, 10))}

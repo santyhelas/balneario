@@ -8,12 +8,16 @@ import "@fontsource-variable/figtree";
 import { SITE_EMAIL, SITE_INSTAGRAM, SITE_INSTAGRAM_URL, SITE_URL, SITE_WHATSAPP_URL } from "@/lib/site";
 import { Analytics } from "@vercel/analytics/next";
 import { CopyEmailButton, DemoButton, DemoEndedNotice, LandingThemeToggle, LoginLink, MobileMenu, ScrollReveal, TB_THEME_SCRIPT } from "@/components/landing";
+import { SuccessCases } from "@/components/success-cases";
 import { DayTimeline, HeroBeach, PhotoStrip, Slider, type DayStep } from "@/components/landing-interactive";
 import "./landing.css";
 
 
 const DESCRIPTION =
   "Sistema de gestión de balnearios: alquiler y reservas de carpas y sombrillas por fecha, mapa de la playa, cobros, señas, deudas, caja diaria, clientes y WhatsApp. Desde la computadora o el celular.";
+
+// Los casos de éxito se actualizan cada hora.
+export const revalidate = 3600;
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
@@ -389,10 +393,15 @@ export default function InicioPage() {
                   <Icon d="M4 6h16v12H4zM4 7l8 6 8-6" />Escribinos por mail
                 </CopyEmailButton>
               </div>
+              <a href="/presupuesto" className="tb-press mt-4 inline-flex h-12 items-center justify-center rounded-full border-2 border-white/80 px-6 text-base font-bold text-white hover:bg-white hover:text-[var(--atl)]">
+                Calculá el precio para tu balneario
+              </a>
               <p className="mt-6 text-sm text-white/70">Mientras tanto, probá todo en la demo, sin registrarte.</p>
             </div>
           </div>
         </section>
+
+        <SuccessCases />
 
         {/* Preguntas */}
         <section id="preguntas" className="scroll-mt-16 bg-white">

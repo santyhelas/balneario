@@ -1405,6 +1405,42 @@ select set_config('request.jwt.claims', '{"sub":"22222222-2222-2222-2222-2222222
 select t.throws($$select public.admin_leads()$$, '', 'Interesados: nadie más los ve');
 select set_config('request.jwt.claims', '{"sub":"11111111-1111-1111-1111-111111111111","email":"duenio@test.com"}', false);
 
+-- 52. Panel del dueño 3: pedidos, renovaciones, presupuesto web y casos de éxito
+select set_config('request.jwt.claims', '{"sub":"11111111-1111-1111-1111-111111111111","email":"duenio@test.com"}', false);
+select t.set('ped', public.admin_save_request(null, 'Lista de espera', null, 'pendiente')::text);
+select public.admin_vote_request(t.uid('ped'), t.uid('ws'), null, 'la pidió por WhatsApp');
+select public.admin_vote_request(t.uid('ped'), null, 'Balneario Sol (interesado)', null);
+select t.ok(jsonb_array_length(public.admin_requests() -> 0 -> 'votos') = 2, 'Pedidos: cuenta quiénes lo pidieron');
+select t.throws(format($$select public.admin_vote_request(%L, %L, null)$$, t.get('ped'), t.get('ws')), 'ya lo había pedido', 'Pedidos: un balneario no suma dos veces');
+select public.admin_set_plan(t.uid('ws'), 'temporada', 0, false, 200000, 300000);
+select public.admin_save_renewal(t.uid('ws'), 2028, 'temporada', 0, 240000, 360000, 'enviada', null);
+select t.ok((select (x -> 'propuesta' ->> 'precio')::numeric = 960000 from jsonb_array_elements(public.admin_renewals(2028)) x where x ->> 'id' = t.get('ws')), 'Renovación: la propuesta suma entrada + 2 cuotas');
+select t.throws(format($$select public.admin_apply_renewal(%L, 2028)$$, t.get('ws')), 'acepta', 'Renovación: no se aplica sin aceptar');
+select public.admin_save_renewal(t.uid('ws'), 2028, 'temporada', 0, 240000, 360000, 'acepta', null);
+select public.admin_apply_renewal(t.uid('ws'), 2028);
+reset role;
+select t.ok((select price = 960000 and entry_amount = 240000 from public.subscriptions where workspace_id = t.uid('ws')), 'Renovación: el precio nuevo queda en el plan');
+set role authenticated;
+select public.admin_save_price_tiers('[{"hasta":50,"anual":500000,"entrada":150000,"cuota":250000},{"hasta":"","anual":700000,"entrada":200000,"cuota":350000}]');
+select t.ok(jsonb_array_length(public.price_tiers()) = 2, 'Presupuesto: escalas guardadas');
+select t.throws($$select public.admin_save_price_tiers('[{"hasta":"","anual":1,"entrada":1,"cuota":1},{"hasta":"","anual":1,"entrada":1,"cuota":1}]')$$, 'sin límite', 'Presupuesto: una sola escala sin límite');
+reset role;
+select t.ok((public.submit_quote_request('h1', '{"nombre":"Juan","telefono":"2235551234","carpas":"40","sombrillas":"20"}') ->> 'anual')::numeric = 700000, 'Presupuesto web: 60 espacios usan la escala sin límite');
+select t.ok((public.submit_quote_request('h1', '{"nombre":"Ana","correo":"ana@x.com","carpas":"30","sombrillas":"0"}') ->> 'anual')::numeric = 500000, 'Presupuesto web: 30 espacios usan la primera escala');
+select t.ok((select count(*) = 2 from private.owner_leads where source = 'web'), 'Presupuesto web: queda en Interesados');
+select public.submit_quote_request('h1', '{"nombre":"Xx","telefono":"2235551234","carpas":"1"}'), public.submit_quote_request('h1', '{"nombre":"Xx","telefono":"2235551234","carpas":"1"}'), public.submit_quote_request('h1', '{"nombre":"Xx","telefono":"2235551234","carpas":"1"}');
+select t.throws($$select public.submit_quote_request('h1', '{"nombre":"Xx","telefono":"2235551234","carpas":"1"}')$$, 'varios pedidos', 'Presupuesto web: máximo 5 por día');
+set role anon;
+select t.throws($$select public.submit_quote_request('h2', '{"nombre":"Xx","telefono":"2235551234","carpas":"1"}')$$, '', 'Presupuesto web: no se llama directo desde el navegador');
+select t.ok(jsonb_array_length(public.price_tiers()) = 2, 'Presupuesto: las escalas se ven sin iniciar sesión');
+set role authenticated;
+select t.ok(jsonb_array_length(public.admin_case_stats(t.uid('ws'))) = 5, 'Casos: números del balneario');
+select t.throws($$select public.admin_save_success_case(null, '{"nombre":"Marli","publicado":true}')$$, 'permiso', 'Casos: no se publica sin permiso');
+select public.admin_save_success_case(null, '{"nombre":"Marli","frase":"Ahora sé quién debe","permiso":true,"publicado":true,"numeros":[{"valor":1200,"texto":"reservas"}]}');
+set role anon;
+select t.ok(jsonb_array_length(public.success_cases()) = 1, 'Casos: la página principal ve solo los publicados');
+set role authenticated;
+
 reset role;
 \o
 -- Resultado ----------------------------------------------------------

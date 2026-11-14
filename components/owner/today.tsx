@@ -14,8 +14,8 @@ export function OwnerToday() {
     const o = ov.data as Overview | null;
     const hoy = o?.hoy ?? "";
     const dues = o ? upcoming(o.balnearios, hoy).filter((d) => !d.auto && d.fecha < hoy) : [];
-    const l = ((leads.data as { interesados?: { proximo_contacto: string | null; estado: string }[] } | null)?.interesados ?? [])
-      .filter((x) => x.proximo_contacto && x.proximo_contacto <= hoy && !["cerrado", "perdido"].includes(x.estado));
+    const all = (leads.data as { interesados?: { proximo_contacto: string | null; estado: string; origen: string | null }[] } | null)?.interesados ?? [];
+    const l = all.filter((x) => (x.proximo_contacto && x.proximo_contacto <= hoy && !["cerrado", "perdido"].includes(x.estado)) || (x.origen === "web" && x.estado === "nuevo"));
     const r = ((rec.data as { vencido: boolean }[] | null) ?? []).filter((x) => x.vencido);
     return { dues, leads: l.length, rec: r.length };
   }, [], 300_000);

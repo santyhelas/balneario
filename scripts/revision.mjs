@@ -110,7 +110,7 @@ for (const [view, opts] of Object.entries(VIEWS)) {
   const ctx = await browser.newContext({ ...opts, locale: "es-AR", timezoneId: "America/Argentina/San_Juan" });
   const page = await ctx.newPage();
   const issues = watch(page);
-  for (const path of ["/", "/login", "/terminos", "/privacidad", "/mapa", "/caja", "/admin", "/dueno", "/no-existe-esta-pagina"]) {
+  for (const path of ["/", "/login", "/terminos", "/privacidad", "/mapa", "/caja", "/admin", "/dueno", "/presupuesto", "/no-existe-esta-pagina"]) {
     report.publico.push(await check(page, path, `publico${path === "/" ? "-inicio" : path}`, view, issues));
   }
   // Panel del dueño (con la cuenta de prueba, que es dueña de la plataforma en la base local)
@@ -145,7 +145,7 @@ for (const [view, opts] of Object.entries(VIEWS)) {
       await p3.waitForTimeout(500);
       await p3.screenshot({ path: `${OUT}/capturas/admin-altas-${view}.png`, fullPage: true });
       // Las demás secciones del panel abren sin errores
-      for (const [name, text] of [["Cobros", "Calendario de cobros"], ["Interesados", "De la demo a la venta"], ["Gastos", "Gastos fijos"], ["Avisos", "Nuevo aviso"], ["Estado", "Servicios"]]) {
+      for (const [name, text] of [["Cobros", "Calendario de cobros"], ["Interesados", "De la demo a la venta"], ["Gastos", "Gastos fijos"], ["Avisos", "Nuevo aviso"], ["Estado", "Servicios"], ["Renovación", "Renovación de temporada"], ["Pedidos", "Pedidos"], ["Casos de éxito", "Casos de éxito"]]) {
         await p3.getByRole("link", { name, exact: true }).first().click();
         const okSec = await p3.getByText(text).first().waitFor({ timeout: 15000 }).then(() => true, () => false);
         await p3.waitForTimeout(800);
