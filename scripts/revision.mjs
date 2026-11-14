@@ -657,6 +657,38 @@ for (const [view, opts] of Object.entries(VIEWS)) {
     } catch (e) { f10.resultado = `Se cortó: ${String(e).slice(0, 200)}`; }
     report.flujos.push(f10);
 
+    // k0) Ubicación del balneario: buscar un lugar, elegirlo, guardar y que quede
+    const fu = { flujo: "Configuración: ubicación del balneario", pasos: [] };
+    try {
+      await page.goto(DEMO + "/configuracion#balneario", { waitUntil: "networkidle" });
+      await page.waitForTimeout(600);
+      const box = page.getByLabel("Buscar lugar");
+      await box.fill("Pinamar");
+      const resp = page.waitForResponse((r) => r.url().includes("/api/lugar?q="), { timeout: 15000 });
+      await page.getByRole("button", { name: "Buscar", exact: true }).click();
+      const r = await resp;
+      const body = await r.json().catch(() => ({}));
+      fu.pasos.push(`búsqueda: ${r.status()} · ${body.error ?? (body.lugares ?? []).length + " lugares"}`);
+      if ((body.lugares ?? []).length) {
+        await page.getByRole("button", { name: /Pinamar/ }).first().click();
+        await page.getByRole("button", { name: "Guardar cambios" }).first().click();
+        await page.waitForTimeout(2000);
+        const ok = await page.getByText("Datos del balneario guardados").count();
+        fu.pasos.push(ok ? "guardado" : "no se vio el mensaje de guardado");
+        await page.reload({ waitUntil: "networkidle" });
+        await page.waitForTimeout(1500);
+        const coords = await page.getByText(/\(-37\.\d+, -56\.\d+\)/).count();
+        fu.pasos.push(coords ? "al recargar sigue Pinamar" : "al recargar no quedó");
+        fu.resultado = ok && coords ? "OK" : "Revisar";
+      } else fu.resultado = "Revisar";
+      const rev = await page.evaluate(async () => { const r = await fetch("/api/lugar?lat=-38.0055&lon=-57.5426"); return `${r.status} ${await r.text()}`; });
+      fu.pasos.push(`nombre del punto: ${rev.slice(0, 120)}`);
+      await page.getByRole("button", { name: "Marcar el punto exacto en el mapa" }).click().catch(() => undefined);
+      await page.waitForTimeout(3000);
+      await page.screenshot({ path: `${OUT}/capturas/ubicacion-mapa.png`, fullPage: false });
+    } catch (e) { fu.resultado = `Se cortó: ${String(e).slice(0, 200)}`; }
+    report.flujos.push(fu);
+
     // k) Configuración en apartados desplegables
     const f11 = { flujo: "Configuración: apartados desplegables", pasos: [] };
     try {
