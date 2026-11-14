@@ -9,9 +9,12 @@ import { Alert, Button, Spinner, TextField } from "@/components/ui";
 /**
  * Llegada desde el mail de invitación (o de «elegí tu contraseña») que manda el dueño al habilitar un balneario.
  * El enlace trae la sesión en la dirección (#access_token=…); se guarda y se pide usuario y contraseña.
+ * Enlace nuevo (?token_hash=…&type=invite): se valida recién cuando la persona toca «Continuar», así los
+ * antivirus del correo (Hotmail/Outlook abren los enlaces para revisarlos) no lo gastan antes de tiempo.
  */
 export default function WelcomePage() {
-  const [state, setState] = useState<"cargando" | "listo" | "error">("cargando");
+  const [state, setState] = useState<"cargando" | "confirmar" | "listo" | "error">("cargando");
+  const [token, setToken] = useState<{ hash: string; type: string } | null>(null);
   const [email, setEmail] = useState<string | null>(null);
   const [usuario, setUsuario] = useState("");
   const [password, setPassword] = useState("");
@@ -19,15 +22,46 @@ export default function WelcomePage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  async function loadUser() {
+    const sb = getSupabase();
+    const { data: { user } } = await sb.auth.getUser();
+    if (!user) { setError("El enlace venció o ya fue usado. Pedí que te lo manden de nuevo."); return setState("error"); }
+    setEmail(user.email ?? null);
+    const { data: u } = await sb.rpc("my_username");
+    if (typeof u === "string") setUsuario(u);
+    setState("listo");
+  }
+
+  async function confirmToken() {
+    if (!token) return;
+    setBusy(true);
+    setError(null);
+    const sb = getSupabase();
+    const types = token.type === "invite" ? ["invite"] : [token.type, "email", "magiclink"];
+    let lastErr: unknown = null;
+    for (const t of types) {
+      const { error: e } = await sb.auth.verifyOtp({ token_hash: token.hash, type: t as "invite" | "email" | "magiclink" });
+      if (!e) { lastErr = null; break; }
+      lastErr = e;
+    }
+    setBusy(false);
+    window.history.replaceState(null, "", window.location.pathname);
+    if (lastErr) { setError("El enlace venció o ya fue usado. Pedí que te lo manden de nuevo."); return setState("error"); }
+    await loadUser();
+  }
+
   useEffect(() => {
     (async () => {
       const sb = getSupabase();
       const h = new URLSearchParams(window.location.hash.slice(1));
       const q = new URLSearchParams(window.location.search);
       if (h.get("error_description") || q.get("error_description")) {
-        setError(h.get("error_description") || q.get("error_description"));
+        const d = h.get("error_description") || q.get("error_description") || "";
+        setError(/expired|invalid/i.test(d) ? "El enlace venció o ya fue usado. Pedí que te lo manden de nuevo." : d);
         return setState("error");
       }
+      const th = q.get("token_hash");
+      if (th) { setToken({ hash: th, type: q.get("type") ?? "invite" }); return setState("confirmar"); }
       const access = h.get("access_token");
       const refresh = h.get("refresh_token");
       if (access && refresh) {
@@ -35,14 +69,9 @@ export default function WelcomePage() {
         window.history.replaceState(null, "", window.location.pathname);
         if (e) { setError(friendlyError(e)); return setState("error"); }
       }
-      const { data: { user } } = await sb.auth.getUser();
-      if (!user) { setError("El enlace venció o ya fue usado. Pedí que te lo manden de nuevo."); return setState("error"); }
-      setEmail(user.email ?? null);
-      const { data: u } = await sb.rpc("my_username");
-      if (typeof u === "string") setUsuario(u);
-      setState("listo");
+      await loadUser();
     })();
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -73,6 +102,12 @@ export default function WelcomePage() {
           {state === "listo" && <p className="text-sm text-muted">Creá tu usuario y tu contraseña para ingresar.</p>}
         </div>
         {state === "cargando" && <div className="flex items-center justify-center gap-2 text-muted"><Spinner small /> Abriendo tu invitación…</div>}
+        {state === "confirmar" && (
+          <div className="flex flex-col gap-3 text-center">
+            <p className="text-sm text-muted">Tocá el botón para empezar a crear tu usuario y tu contraseña.</p>
+            <Button onClick={confirmToken} loading={busy}>Continuar</Button>
+          </div>
+        )}
         {state === "error" && (
           <div className="flex flex-col gap-3">
             <Alert tone="danger">{error}</Alert>
