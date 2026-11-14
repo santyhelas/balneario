@@ -1,0 +1,1257 @@
+{
+  "base": "https://mibalneario.com.ar",
+  "fecha": "2026-11-14T19:35:24.677Z",
+  "publico": [
+    {
+      "pagina": "/",
+      "vista": "pc",
+      "estado": 200,
+      "url_final": "/",
+      "titulo": "Mi Balneario · Sistema de gestión de balnearios y alquiler de carpas",
+      "desborde_px": 0,
+      "culpables": [],
+      "imagenes_rotas": [],
+      "avisos": [],
+      "sigue_cargando": false,
+      "captura": "publico-inicio-pc.png",
+      "consola": [],
+      "errores_js": [],
+      "pedidos": []
+    },
+    {
+      "pagina": "/login",
+      "vista": "pc",
+      "estado": 200,
+      "url_final": "/login",
+      "titulo": "Mi Balneario",
+      "desborde_px": 0,
+      "culpables": [],
+      "imagenes_rotas": [],
+      "avisos": [],
+      "sigue_cargando": false,
+      "captura": "publico_login-pc.png",
+      "consola": [],
+      "errores_js": [],
+      "pedidos": []
+    },
+    {
+      "pagina": "/terminos",
+      "vista": "pc",
+      "estado": 200,
+      "url_final": "/terminos",
+      "titulo": "Términos de uso · Mi Balneario",
+      "desborde_px": 0,
+      "culpables": [],
+      "imagenes_rotas": [],
+      "avisos": [],
+      "sigue_cargando": false,
+      "captura": "publico_terminos-pc.png",
+      "consola": [],
+      "errores_js": [],
+      "pedidos": []
+    },
+    {
+      "pagina": "/privacidad",
+      "vista": "pc",
+      "estado": 200,
+      "url_final": "/privacidad",
+      "titulo": "Política de privacidad · Mi Balneario",
+      "desborde_px": 0,
+      "culpables": [],
+      "imagenes_rotas": [],
+      "avisos": [],
+      "sigue_cargando": false,
+      "captura": "publico_privacidad-pc.png",
+      "consola": [],
+      "errores_js": [],
+      "pedidos": []
+    },
+    {
+      "pagina": "/mapa",
+      "vista": "pc",
+      "estado": 200,
+      "url_final": "/",
+      "titulo": "Mi Balneario · Sistema de gestión de balnearios y alquiler de carpas",
+      "desborde_px": 0,
+      "culpables": [],
+      "imagenes_rotas": [],
+      "avisos": [],
+      "sigue_cargando": false,
+      "captura": "publico_mapa-pc.png",
+      "consola": [],
+      "errores_js": [],
+      "pedidos": []
+    },
+    {
+      "pagina": "/caja",
+      "vista": "pc",
+      "estado": 200,
+      "url_final": "/",
+      "titulo": "Mi Balneario · Sistema de gestión de balnearios y alquiler de carpas",
+      "desborde_px": 0,
+      "culpables": [],
+      "imagenes_rotas": [],
+      "avisos": [],
+      "sigue_cargando": false,
+      "captura": "publico_caja-pc.png",
+      "consola": [],
+      "errores_js": [],
+      "pedidos": []
+    },
+    {
+      "pagina": "/admin",
+      "vista": "pc",
+      "estado": 200,
+      "url_final": "/",
+      "titulo": "Mi Balneario · Sistema de gestión de balnearios y alquiler de carpas",
+      "desborde_px": 0,
+      "culpables": [],
+      "imagenes_rotas": [],
+      "avisos": [],
+      "sigue_cargando": false,
+      "captura": "publico_admin-pc.png",
+      "consola": [],
+      "errores_js": [],
+      "pedidos": []
+    },
+    {
+      "pagina": "/dueno",
+      "vista": "pc",
+      "estado": 200,
+      "url_final": "/",
+      "titulo": "Mi Balneario · Sistema de gestión de balnearios y alquiler de carpas",
+      "desborde_px": 0,
+      "culpables": [],
+      "imagenes_rotas": [],
+      "avisos": [],
+      "sigue_cargando": false,
+      "captura": "publico_dueno-pc.png",
+      "consola": [],
+      "errores_js": [],
+      "pedidos": []
+    },
+    {
+      "pagina": "/presupuesto",
+      "vista": "pc",
+      "estado": 200,
+      "url_final": "/presupuesto",
+      "titulo": "Calculá el precio para tu balneario · Mi Balneario",
+      "desborde_px": 0,
+      "culpables": [],
+      "imagenes_rotas": [],
+      "avisos": [],
+      "sigue_cargando": false,
+      "captura": "publico_presupuesto-pc.png",
+      "consola": [],
+      "errores_js": [],
+      "pedidos": []
+    },
+    {
+      "pagina": "/no-existe-esta-pagina",
+      "vista": "pc",
+      "estado": 200,
+      "url_final": "/",
+      "titulo": "Mi Balneario · Sistema de gestión de balnearios y alquiler de carpas",
+      "desborde_px": 0,
+      "culpables": [],
+      "imagenes_rotas": [],
+      "avisos": [],
+      "sigue_cargando": false,
+      "captura": "publico_no-existe-esta-pagina-pc.png",
+      "consola": [],
+      "errores_js": [],
+      "pedidos": []
+    },
+    {
+      "pagina": "/",
+      "vista": "cel",
+      "estado": 200,
+      "url_final": "/",
+      "titulo": "Mi Balneario · Sistema de gestión de balnearios y alquiler de carpas",
+      "desborde_px": 0,
+      "culpables": [],
+      "imagenes_rotas": [],
+      "avisos": [],
+      "sigue_cargando": false,
+      "captura": "publico-inicio-cel.png",
+      "consola": [],
+      "errores_js": [],
+      "pedidos": []
+    },
+    {
+      "pagina": "/login",
+      "vista": "cel",
+      "estado": 200,
+      "url_final": "/login",
+      "titulo": "Mi Balneario",
+      "desborde_px": 0,
+      "culpables": [],
+      "imagenes_rotas": [],
+      "avisos": [],
+      "sigue_cargando": false,
+      "captura": "publico_login-cel.png",
+      "consola": [],
+      "errores_js": [],
+      "pedidos": []
+    },
+    {
+      "pagina": "/terminos",
+      "vista": "cel",
+      "estado": 200,
+      "url_final": "/terminos",
+      "titulo": "Términos de uso · Mi Balneario",
+      "desborde_px": 0,
+      "culpables": [],
+      "imagenes_rotas": [],
+      "avisos": [],
+      "sigue_cargando": false,
+      "captura": "publico_terminos-cel.png",
+      "consola": [],
+      "errores_js": [],
+      "pedidos": []
+    },
+    {
+      "pagina": "/privacidad",
+      "vista": "cel",
+      "estado": 200,
+      "url_final": "/privacidad",
+      "titulo": "Política de privacidad · Mi Balneario",
+      "desborde_px": 0,
+      "culpables": [],
+      "imagenes_rotas": [],
+      "avisos": [],
+      "sigue_cargando": false,
+      "captura": "publico_privacidad-cel.png",
+      "consola": [],
+      "errores_js": [],
+      "pedidos": []
+    },
+    {
+      "pagina": "/mapa",
+      "vista": "cel",
+      "estado": 200,
+      "url_final": "/",
+      "titulo": "Mi Balneario · Sistema de gestión de balnearios y alquiler de carpas",
+      "desborde_px": 0,
+      "culpables": [],
+      "imagenes_rotas": [],
+      "avisos": [],
+      "sigue_cargando": false,
+      "captura": "publico_mapa-cel.png",
+      "consola": [],
+      "errores_js": [],
+      "pedidos": []
+    },
+    {
+      "pagina": "/caja",
+      "vista": "cel",
+      "estado": 200,
+      "url_final": "/",
+      "titulo": "Mi Balneario · Sistema de gestión de balnearios y alquiler de carpas",
+      "desborde_px": 0,
+      "culpables": [],
+      "imagenes_rotas": [],
+      "avisos": [],
+      "sigue_cargando": false,
+      "captura": "publico_caja-cel.png",
+      "consola": [],
+      "errores_js": [],
+      "pedidos": []
+    },
+    {
+      "pagina": "/admin",
+      "vista": "cel",
+      "estado": 200,
+      "url_final": "/",
+      "titulo": "Mi Balneario · Sistema de gestión de balnearios y alquiler de carpas",
+      "desborde_px": 0,
+      "culpables": [],
+      "imagenes_rotas": [],
+      "avisos": [],
+      "sigue_cargando": false,
+      "captura": "publico_admin-cel.png",
+      "consola": [],
+      "errores_js": [],
+      "pedidos": []
+    },
+    {
+      "pagina": "/dueno",
+      "vista": "cel",
+      "estado": 200,
+      "url_final": "/",
+      "titulo": "Mi Balneario · Sistema de gestión de balnearios y alquiler de carpas",
+      "desborde_px": 0,
+      "culpables": [],
+      "imagenes_rotas": [],
+      "avisos": [],
+      "sigue_cargando": false,
+      "captura": "publico_dueno-cel.png",
+      "consola": [],
+      "errores_js": [],
+      "pedidos": []
+    },
+    {
+      "pagina": "/presupuesto",
+      "vista": "cel",
+      "estado": 200,
+      "url_final": "/presupuesto",
+      "titulo": "Calculá el precio para tu balneario · Mi Balneario",
+      "desborde_px": 0,
+      "culpables": [],
+      "imagenes_rotas": [],
+      "avisos": [],
+      "sigue_cargando": false,
+      "captura": "publico_presupuesto-cel.png",
+      "consola": [],
+      "errores_js": [],
+      "pedidos": []
+    },
+    {
+      "pagina": "/no-existe-esta-pagina",
+      "vista": "cel",
+      "estado": 200,
+      "url_final": "/",
+      "titulo": "Mi Balneario · Sistema de gestión de balnearios y alquiler de carpas",
+      "desborde_px": 0,
+      "culpables": [],
+      "imagenes_rotas": [],
+      "avisos": [],
+      "sigue_cargando": false,
+      "captura": "publico_no-existe-esta-pagina-cel.png",
+      "consola": [],
+      "errores_js": [],
+      "pedidos": []
+    }
+  ],
+  "demo": [
+    {
+      "pagina": "/",
+      "vista": "pc",
+      "estado": 200,
+      "url_final": "/",
+      "titulo": "Mi Balneario",
+      "desborde_px": 0,
+      "culpables": [],
+      "imagenes_rotas": [],
+      "avisos": [
+        "Viento fuerte (26 km/h): revisá amarres de carpas y cerrá sombrillas.",
+        "Atención: 2 clientes terminan hoy con deuda: Rodrigo Romero (68) $ 99.912 · Federico Herrera (06) $ 18.000"
+      ],
+      "sigue_cargando": false,
+      "captura": "demo-panel-pc.png",
+      "consola": [],
+      "errores_js": [],
+      "pedidos": []
+    },
+    {
+      "pagina": "/mapa",
+      "vista": "pc",
+      "estado": 200,
+      "url_final": "/mapa",
+      "titulo": "Mi Balneario",
+      "desborde_px": 0,
+      "culpables": [],
+      "imagenes_rotas": [],
+      "avisos": [
+        "Viento fuerte (26 km/h): revisá amarres de carpas y cerrá sombrillas."
+      ],
+      "sigue_cargando": false,
+      "captura": "demo_mapa-pc.png",
+      "consola": [],
+      "errores_js": [],
+      "pedidos": []
+    },
+    {
+      "pagina": "/disponibilidad",
+      "vista": "pc",
+      "estado": 200,
+      "url_final": "/disponibilidad",
+      "titulo": "Mi Balneario",
+      "desborde_px": 0,
+      "culpables": [],
+      "imagenes_rotas": [],
+      "avisos": [],
+      "sigue_cargando": false,
+      "captura": "demo_disponibilidad-pc.png",
+      "consola": [],
+      "errores_js": [],
+      "pedidos": []
+    },
+    {
+      "pagina": "/reservas",
+      "vista": "pc",
+      "estado": 200,
+      "url_final": "/reservas",
+      "titulo": "Mi Balneario",
+      "desborde_px": 0,
+      "culpables": [],
+      "imagenes_rotas": [],
+      "avisos": [],
+      "sigue_cargando": false,
+      "captura": "demo_reservas-pc.png",
+      "consola": [],
+      "errores_js": [],
+      "pedidos": []
+    },
+    {
+      "pagina": "/reservas/nueva",
+      "vista": "pc",
+      "estado": 200,
+      "url_final": "/reservas/nueva",
+      "titulo": "Mi Balneario",
+      "desborde_px": 0,
+      "culpables": [],
+      "imagenes_rotas": [],
+      "avisos": [],
+      "sigue_cargando": false,
+      "captura": "demo_reservas_nueva-pc.png",
+      "consola": [],
+      "errores_js": [],
+      "pedidos": []
+    },
+    {
+      "pagina": "/tarifas",
+      "vista": "pc",
+      "estado": 200,
+      "url_final": "/tarifas",
+      "titulo": "Mi Balneario",
+      "desborde_px": 0,
+      "culpables": [],
+      "imagenes_rotas": [],
+      "avisos": [],
+      "sigue_cargando": false,
+      "captura": "demo_tarifas-pc.png",
+      "consola": [],
+      "errores_js": [],
+      "pedidos": []
+    },
+    {
+      "pagina": "/convenios",
+      "vista": "pc",
+      "estado": 200,
+      "url_final": "/convenios",
+      "titulo": "Mi Balneario",
+      "desborde_px": 0,
+      "culpables": [],
+      "imagenes_rotas": [],
+      "avisos": [],
+      "sigue_cargando": false,
+      "captura": "demo_convenios-pc.png",
+      "consola": [],
+      "errores_js": [],
+      "pedidos": []
+    },
+    {
+      "pagina": "/clientes",
+      "vista": "pc",
+      "estado": 200,
+      "url_final": "/clientes",
+      "titulo": "Mi Balneario",
+      "desborde_px": 0,
+      "culpables": [],
+      "imagenes_rotas": [],
+      "avisos": [],
+      "sigue_cargando": false,
+      "captura": "demo_clientes-pc.png",
+      "consola": [],
+      "errores_js": [],
+      "pedidos": []
+    },
+    {
+      "pagina": "/renovacion",
+      "vista": "pc",
+      "estado": 200,
+      "url_final": "/renovacion",
+      "titulo": "Mi Balneario",
+      "desborde_px": 0,
+      "culpables": [],
+      "imagenes_rotas": [],
+      "avisos": [],
+      "sigue_cargando": false,
+      "captura": "demo_renovacion-pc.png",
+      "consola": [],
+      "errores_js": [],
+      "pedidos": []
+    },
+    {
+      "pagina": "/cobros",
+      "vista": "pc",
+      "estado": 200,
+      "url_final": "/cobros",
+      "titulo": "Mi Balneario",
+      "desborde_px": 0,
+      "culpables": [],
+      "imagenes_rotas": [],
+      "avisos": [],
+      "sigue_cargando": false,
+      "captura": "demo_cobros-pc.png",
+      "consola": [],
+      "errores_js": [],
+      "pedidos": []
+    },
+    {
+      "pagina": "/caja",
+      "vista": "pc",
+      "estado": 200,
+      "url_final": "/caja",
+      "titulo": "Mi Balneario",
+      "desborde_px": 0,
+      "culpables": [],
+      "imagenes_rotas": [],
+      "avisos": [],
+      "sigue_cargando": false,
+      "captura": "demo_caja-pc.png",
+      "consola": [],
+      "errores_js": [],
+      "pedidos": []
+    },
+    {
+      "pagina": "/caja/tarjetas",
+      "vista": "pc",
+      "estado": 200,
+      "url_final": "/caja/tarjetas",
+      "titulo": "Mi Balneario",
+      "desborde_px": 0,
+      "culpables": [],
+      "imagenes_rotas": [],
+      "avisos": [],
+      "sigue_cargando": false,
+      "captura": "demo_caja_tarjetas-pc.png",
+      "consola": [],
+      "errores_js": [],
+      "pedidos": []
+    },
+    {
+      "pagina": "/gastos",
+      "vista": "pc",
+      "estado": 200,
+      "url_final": "/gastos",
+      "titulo": "Mi Balneario",
+      "desborde_px": 0,
+      "culpables": [],
+      "imagenes_rotas": [],
+      "avisos": [],
+      "sigue_cargando": false,
+      "captura": "demo_gastos-pc.png",
+      "consola": [],
+      "errores_js": [],
+      "pedidos": []
+    },
+    {
+      "pagina": "/reportes",
+      "vista": "pc",
+      "estado": 200,
+      "url_final": "/reportes",
+      "titulo": "Mi Balneario",
+      "desborde_px": 0,
+      "culpables": [],
+      "imagenes_rotas": [],
+      "avisos": [],
+      "sigue_cargando": false,
+      "captura": "demo_reportes-pc.png",
+      "consola": [],
+      "errores_js": [],
+      "pedidos": []
+    },
+    {
+      "pagina": "/historial",
+      "vista": "pc",
+      "estado": 200,
+      "url_final": "/historial",
+      "titulo": "Mi Balneario",
+      "desborde_px": 0,
+      "culpables": [],
+      "imagenes_rotas": [],
+      "avisos": [],
+      "sigue_cargando": false,
+      "captura": "demo_historial-pc.png",
+      "consola": [],
+      "errores_js": [],
+      "pedidos": []
+    },
+    {
+      "pagina": "/copias",
+      "vista": "pc",
+      "estado": 200,
+      "url_final": "/copias",
+      "titulo": "Mi Balneario",
+      "desborde_px": 0,
+      "culpables": [],
+      "imagenes_rotas": [],
+      "avisos": [],
+      "sigue_cargando": false,
+      "captura": "demo_copias-pc.png",
+      "consola": [],
+      "errores_js": [],
+      "pedidos": []
+    },
+    {
+      "pagina": "/configuracion",
+      "vista": "pc",
+      "estado": 200,
+      "url_final": "/configuracion",
+      "titulo": "Mi Balneario",
+      "desborde_px": 0,
+      "culpables": [],
+      "imagenes_rotas": [],
+      "avisos": [],
+      "sigue_cargando": false,
+      "captura": "demo_configuracion-pc.png",
+      "consola": [],
+      "errores_js": [],
+      "pedidos": []
+    },
+    {
+      "pagina": "/",
+      "vista": "cel",
+      "estado": 200,
+      "url_final": "/",
+      "titulo": "Mi Balneario",
+      "desborde_px": 0,
+      "culpables": [],
+      "imagenes_rotas": [],
+      "avisos": [
+        "Viento fuerte (26 km/h): revisá amarres de carpas y cerrá sombrillas.",
+        "Atención: 2 clientes terminan hoy con deuda: Rodrigo Romero (68) $ 99.912 · Federico Herrera (06) $ 18.000"
+      ],
+      "sigue_cargando": false,
+      "captura": "demo-panel-cel.png",
+      "consola": [],
+      "errores_js": [],
+      "pedidos": []
+    },
+    {
+      "pagina": "/mapa",
+      "vista": "cel",
+      "estado": 200,
+      "url_final": "/mapa",
+      "titulo": "Mi Balneario",
+      "desborde_px": 0,
+      "culpables": [],
+      "imagenes_rotas": [],
+      "avisos": [
+        "Viento fuerte (26 km/h): revisá amarres de carpas y cerrá sombrillas."
+      ],
+      "sigue_cargando": false,
+      "captura": "demo_mapa-cel.png",
+      "consola": [],
+      "errores_js": [],
+      "pedidos": []
+    },
+    {
+      "pagina": "/disponibilidad",
+      "vista": "cel",
+      "estado": 200,
+      "url_final": "/disponibilidad",
+      "titulo": "Mi Balneario",
+      "desborde_px": 0,
+      "culpables": [],
+      "imagenes_rotas": [],
+      "avisos": [],
+      "sigue_cargando": false,
+      "captura": "demo_disponibilidad-cel.png",
+      "consola": [],
+      "errores_js": [],
+      "pedidos": []
+    },
+    {
+      "pagina": "/reservas",
+      "vista": "cel",
+      "estado": 200,
+      "url_final": "/reservas",
+      "titulo": "Mi Balneario",
+      "desborde_px": 0,
+      "culpables": [],
+      "imagenes_rotas": [],
+      "avisos": [],
+      "sigue_cargando": false,
+      "captura": "demo_reservas-cel.png",
+      "consola": [],
+      "errores_js": [],
+      "pedidos": []
+    },
+    {
+      "pagina": "/reservas/nueva",
+      "vista": "cel",
+      "estado": 200,
+      "url_final": "/reservas/nueva",
+      "titulo": "Mi Balneario",
+      "desborde_px": 0,
+      "culpables": [],
+      "imagenes_rotas": [],
+      "avisos": [],
+      "sigue_cargando": false,
+      "captura": "demo_reservas_nueva-cel.png",
+      "consola": [],
+      "errores_js": [],
+      "pedidos": []
+    },
+    {
+      "pagina": "/tarifas",
+      "vista": "cel",
+      "estado": 200,
+      "url_final": "/tarifas",
+      "titulo": "Mi Balneario",
+      "desborde_px": 0,
+      "culpables": [],
+      "imagenes_rotas": [],
+      "avisos": [],
+      "sigue_cargando": false,
+      "captura": "demo_tarifas-cel.png",
+      "consola": [],
+      "errores_js": [],
+      "pedidos": []
+    },
+    {
+      "pagina": "/convenios",
+      "vista": "cel",
+      "estado": 200,
+      "url_final": "/convenios",
+      "titulo": "Mi Balneario",
+      "desborde_px": 0,
+      "culpables": [],
+      "imagenes_rotas": [],
+      "avisos": [],
+      "sigue_cargando": false,
+      "captura": "demo_convenios-cel.png",
+      "consola": [],
+      "errores_js": [],
+      "pedidos": []
+    },
+    {
+      "pagina": "/clientes",
+      "vista": "cel",
+      "estado": 200,
+      "url_final": "/clientes",
+      "titulo": "Mi Balneario",
+      "desborde_px": 0,
+      "culpables": [],
+      "imagenes_rotas": [],
+      "avisos": [],
+      "sigue_cargando": false,
+      "captura": "demo_clientes-cel.png",
+      "consola": [],
+      "errores_js": [],
+      "pedidos": []
+    },
+    {
+      "pagina": "/renovacion",
+      "vista": "cel",
+      "estado": 200,
+      "url_final": "/renovacion",
+      "titulo": "Mi Balneario",
+      "desborde_px": 0,
+      "culpables": [],
+      "imagenes_rotas": [],
+      "avisos": [],
+      "sigue_cargando": false,
+      "captura": "demo_renovacion-cel.png",
+      "consola": [],
+      "errores_js": [],
+      "pedidos": []
+    },
+    {
+      "pagina": "/cobros",
+      "vista": "cel",
+      "estado": 200,
+      "url_final": "/cobros",
+      "titulo": "Mi Balneario",
+      "desborde_px": 0,
+      "culpables": [],
+      "imagenes_rotas": [],
+      "avisos": [],
+      "sigue_cargando": false,
+      "captura": "demo_cobros-cel.png",
+      "consola": [],
+      "errores_js": [],
+      "pedidos": []
+    },
+    {
+      "pagina": "/caja",
+      "vista": "cel",
+      "estado": 200,
+      "url_final": "/caja",
+      "titulo": "Mi Balneario",
+      "desborde_px": 0,
+      "culpables": [],
+      "imagenes_rotas": [],
+      "avisos": [],
+      "sigue_cargando": false,
+      "captura": "demo_caja-cel.png",
+      "consola": [],
+      "errores_js": [],
+      "pedidos": []
+    },
+    {
+      "pagina": "/caja/tarjetas",
+      "vista": "cel",
+      "estado": 200,
+      "url_final": "/caja/tarjetas",
+      "titulo": "Mi Balneario",
+      "desborde_px": 0,
+      "culpables": [],
+      "imagenes_rotas": [],
+      "avisos": [],
+      "sigue_cargando": false,
+      "captura": "demo_caja_tarjetas-cel.png",
+      "consola": [],
+      "errores_js": [],
+      "pedidos": []
+    },
+    {
+      "pagina": "/gastos",
+      "vista": "cel",
+      "estado": 200,
+      "url_final": "/gastos",
+      "titulo": "Mi Balneario",
+      "desborde_px": 0,
+      "culpables": [],
+      "imagenes_rotas": [],
+      "avisos": [],
+      "sigue_cargando": false,
+      "captura": "demo_gastos-cel.png",
+      "consola": [],
+      "errores_js": [],
+      "pedidos": []
+    },
+    {
+      "pagina": "/reportes",
+      "vista": "cel",
+      "estado": 200,
+      "url_final": "/reportes",
+      "titulo": "Mi Balneario",
+      "desborde_px": 0,
+      "culpables": [],
+      "imagenes_rotas": [],
+      "avisos": [],
+      "sigue_cargando": false,
+      "captura": "demo_reportes-cel.png",
+      "consola": [],
+      "errores_js": [],
+      "pedidos": []
+    },
+    {
+      "pagina": "/historial",
+      "vista": "cel",
+      "estado": 200,
+      "url_final": "/historial",
+      "titulo": "Mi Balneario",
+      "desborde_px": 0,
+      "culpables": [],
+      "imagenes_rotas": [],
+      "avisos": [],
+      "sigue_cargando": false,
+      "captura": "demo_historial-cel.png",
+      "consola": [],
+      "errores_js": [],
+      "pedidos": []
+    },
+    {
+      "pagina": "/copias",
+      "vista": "cel",
+      "estado": 200,
+      "url_final": "/copias",
+      "titulo": "Mi Balneario",
+      "desborde_px": 0,
+      "culpables": [],
+      "imagenes_rotas": [],
+      "avisos": [],
+      "sigue_cargando": false,
+      "captura": "demo_copias-cel.png",
+      "consola": [],
+      "errores_js": [],
+      "pedidos": []
+    },
+    {
+      "pagina": "/configuracion",
+      "vista": "cel",
+      "estado": 200,
+      "url_final": "/configuracion",
+      "titulo": "Mi Balneario",
+      "desborde_px": 0,
+      "culpables": [],
+      "imagenes_rotas": [],
+      "avisos": [],
+      "sigue_cargando": false,
+      "captura": "demo_configuracion-cel.png",
+      "consola": [],
+      "errores_js": [],
+      "pedidos": []
+    }
+  ],
+  "flujos": [
+    {
+      "flujo": "Panel del dueño (pc)",
+      "pasos": [
+        "sesión: ok",
+        "Cobros: ok",
+        "Interesados: ok",
+        "Gastos: ok",
+        "Renovación: ok",
+        "Instagram: ok",
+        "soporte: no hay otro balneario para mirar",
+        "fichas: 1",
+        "entra en la pantalla"
+      ],
+      "resultado": "OK"
+    },
+    {
+      "flujo": "Portada: animaciones al bajar",
+      "pasos": [
+        "elementos animados: 20",
+        "escondidos al entrar: 20",
+        "escondidos al llegar abajo: 0"
+      ],
+      "resultado": "OK"
+    },
+    {
+      "flujo": "Portada en modo oscuro (pc)",
+      "pasos": [],
+      "resultado": "OK"
+    },
+    {
+      "flujo": "Casilla de Cloudflare en el ingreso",
+      "resultado": "no apareció"
+    },
+    {
+      "flujo": "Ingreso con clave incorrecta",
+      "resultado": "Usuario o contraseña incorrectos. | ",
+      "captura": "login-incorrecto.png"
+    },
+    {
+      "flujo": "Panel del dueño (cel)",
+      "pasos": [
+        "sesión: ok",
+        "Cobros: ok",
+        "Interesados: ok",
+        "Gastos: ok",
+        "Renovación: ok",
+        "Instagram: ok",
+        "soporte: no hay otro balneario para mirar",
+        "fichas: 1",
+        "entra en la pantalla"
+      ],
+      "resultado": "OK"
+    },
+    {
+      "flujo": "Portada en modo oscuro (cel)",
+      "pasos": [],
+      "resultado": "OK"
+    },
+    {
+      "flujo": "Casilla de Cloudflare en la demo",
+      "resultado": "no apareció"
+    },
+    {
+      "flujo": "Entrar a la demo (pc)",
+      "resultado": "OK"
+    },
+    {
+      "flujo": "Extras: crear «Reposera» y agregarla a la reserva",
+      "pasos": [
+        "extra creado"
+      ],
+      "resultado": "OK",
+      "avisos": [
+        ""
+      ]
+    },
+    {
+      "flujo": "Crear una reserva (cliente nuevo, 5 días, carpa libre, pagada)",
+      "pasos": [
+        "cliente creado y elegido",
+        "carpa elegida",
+        "revisó",
+        "guardada"
+      ],
+      "resultado": "OK"
+    },
+    {
+      "flujo": "Caja: abrir (si está cerrada) y cargar un gasto en efectivo",
+      "pasos": [
+        "la caja ya estaba abierta"
+      ],
+      "resultado": "OK",
+      "avisos": [
+        ""
+      ]
+    },
+    {
+      "flujo": "Límite de efectivo y depósito",
+      "pasos": [
+        "límite guardado",
+        "aviso visible"
+      ],
+      "resultado": "OK",
+      "avisos": [
+        ""
+      ]
+    },
+    {
+      "flujo": "Vista de impresión (reportes y caja)",
+      "resultado": "captura tomada"
+    },
+    {
+      "flujo": "Agrandar el plano",
+      "pasos": [],
+      "resultado": "OK"
+    },
+    {
+      "flujo": "Plano: varias a la vez, mover y copiar/pegar",
+      "pasos": [
+        "Ctrl + clic: no eligió nada",
+        "no se movió",
+        "Ctrl+C/V con carpas: 89 → 89 espacios",
+        "límite visible (o aviso de que no se puede achicar)",
+        "deshacer: volvió a su lugar"
+      ],
+      "resultado": "Revisar"
+    },
+    {
+      "flujo": "Mapa: ficha centrada, cambiar de lugar y traer a alguien",
+      "pasos": [
+        "pantalla completa",
+        "ventana centrada",
+        "cambiar de lugar: sí · girar fuera de edición: no está",
+        "destino ya elegido",
+        "cambio registrado"
+      ],
+      "resultado": "OK"
+    },
+    {
+      "flujo": "Tutorial de la demo (un día)",
+      "pasos": [
+        "1. Un día en el balneario (sin resaltar)",
+        "2. 8:00 · Llegás y mirás el día",
+        "3. 8:05 · Los avisos",
+        "4. 8:10 · Abrís la caja",
+        "5. 8:30 · El menú",
+        "6. El mapa de la playa",
+        "7. El clima en la playa",
+        "8. 10:00 · Llega un cliente nuevo",
+        "9. Elegís la carpa",
+        "10. Reposeras y otros extras",
+        "11. Precio y cobro",
+        "12. 11:00 · Te preguntan por otra fecha",
+        "13. Disponibilidad",
+        "14. 12:00 · Notas para el equipo",
+        "15. 15:00 · Cobrar lo pendiente",
+        "16. Cobros y deudas",
+        "17. 17:00 · Pagás un gasto",
+        "18. 18:00 · Tus clientes",
+        "19. Clientes",
+        "20. 20:00 · Cierre del día",
+        "21. Cerrar la caja",
+        "22. Y cuando quieras ver números",
+        "23. Reportes",
+        "24. ¡Listo! Ahora probalo vos"
+      ],
+      "resultado": "OK"
+    },
+    {
+      "flujo": "Tutorial de novedades",
+      "pasos": [
+        "1. Novedades de Mi Balneario (sin resaltar)",
+        "2. Plano: varias cosas a la vez",
+        "3. Cómo se eligen y se copian",
+        "4. Cómo se combinan los descuentos",
+        "5. Extras",
+        "6. Límite de efectivo y tope de descuento",
+        "7. Depósitos de caja",
+        "8. Mensajes con más datos, y por mail",
+        "9. Recordatorio por mail",
+        "10. Contactar clientes",
+        "11. Gastos en Excel",
+        "12. Comparar temporadas",
+        "13. Números de reserva propios",
+        "14. ¡Eso es todo! (sin resaltar)"
+      ],
+      "resultado": "OK"
+    },
+    {
+      "flujo": "Ubicación: mapa para marcar el punto",
+      "pasos": [
+        "mosaicos cargados: 10",
+        "ubicación: (-38.00523, -57.5444)"
+      ],
+      "resultado": "Se cortó: TimeoutError: locator.scrollIntoViewIfNeeded: Timeout 30000ms exceeded.\nCall log:\n  - waiting for locator('[aria-label=\"Mapa para marcar la ubicación del balneario\"]')\n"
+    },
+    {
+      "flujo": "Consultas: escribir la consulta",
+      "pasos": [
+        "texto: «Hola, esto es una prueba de consulta»",
+        "mail a mibalnearioarg"
+      ],
+      "resultado": "OK"
+    },
+    {
+      "flujo": "Panel: atajos F# y listas de a 5",
+      "pasos": [
+        "sin botones de accesos rápidos",
+        "F4 → mapa",
+        "F2 → nueva reserva",
+        "ítems por lista: 5, 5",
+        "con páginas"
+      ],
+      "resultado": "OK"
+    },
+    {
+      "flujo": "Avisos: abrir apaga el número y se pueden eliminar",
+      "pasos": [
+        "antes: Avisos (54 nuevos)",
+        "avisos: 62 → 61",
+        "después: Avisos"
+      ],
+      "resultado": "OK"
+    },
+    {
+      "flujo": "Configuración: ubicación del balneario",
+      "pasos": [
+        "búsqueda: 200 · 2 lugares",
+        "guardado",
+        "al recargar sigue Pinamar",
+        "nombre del punto: 200 {\"nombre\":\"Centro, Mar del Plata, Buenos Aires\"}"
+      ],
+      "resultado": "OK"
+    },
+    {
+      "flujo": "Configuración: apartados desplegables",
+      "pasos": [
+        "apartados: 5",
+        "perfil abierto con «Tema»"
+      ],
+      "resultado": "OK"
+    },
+    {
+      "flujo": "Caja: cerrar y reabrir",
+      "pasos": [
+        "cerrada",
+        "reabierta"
+      ],
+      "resultado": "OK"
+    },
+    {
+      "flujo": "Casilla de Cloudflare en la demo",
+      "resultado": "no apareció"
+    },
+    {
+      "flujo": "Entrar a la demo (cel)",
+      "resultado": "OK"
+    },
+    {
+      "flujo": "Ingreso: aviso tras 3 contraseñas incorrectas",
+      "pasos": [
+        "aviso visible"
+      ],
+      "resultado": "OK"
+    },
+    {
+      "flujo": "Bienvenida sin invitación válida",
+      "pasos": [
+        "¡Bienvenido a Mi Balneario! El enlace venció o ya fue usado. Pedí que te lo manden de nuevo. Ir a ingresar"
+      ],
+      "resultado": "OK"
+    }
+  ],
+  "api": [
+    {
+      "ruta": "GET /api/clima",
+      "estado": 401,
+      "respuesta": "{\"error\":\"Tenés que iniciar sesión.\"}"
+    },
+    {
+      "ruta": "GET /api/cron/planes",
+      "estado": 200,
+      "respuesta": "{\"ok\":false,\"motivo\":\"sin configurar\"}"
+    },
+    {
+      "ruta": "POST /api/mp/webhook",
+      "estado": 503,
+      "respuesta": "{\"ok\":false,\"motivo\":\"sin configurar\"}"
+    },
+    {
+      "ruta": "POST /api/plan/suscribir",
+      "estado": 401,
+      "respuesta": "{\"error\":\"Tenés que iniciar sesión.\"}"
+    },
+    {
+      "ruta": "POST /api/plan/cancelar",
+      "estado": 401,
+      "respuesta": "{\"error\":\"Tenés que iniciar sesión.\"}"
+    },
+    {
+      "ruta": "GET /api/lugar?q=Pinamar",
+      "estado": 401,
+      "respuesta": "{\"error\":\"Tenés que iniciar sesión.\"}"
+    },
+    {
+      "ruta": "POST /auth/registrar",
+      "estado": 403,
+      "respuesta": "{\"error\":\"Por ahora no se pueden crear cuentas desde acá. Pedí tu presupuesto en la página principal o escribinos.\",\"planes\":\"/#planes\"}"
+    },
+    {
+      "ruta": "GET /robots.txt",
+      "estado": 200,
+      "respuesta": "User-Agent: *\nAllow: /\nAllow: /inicio\nDisallow: /api/\nDisallow: /auth/\n\nSitemap: https://mibalneario.com.ar/sitemap.xml\n"
+    },
+    {
+      "ruta": "GET /sitemap.xml",
+      "estado": 200,
+      "respuesta": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n<url>\n<loc>https://mibalneario.com.ar/</loc>\n<changefreq>weekly</changefreq>\n<priority>1</priority>\n"
+    }
+  ],
+  "cabeceras": {
+    "content-security-policy": "frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'",
+    "strict-transport-security": "max-age=63072000; includeSubDomains",
+    "x-frame-options": "DENY",
+    "x-content-type-options": "nosniff",
+    "referrer-policy": "strict-origin-when-cross-origin",
+    "permissions-policy": "camera=(), microphone=(), geolocation=(self), payment=(), usb=()"
+  },
+  "enlaces": [
+    {
+      "enlace": "/#arriba",
+      "estado": 200
+    },
+    {
+      "enlace": "/#un-dia",
+      "estado": 200
+    },
+    {
+      "enlace": "/#funciones",
+      "estado": 200
+    },
+    {
+      "enlace": "/#planes",
+      "estado": 200
+    },
+    {
+      "enlace": "/#preguntas",
+      "estado": 200
+    },
+    {
+      "enlace": "/login",
+      "estado": 200
+    },
+    {
+      "enlace": "https://wa.me/5492645857461?text=%C2%A1Hola!%20Quiero%20un%20presupuesto%20del%20sistema%20Mi%20Balneario.",
+      "estado": "externo (no se prueba)"
+    },
+    {
+      "enlace": "/presupuesto",
+      "estado": 200
+    },
+    {
+      "enlace": "https://www.instagram.com/mibalneario/",
+      "estado": "externo (no se prueba)"
+    },
+    {
+      "enlace": "/terminos",
+      "estado": 200
+    },
+    {
+      "enlace": "/privacidad",
+      "estado": 200
+    }
+  ]
+}
