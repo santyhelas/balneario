@@ -1341,6 +1341,21 @@ select t.ok((select total_amount = 400000 from public.reservations where id = t.
         and exists (select 1 from public.reservation_discounts where reservation_id = t.uid('rr') and kind = 'redondeo' and amount = 40 and label = 'Redondeo'),
   'Redondeo: $400.040 se guarda en $400.000 con el descuento «Redondeo» de $40');
 
+-- 49. Panel del dueño: métricas y soporte en solo lectura (queda registrado)
+select set_config('request.jwt.claims', '{"sub":"11111111-1111-1111-1111-111111111111","email":"duenio@test.com"}', false);
+select t.ok(jsonb_array_length(public.admin_metrics() -> 'ingresos_por_mes') = 12 and (public.admin_metrics() -> 'totales' ->> 'carpas')::int > 0,
+  'Dueño: métricas de 12 meses y totales');
+select t.ok(jsonb_array_length(public.admin_support_view(t.uid('ws'), 'Consulta por la caja') -> 'espacios') > 0, 'Soporte: el dueño ve el balneario en solo lectura');
+select public.admin_support_view(t.uid('ws'));
+reset role;
+select t.ok((select count(*) = 1 from private.support_access where workspace_id = t.uid('ws')), 'Soporte: queda una sola entrada por hora en el registro');
+set role authenticated;
+select t.ok(jsonb_array_length(public.support_accesses(t.uid('ws'))) = 1, 'Soporte: el balneario ve que lo miraron');
+select set_config('request.jwt.claims', '{"sub":"22222222-2222-2222-2222-222222222222","email":"extranio@test.com"}', false);
+select t.throws($$select public.admin_metrics()$$, '', 'Dueño: nadie más ve las métricas');
+select t.throws(format($$select public.admin_support_view(%L)$$, t.get('ws')), '', 'Soporte: nadie más puede ver otro balneario');
+select set_config('request.jwt.claims', '{"sub":"11111111-1111-1111-1111-111111111111","email":"duenio@test.com"}', false);
+
 reset role;
 \o
 -- Resultado ----------------------------------------------------------

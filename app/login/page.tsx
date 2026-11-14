@@ -87,7 +87,9 @@ export default function LoginPage() {
         if (/incorrect/i.test(r.error ?? "")) setFails((n) => n + 1);
         return setError(r.error!);
       }
-      window.location.assign("/");
+      // El dueño de Mi Balneario entra directo a su panel.
+      const adm = await getSupabase().rpc("is_platform_admin").then((x) => x.data === true, () => false);
+      window.location.assign(adm ? "/dueno" : "/");
       return;
     }
     if (mode === "crear") {

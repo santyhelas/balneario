@@ -110,7 +110,7 @@ for (const [view, opts] of Object.entries(VIEWS)) {
   const ctx = await browser.newContext({ ...opts, locale: "es-AR", timezoneId: "America/Argentina/San_Juan" });
   const page = await ctx.newPage();
   const issues = watch(page);
-  for (const path of ["/", "/login", "/terminos", "/privacidad", "/mapa", "/caja", "/admin", "/no-existe-esta-pagina"]) {
+  for (const path of ["/", "/login", "/terminos", "/privacidad", "/mapa", "/caja", "/admin", "/dueno", "/no-existe-esta-pagina"]) {
     report.publico.push(await check(page, path, `publico${path === "/" ? "-inicio" : path}`, view, issues));
   }
   // Panel del dueño (con la cuenta de prueba, que es dueña de la plataforma en la base local)
@@ -130,18 +130,31 @@ for (const [view, opts] of Object.entries(VIEWS)) {
       const p3 = await ctx3.newPage();
       const errs = [];
       p3.on("pageerror", (e) => errs.push(String(e)));
-      await p3.goto(DEMO + "/admin", { waitUntil: "networkidle" });
-      await p3.getByRole("tab", { name: /Balnearios/ }).waitFor({ timeout: 15000 });
-      // La caja del día pide abrirse: se deja para después.
-      await p3.getByRole("button", { name: "Ahora no" }).click({ timeout: 4000 }).catch(() => {});
+      await p3.goto(DEMO + "/dueno", { waitUntil: "networkidle" });
+      await p3.getByRole("link", { name: /Soporte/ }).first().waitFor({ timeout: 15000 });
+      await p3.waitForTimeout(1500);
+      await p3.screenshot({ path: `${OUT}/capturas/dueno-resumen-${view}.png`, fullPage: true });
+      await p3.getByRole("link", { name: "Balnearios" }).first().click();
+      await p3.locator("h3").first().waitFor({ timeout: 15000 });
       await p3.waitForTimeout(800);
       await p3.screenshot({ path: `${OUT}/capturas/admin-${view}.png`, fullPage: true });
       const cards = await p3.locator("h3").count();
       // ¿Algo se sale de la pantalla?
       const overflow = await p3.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 2);
-      await p3.getByRole("tab", { name: /Altas/ }).click();
+      await p3.getByRole("link", { name: /Altas/ }).first().click();
       await p3.waitForTimeout(500);
       await p3.screenshot({ path: `${OUT}/capturas/admin-altas-${view}.png`, fullPage: true });
+      // Soporte en solo lectura: abre el primer balneario de la lista (si hay otro además del propio).
+      await p3.getByRole("link", { name: "Soporte" }).first().click();
+      await p3.waitForTimeout(2000);
+      const ver = p3.getByText("Ver en solo lectura").first();
+      if (await ver.count()) {
+        await ver.click();
+        await p3.getByText("Solo lectura.").waitFor({ timeout: 15000 });
+        await p3.waitForTimeout(1200);
+        await p3.screenshot({ path: `${OUT}/capturas/dueno-soporte-${view}.png`, fullPage: true });
+        f9.pasos.push("soporte: se ve en solo lectura");
+      } else f9.pasos.push("soporte: no hay otro balneario para mirar");
       f9.pasos.push(`fichas: ${cards}`, overflow ? "se sale de la pantalla" : "entra en la pantalla", ...errs.map((e) => `error: ${e}`));
       f9.resultado = cards > 0 && !overflow && !errs.length ? "OK" : "Revisar";
     } catch (e) {

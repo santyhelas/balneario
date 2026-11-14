@@ -270,9 +270,9 @@ export function Shell({ children }: { children: ReactNode }) {
             );
           })}
           {isPlatformAdmin && (
-            <Link href="/admin" aria-current={isActive("/admin") ? "page" : undefined}
+            <Link href="/dueno" aria-current={isActive("/dueno") ? "page" : undefined}
               className={cx("mt-2 flex items-center gap-3 rounded-lg border border-dashed border-line px-3 py-2 text-sm font-medium",
-                isActive("/admin") ? "bg-accent text-accent-fg" : "text-fg hover:bg-surface-2")}>
+                isActive("/dueno") ? "bg-accent text-accent-fg" : "text-fg hover:bg-surface-2")}>
               <Icon d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z" className="h-[18px] w-[18px]" />
               <span className="flex-1 truncate">Panel del dueño</span>
               {adminAlerts > 0 && <span className="rounded-full bg-danger px-1.5 text-xs font-bold text-white">{adminAlerts}</span>}
@@ -439,8 +439,8 @@ export function Shell({ children }: { children: ReactNode }) {
                 </Link>
               ))}
               {isPlatformAdmin && (
-                <Link href="/admin"
-                  className={cx("relative flex flex-col items-center gap-1 rounded-xl border border-dashed p-2.5 text-center text-xs font-medium", isActive("/admin") ? "border-accent bg-accent-soft text-accent" : "border-line")}>
+                <Link href="/dueno"
+                  className={cx("relative flex flex-col items-center gap-1 rounded-xl border border-dashed p-2.5 text-center text-xs font-medium", isActive("/dueno") ? "border-accent bg-accent-soft text-accent" : "border-line")}>
                   <Icon d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z" className="h-6 w-6" />
                   Panel del dueño
                   {adminAlerts > 0 && <span className="absolute right-1.5 top-1.5 rounded-full bg-danger px-1.5 text-[10px] font-bold text-white">{adminAlerts}</span>}

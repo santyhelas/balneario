@@ -165,6 +165,9 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       }
       if (mem.error) throw mem.error;
       if (!mem.data) {
+        // El dueño de Mi Balneario no necesita un balneario: va a su panel.
+        const adm = await sb.rpc("is_platform_admin");
+        if (adm.data === true) { window.location.assign("/dueno"); return; }
         // Las altas son por plan: solo puede crear su balneario una cuenta habilitada.
         // Si la función no existe todavía (falta la actualización 0028), también se bloquea.
         const allowed = await sb.rpc("can_create_workspace");

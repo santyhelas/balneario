@@ -13,6 +13,7 @@ import { CloseCashModal, OpenCashModal, type CashSummary } from "@/components/ca
 import { WeatherStrip } from "@/components/weather";
 import { useTourActive } from "@/components/demo-tour";
 import { ArrivalButtons, type ArrivalState } from "@/components/arrival";
+import { SupportAccessNotice } from "@/components/support-notice";
 
 type Tone = "accent" | "ok" | "danger" | "warn" | "orange" | "neutral";
 const TONE: Record<Tone, { box: string; label: string; value: string }> = {
@@ -110,6 +111,8 @@ export default function DashboardPage() {
         </p>
         <WeatherStrip onDark className="mt-4" />
       </section>
+
+      {!isGuest && <SupportAccessNotice workspaceId={ws.id} />}
 
       {/* Avisos prioritarios */}
       {data.caja_anterior_sin_cerrar && (
