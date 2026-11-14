@@ -1,5 +1,6 @@
 "use client";
 import { HotkeysCard } from "@/components/hotkeys";
+import { PASSWORD_HINT, passwordWeak } from "@/lib/password";
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { getSupabase } from "@/lib/supabase/client";
 import { unwrap, useLoader } from "@/lib/data";
@@ -244,7 +245,8 @@ function ProfileCard() {
   async function changePassword(e: FormEvent) {
     e.preventDefault();
     setPwMsg(null);
-    if (pw.length < 8) return setPwMsg({ tone: "danger", text: "La contraseña debe tener al menos 8 caracteres." });
+    const weak = passwordWeak(pw);
+    if (weak) return setPwMsg({ tone: "danger", text: weak });
     if (pw !== pw2) return setPwMsg({ tone: "danger", text: "Las contraseñas no coinciden." });
     setPwBusy(true);
     const { error } = await getSupabase().auth.updateUser({ password: pw });
@@ -283,7 +285,7 @@ function ProfileCard() {
       <form onSubmit={changePassword} className="mt-4 flex flex-col gap-3 border-t border-line pt-4">
         <h3 className="text-sm font-semibold">Cambiar contraseña</h3>
         <div className="grid gap-3 sm:grid-cols-2">
-          <TextField label="Nueva contraseña" type="password" autoComplete="new-password" value={pw} onChange={(e) => setPw(e.target.value)} />
+          <TextField label="Nueva contraseña" type="password" autoComplete="new-password" value={pw} onChange={(e) => setPw(e.target.value)} hint={PASSWORD_HINT} />
           <TextField label="Repetila" type="password" autoComplete="new-password" value={pw2} onChange={(e) => setPw2(e.target.value)} />
         </div>
         {pwMsg && <Alert tone={pwMsg.tone}>{pwMsg.text}</Alert>}

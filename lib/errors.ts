@@ -29,6 +29,7 @@ export function friendlyError(err: unknown): string {
   if (/email not confirmed/i.test(msg)) return "Todavía no confirmaste tu correo. Revisá tu bandeja de entrada.";
   if (/user already registered/i.test(msg)) return "Ya existe una cuenta con ese correo. Iniciá sesión.";
   if (/password should be at least/i.test(msg)) return "La contraseña debe tener al menos 8 caracteres.";
+  if (/different from the old password/i.test(msg)) return "Esa contraseña es la que ya tenías. Elegí una distinta.";
   if (/rate limit/i.test(msg)) return "Demasiados intentos seguidos. Esperá unos minutos.";
   return msg || "Ocurrió un error inesperado. La operación no se guardó.";
 }

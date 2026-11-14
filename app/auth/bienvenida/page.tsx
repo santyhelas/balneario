@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState, type FormEvent } from "react";
+import { PASSWORD_HINT, passwordWeak } from "@/lib/password";
 import { getSupabase } from "@/lib/supabase/client";
 import { friendlyError } from "@/lib/errors";
 import { USERNAME_RE, normalizeUsername } from "@/lib/remember";
@@ -49,14 +50,17 @@ export default function WelcomePage() {
     const u = normalizeUsername(usuario);
     if (!u) return setError("Elegí un usuario para ingresar.");
     if (!USERNAME_RE.test(u)) return setError("El usuario debe tener entre 3 y 30 caracteres: letras, números, punto, guion o guion bajo (sin espacios).");
-    if (password.length < 8) return setError("La contraseña debe tener al menos 8 caracteres.");
+    const weak = passwordWeak(password);
+    if (weak) return setError(weak);
     if (password !== repeat) return setError("Las contraseñas no coinciden.");
     setBusy(true);
     const sb = getSupabase();
-    const r1 = await sb.auth.updateUser({ password });
-    if (r1.error) { setBusy(false); return setError(friendlyError(r1.error)); }
+    // Primero el usuario (si está tomado, no se toca la contraseña); después la contraseña.
     const r2 = await sb.rpc("set_my_username", { p_username: u });
     if (r2.error) { setBusy(false); return setError(friendlyError(r2.error)); }
+    const r1 = await sb.auth.updateUser({ password });
+    // Si es la misma contraseña que quedó guardada en un intento anterior, ya está bien.
+    if (r1.error && !/different from the old password/i.test(r1.error.message)) { setBusy(false); return setError(friendlyError(r1.error)); }
     window.location.assign("/");
   }
 
@@ -82,7 +86,7 @@ export default function WelcomePage() {
             <TextField label="Usuario" autoCapitalize="none" autoCorrect="off" spellCheck={false} autoComplete="username" value={usuario} required
               onChange={(e) => setUsuario(e.target.value)} placeholder="Ej: laola"
               hint="Entre 3 y 30 caracteres, sin espacios. Con él ingresás; también podés entrar con Google." />
-            <TextField label="Contraseña" type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+            <TextField label="Contraseña" type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} hint={PASSWORD_HINT} required />
             <TextField label="Repetila" type="password" autoComplete="new-password" value={repeat} onChange={(e) => setRepeat(e.target.value)} required />
             {error && <Alert tone="danger">{error}</Alert>}
             <Button type="submit" loading={busy}>Guardar y crear mi balneario</Button>

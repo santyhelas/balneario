@@ -1,4 +1,5 @@
 import "server-only";
+import { passwordWeak } from "@/lib/password";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { getServerSupabase } from "@/lib/supabase/server";
@@ -24,8 +25,9 @@ export async function signIn(email: string, password: string, remember: boolean,
 }
 
 export function passwordProblem(p: unknown, p2: unknown): string | null {
-  if (typeof p !== "string" || p.length < 8) return "La contraseña debe tener al menos 8 caracteres.";
-  if (p.length > 72) return "La contraseña puede tener hasta 72 caracteres.";
+  if (typeof p !== "string") return "La contraseña debe tener al menos 8 caracteres.";
+  const weak = passwordWeak(p);
+  if (weak) return weak;
   if (p !== p2) return "Las contraseñas no coinciden.";
   return null;
 }

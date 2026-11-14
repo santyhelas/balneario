@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState, type FormEvent } from "react";
+import { PASSWORD_HINT, passwordWeak } from "@/lib/password";
 import { getSupabase, setRememberPreference } from "@/lib/supabase/client";
 import { friendlyError } from "@/lib/errors";
 import { Alert, Button, Field, Input, TextField } from "@/components/ui";
@@ -90,7 +91,8 @@ export default function LoginPage() {
       return;
     }
     if (mode === "crear") {
-      if (password.length < 8) return setError("La contraseña debe tener al menos 8 caracteres.");
+      const weak = passwordWeak(password);
+      if (weak) return setError(weak);
       if (password !== password2) return setError("Las contraseñas no coinciden. Escribila igual en los dos campos.");
       setBusy(true);
       const r = await post("/auth/registrar", { usuario, password, password2 });
@@ -173,7 +175,7 @@ export default function LoginPage() {
                   value={password2}
                   onChange={(e) => setPassword2(e.target.value)}
                   error={mismatch ? "No coincide con la contraseña." : null}
-                  hint="Mínimo 8 caracteres."
+                  hint={PASSWORD_HINT}
                 />
               )}
               <label className="flex items-center gap-2 text-sm">

@@ -1,5 +1,6 @@
 "use client";
 import { useState, type FormEvent } from "react";
+import { PASSWORD_HINT, passwordWeak } from "@/lib/password";
 import { getSupabase } from "@/lib/supabase/client";
 import { unwrap, useLoader } from "@/lib/data";
 import { friendlyError } from "@/lib/errors";
@@ -23,7 +24,7 @@ async function api(method: "POST" | "PATCH", body: unknown) {
 export function PasswordPair({ pw, setPw, pw2, setPw2 }: { pw: string; setPw: (v: string) => void; pw2: string; setPw2: (v: string) => void }) {
   return (
     <div className="grid gap-3 sm:grid-cols-2">
-      <TextField label="Contraseña" type="password" autoComplete="new-password" value={pw} onChange={(e) => setPw(e.target.value)} hint="Mínimo 8 caracteres." />
+      <TextField label="Contraseña" type="password" autoComplete="new-password" value={pw} onChange={(e) => setPw(e.target.value)} hint={PASSWORD_HINT} />
       <TextField label="Repetí la contraseña" type="password" autoComplete="new-password" value={pw2} onChange={(e) => setPw2(e.target.value)} error={pw2 && pw !== pw2 ? "No coincide." : null} />
     </div>
   );
@@ -118,7 +119,8 @@ function CreateUserModal({ open, isOwner, onClose, onDone }: { open: boolean; is
     e.preventDefault();
     const u = normalizeUsername(usuario);
     if (!USERNAME_RE.test(u)) return setError("El usuario debe tener entre 3 y 30 caracteres: letras, números, punto, guion o guion bajo (sin espacios).");
-    if (pw.length < 8) return setError("La contraseña debe tener al menos 8 caracteres.");
+    const weak = passwordWeak(pw);
+    if (weak) return setError(weak);
     if (pw !== pw2) return setError("Las contraseñas no coinciden.");
     setBusy(true);
     setError(null);
@@ -158,7 +160,8 @@ function ResetPasswordModal({ user, onClose, onDone }: { user: WsUser | null; on
   async function submit(e: FormEvent) {
     e.preventDefault();
     if (!user) return;
-    if (pw.length < 8) return setError("La contraseña debe tener al menos 8 caracteres.");
+    const weak = passwordWeak(pw);
+    if (weak) return setError(weak);
     if (pw !== pw2) return setError("Las contraseñas no coinciden.");
     setBusy(true);
     setError(null);

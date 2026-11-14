@@ -1,5 +1,6 @@
 "use client";
 import { useState, type FormEvent, type ReactNode } from "react";
+import { passwordWeak } from "@/lib/password";
 import { getSupabase } from "@/lib/supabase/client";
 import { unwrap, useLoader } from "@/lib/data";
 import { friendlyError } from "@/lib/errors";
@@ -519,7 +520,8 @@ function AdminCreateUserModal({ b, onClose, onDone }: { b: Balneario; onClose: (
     e.preventDefault();
     const u = normalizeUsername(usuario);
     if (!USERNAME_RE.test(u)) return setError("El usuario debe tener entre 3 y 30 caracteres: letras, números, punto, guion o guion bajo (sin espacios).");
-    if (pw.length < 8) return setError("La contraseña debe tener al menos 8 caracteres.");
+    const weak = passwordWeak(pw);
+    if (weak) return setError(weak);
     if (pw !== pw2) return setError("Las contraseñas no coinciden.");
     setBusy(true);
     setError(null);
