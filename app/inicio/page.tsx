@@ -16,9 +16,6 @@ import "./landing.css";
 const DESCRIPTION =
   "Sistema de gestión de balnearios: alquiler y reservas de carpas y sombrillas por fecha, mapa de la playa, cobros, señas, deudas, caja diaria, clientes y WhatsApp. Desde la computadora o el celular.";
 
-// Los casos de éxito se actualizan cada hora.
-export const revalidate = 3600;
-
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: "Mi Balneario · Sistema de gestión de balnearios y alquiler de carpas",
