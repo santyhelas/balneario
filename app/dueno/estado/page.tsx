@@ -45,6 +45,7 @@ export default function OwnerHealth() {
     <>
       <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
         <div>
+          <a href="/dueno" className="text-sm text-accent hover:underline">← Resumen</a>
           <h1 className="text-2xl font-semibold tracking-tight">Estado del sistema</h1>
           <p className="text-sm text-muted">Si todo anda: servicios, correo y copias de seguridad de cada balneario.</p>
         </div>

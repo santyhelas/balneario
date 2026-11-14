@@ -1441,6 +1441,19 @@ set role anon;
 select t.ok(jsonb_array_length(public.success_cases()) = 1, 'Casos: la página principal ve solo los publicados');
 set role authenticated;
 
+-- 53. Calendario de Instagram del dueño
+select set_config('request.jwt.claims', '{"sub":"11111111-1111-1111-1111-111111111111","email":"duenio@test.com"}', false);
+select t.set('ig', public.admin_save_ig_post(null, null, '{"titulo":"Reel: un día en el balneario","tipo":"reel","descripcion":"Así se ve…","hashtags":"#playa"}')::text);
+select t.ok((public.admin_ig_posts() -> 0 ->> 'fecha') is null and (public.admin_ig_posts() -> 0 ->> 'estado') = 'idea', 'Instagram: una idea sin fecha');
+select public.admin_move_ig_post(t.uid('ig'), private.today_ar() + 3, 'preparando');
+select t.ok((public.admin_ig_posts() -> 0 ->> 'fecha')::date = private.today_ar() + 3 and (public.admin_ig_posts() -> 0 ->> 'version')::int = 2, 'Instagram: se pasa a una fecha');
+select t.throws(format($$select public.admin_save_ig_post(%L, 1, '{"titulo":"Otro"}')$$, t.get('ig')), 'otro dispositivo', 'Instagram: no se pisa un cambio de otro dispositivo');
+select public.admin_delete_ig_post(t.uid('ig'));
+select t.ok(jsonb_array_length(public.admin_ig_posts()) = 0, 'Instagram: se borra');
+select set_config('request.jwt.claims', '{"sub":"22222222-2222-2222-2222-222222222222","email":"extranio@test.com"}', false);
+select t.throws($$select public.admin_ig_posts()$$, '', 'Instagram: nadie más lo ve');
+select set_config('request.jwt.claims', '{"sub":"11111111-1111-1111-1111-111111111111","email":"duenio@test.com"}', false);
+
 reset role;
 \o
 -- Resultado ----------------------------------------------------------

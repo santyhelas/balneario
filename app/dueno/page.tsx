@@ -3,6 +3,7 @@ import { useRouter } from "next/navigation";
 import { OwnerBoard } from "@/components/owner/board";
 import { OwnerMetrics } from "@/components/owner/metrics";
 import { OwnerToday } from "@/components/owner/today";
+import { OwnerStatusStrip } from "@/components/owner/status-strip";
 import { useOwner } from "@/components/owner/context";
 
 export default function OwnerHome() {
@@ -15,6 +16,7 @@ export default function OwnerHome() {
         <h1 className="text-2xl font-semibold tracking-tight">{hour < 13 ? "Buen día" : hour < 20 ? "Buenas tardes" : "Buenas noches"}</h1>
         <p className="text-sm text-muted">Así viene Mi Balneario hoy.</p>
       </div>
+      <OwnerStatusStrip />
       <OwnerToday />
       <OwnerBoard view="resumen" mineId={mineId} onSupport={(id) => router.push(`/dueno/soporte/${id}`)} />
       <OwnerMetrics />

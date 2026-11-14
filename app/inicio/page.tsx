@@ -8,7 +8,6 @@ import "@fontsource-variable/figtree";
 import { SITE_EMAIL, SITE_INSTAGRAM, SITE_INSTAGRAM_URL, SITE_URL, SITE_WHATSAPP_URL } from "@/lib/site";
 import { Analytics } from "@vercel/analytics/next";
 import { CopyEmailButton, DemoButton, DemoEndedNotice, LandingThemeToggle, LoginLink, MobileMenu, ScrollReveal, TB_THEME_SCRIPT } from "@/components/landing";
-import { SuccessCases } from "@/components/success-cases";
 import { DayTimeline, HeroBeach, PhotoStrip, Slider, type DayStep } from "@/components/landing-interactive";
 import "./landing.css";
 
@@ -397,8 +396,6 @@ export default function InicioPage() {
             </div>
           </div>
         </section>
-
-        <SuccessCases />
 
         {/* Preguntas */}
         <section id="preguntas" className="scroll-mt-16 bg-white">

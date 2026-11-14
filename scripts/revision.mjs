@@ -145,7 +145,7 @@ for (const [view, opts] of Object.entries(VIEWS)) {
       await p3.waitForTimeout(500);
       await p3.screenshot({ path: `${OUT}/capturas/admin-altas-${view}.png`, fullPage: true });
       // Las demás secciones del panel abren sin errores
-      for (const [name, text] of [["Cobros", "Calendario de cobros"], ["Interesados", "De la demo a la venta"], ["Gastos", "Gastos fijos"], ["Avisos", "Nuevo aviso"], ["Estado", "Servicios"], ["Renovación", "Renovación de temporada"], ["Pedidos", "Pedidos"], ["Casos de éxito", "Casos de éxito"]]) {
+      for (const [name, text] of [["Cobros", "Calendario de cobros"], ["Interesados", "De la demo a la venta"], ["Gastos", "Gastos fijos"], ["Renovación", "Renovación de temporada"], ["Instagram", "Banco de ideas"]]) {
         await p3.getByRole("link", { name, exact: true }).first().click();
         const okSec = await p3.getByText(text).first().waitFor({ timeout: 15000 }).then(() => true, () => false);
         await p3.waitForTimeout(800);
