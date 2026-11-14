@@ -1343,7 +1343,7 @@ select t.ok((select total_amount = 400000 from public.reservations where id = t.
 
 -- 49. Panel del dueño: métricas y soporte en solo lectura (queda registrado)
 select set_config('request.jwt.claims', '{"sub":"11111111-1111-1111-1111-111111111111","email":"duenio@test.com"}', false);
-select t.ok(jsonb_array_length(public.admin_metrics() -> 'ingresos_por_mes') = 12 and (public.admin_metrics() -> 'totales' ->> 'carpas')::int > 0,
+select t.ok(jsonb_array_length(public.admin_metrics() -> 'ingresos_por_mes') = 12 and (public.admin_metrics() -> 'totales' ->> 'carpas')::int >= 0,
   'Dueño: métricas de 12 meses y totales');
 select t.ok(jsonb_array_length(public.admin_support_view(t.uid('ws'), 'Consulta por la caja') -> 'espacios') > 0, 'Soporte: el dueño ve el balneario en solo lectura');
 select public.admin_support_view(t.uid('ws'));
@@ -1453,6 +1453,11 @@ select t.ok(jsonb_array_length(public.admin_ig_posts()) = 0, 'Instagram: se borr
 select set_config('request.jwt.claims', '{"sub":"22222222-2222-2222-2222-222222222222","email":"extranio@test.com"}', false);
 select t.throws($$select public.admin_ig_posts()$$, '', 'Instagram: nadie más lo ve');
 select set_config('request.jwt.claims', '{"sub":"11111111-1111-1111-1111-111111111111","email":"duenio@test.com"}', false);
+
+-- 54. Métricas: el balneario propio del dueño no cuenta como cliente
+select set_config('request.jwt.claims', '{"sub":"11111111-1111-1111-1111-111111111111","email":"duenio@test.com"}', false);
+select t.ok((public.admin_metrics() -> 'totales' ->> 'clientes_pagos')::int = 0 and (public.admin_metrics() -> 'totales' ->> 'consultas')::int >= 1,
+  'Métricas: el balneario del dueño no cuenta como cliente; las consultas sí se cuentan');
 
 reset role;
 \o

@@ -167,9 +167,9 @@ export function OwnerBoard({ view, mineId, onSupport, prefill, kpisExtra, lead, 
       {msg && <Alert tone={msg.tone} className="mb-3">{msg.text}</Alert>}
       {!d ? (q.loading && <div className="flex items-center gap-2 text-muted"><Spinner small /> Cargando…</div>) : (
         <div className="flex flex-col gap-4">
-          {view === "resumen" && <><div className="grid grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-8">
+          {view === "resumen" && <><div className="grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-7">
             <Kpi small icon={KPI_ICON.casa} label="Balnearios" value={String(d.balnearios.length)} note={`${usados7} usados esta semana · ${d.balnearios.length - activos.length} en pausa`} />
-            <Kpi small icon={KPI_ICON.ok} tone="green" label="Planes al día" value={String(conPlan.length - vencidos.length)} note={`${conPlan.filter((b) => b.plan!.debito).length} con débito automático`} />
+            <Kpi small icon={KPI_ICON.ok} tone="green" label="Planes al día" value={String(conPlan.length - vencidos.length)} note={`de ${conPlan.length} con plan`} />
             <Kpi small label="Vencidos / por vencer" value={`${vencidos.length} / ${porVencer.length}`} note="por vencer: en 7 días y sin débito" icon={KPI_ICON.reloj} tone={vencidos.length ? "red" : "sand"} />
             <Kpi small icon={KPI_ICON.plata} tone="green" label="Ingreso por año (aprox.)" value={formatMoney(anualizado)} note="anuales + temporadas al día" />
             {kpisExtra}
@@ -307,15 +307,15 @@ export function Kpi({ label, value, note, tone = "sea", icon, small }: { label: 
         </span>
       )}
       <div className="min-w-0">
-        <div className={cx("truncate font-medium opacity-75", small ? "text-[11px]" : "text-xs")}>{label}</div>
-        <div className={cx("truncate font-bold tabular leading-tight", small ? "text-lg" : "text-2xl")}>{value}</div>
-        {note && <div className={cx("mt-0.5 opacity-75", small ? "truncate text-[11px]" : "text-xs")}>{note}</div>}
+        <div className={cx("font-medium opacity-75", small ? "text-[11px] leading-tight" : "text-xs")}>{label}</div>
+        <div className={cx("font-bold tabular leading-tight", small ? "text-lg" : "text-2xl")}>{value}</div>
+        {note && <div className={cx("mt-0.5 opacity-75", small ? "text-[11px] leading-tight" : "text-xs")}>{note}</div>}
       </div>
     </div>
   );
 }
 export const KPI_ICON = {
-  casa: "M3 11l9-7 9 7M5 10v10h14V10",
+  casa: "M12 4a8 8 0 0 1 8 8H4a8 8 0 0 1 8-8zM12 4v-1M12 12l3 8M9 20h8M2 21c2-1.3 4-1.3 6 0s4 1.3 6 0 4-1.3 6 0",
   ok: "M20 6L9 17l-5-5",
   reloj: "M12 7v5l3 2M12 21a9 9 0 1 1 0-18 9 9 0 0 1 0 18z",
   plata: "M12 3v18M17 7H9.5a3 3 0 0 0 0 6h5a3 3 0 0 1 0 6H6",

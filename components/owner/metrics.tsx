@@ -11,7 +11,7 @@ type Metrics = {
   ingresos_por_mes: { mes: string; importe: number }[];
   altas_por_mes: { mes: string; cantidad: number }[];
   demo_por_semana: { semana: string; cantidad: number }[];
-  totales: { carpas: number; sombrillas: number; reservas: number; reservas_30d: number; clientes: number; demo_total: number; cobrado_anio: number };
+  totales: { carpas: number; sombrillas: number; reservas: number; reservas_30d: number; clientes: number; demo_total: number; cobrado_anio: number; clientes_pagos?: number; consultas?: number };
 };
 
 const MESES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
@@ -55,9 +55,8 @@ export function MetricsKpis({ q }: { q: MetricsQuery }) {
   return (
     <>
       <Kpi small icon={KPI_ICON.plata} tone="green" label={`Cobrado en ${m.hoy.slice(0, 4)}`} value={formatMoney(t.cobrado_anio)} note={`este mes: ${formatMoney(mesActual)}`} />
-      <Kpi small icon={KPI_ICON.carpa} tone="sand" label="Carpas · sombrillas" value={`${t.carpas} · ${t.sombrillas}`} note="que se manejan con el sistema" />
-      <Kpi small icon={KPI_ICON.calendario} label="Reservas" value={t.reservas.toLocaleString("es-AR")} note={`${t.reservas_30d.toLocaleString("es-AR")} en 30 días`} />
-      <Kpi small icon={KPI_ICON.personas} label="Clientes" value={t.clientes.toLocaleString("es-AR")} note={`${t.demo_total.toLocaleString("es-AR")} visitas a la demo`} />
+      <Kpi small icon={KPI_ICON.ok} tone="green" label="Clientes que pagan" value={String(t.clientes_pagos ?? 0)} note="balnearios con algún pago (sin contar el tuyo)" />
+      <Kpi small icon={KPI_ICON.personas} tone="sand" label="Consultas" value={String(t.consultas ?? 0)} note={`${t.demo_total.toLocaleString("es-AR")} ${t.demo_total === 1 ? "visita" : "visitas"} a la demo`} />
     </>
   );
 }
