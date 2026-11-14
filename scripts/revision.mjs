@@ -671,9 +671,8 @@ for (const [view, opts] of Object.entries(VIEWS)) {
       fu.pasos.push(`búsqueda: ${r.status()} · ${body.error ?? (body.lugares ?? []).length + " lugares"}`);
       if ((body.lugares ?? []).length) {
         await page.getByRole("button", { name: /Pinamar/ }).first().click();
-        await page.getByRole("button", { name: "Guardar cambios" }).first().click();
-        await page.waitForTimeout(2000);
-        const ok = await page.getByText("Datos del balneario guardados").count();
+        await page.waitForTimeout(2500);
+        const ok = await page.getByText("Ubicación guardada").count();
         fu.pasos.push(ok ? "guardado" : "no se vio el mensaje de guardado");
         await page.reload({ waitUntil: "networkidle" });
         await page.waitForTimeout(1500);

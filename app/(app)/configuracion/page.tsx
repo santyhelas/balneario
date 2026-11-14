@@ -149,6 +149,8 @@ function ImagePicker({ label, value, onChange, disabled, round, maxSide, maxByte
   );
 }
 
+let locFlash: { tone: "ok" | "danger"; text: string } | null = null;
+
 function BalnearioCard({ row, editable, onSaved, onConflict }: { row: WsRow; editable: boolean; onSaved: () => Promise<void>; onConflict: () => void }) {
   const { ws } = useWorkspace();
   const [name, setName] = useState(row.name);
@@ -161,6 +163,24 @@ function BalnearioCard({ row, editable, onSaved, onConflict }: { row: WsRow; edi
   const [lon, setLon] = useState<number | null>(row.longitude == null ? null : Number(row.longitude));
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ tone: "ok" | "danger"; text: string } | null>(null);
+
+  // El aviso sobrevive a que la tarjeta se vuelva a armar con los datos nuevos.
+  const [locMsg, setLocMsg] = useState<{ tone: "ok" | "danger"; text: string } | null>(() => { const m = locFlash; locFlash = null; return m; });
+  /** La ubicación se guarda en el momento (antes había que acordarse de tocar «Guardar cambios» abajo). */
+  async function saveLocation(la: number | null, lo: number | null) {
+    setLocMsg(null);
+    const { error } = await getSupabase().from("workspaces").update({ latitude: la, longitude: lo, version: row.version + 1 })
+      .eq("id", ws.id).select("id").single();
+    if (error) {
+      setLocMsg({ tone: "danger", text: friendlyError(error) });
+      if (isVersionConflict(error)) onConflict();
+      return;
+    }
+    const ok = { tone: "ok" as const, text: la == null ? "Ubicación quitada." : "Ubicación guardada. El clima del mapa ya usa este lugar." };
+    setLocMsg(ok);
+    locFlash = ok;
+    await onSaved();
+  }
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -202,8 +222,9 @@ function BalnearioCard({ row, editable, onSaved, onConflict }: { row: WsRow; edi
           <TextField label="Teléfono (opcional)" value={phone} onChange={(e) => setPhone(e.target.value)} maxLength={40} disabled={!editable} />
         </div>
         <TextField label="Dirección (opcional)" value={address} onChange={(e) => setAddress(e.target.value)} maxLength={200} disabled={!editable} />
-        <LocationPicker lat={lat} lon={lon} onChange={(a, b) => { setLat(a); setLon(b); }} disabled={!editable} />
-        <p className="text-xs text-muted">La ubicación se usa para el clima, el viento y el sol de tu balneario; se guarda al tocar «Guardar cambios». En el comprobante aparecen el nombre, el CUIT, el teléfono y la dirección.</p>
+        <LocationPicker lat={lat} lon={lon} onChange={(a, b) => { setLat(a); setLon(b); void saveLocation(a, b); }} disabled={!editable} />
+        {locMsg && <Alert tone={locMsg.tone}>{locMsg.text}</Alert>}
+        <p className="text-xs text-muted">La ubicación se usa para el clima, el viento y el sol de tu balneario y se guarda sola apenas la elegís. En el comprobante aparecen el nombre, el CUIT, el teléfono y la dirección.</p>
         {msg && <Alert tone={msg.tone}>{msg.text}</Alert>}
         {editable ? <Button type="submit" loading={busy}>Guardar cambios</Button> : <p className="text-sm text-muted">Solo el propietario o un administrador pueden modificar estos datos.</p>}
       </form>

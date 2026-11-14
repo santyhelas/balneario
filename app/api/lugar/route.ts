@@ -22,6 +22,25 @@ async function nominatim(path: string): Promise<unknown> {
   return body;
 }
 
+type OmItem = { name: string; latitude: number; longitude: number; admin1?: string; admin2?: string; country_code?: string };
+async function openMeteo(q: string) {
+  const out: { label: string; lat: number; lon: number }[] = [];
+  for (const cc of ["AR", "UY"]) {
+    try {
+      const r = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=6&language=es&format=json&countryCode=${cc}`,
+        { cache: "no-store", signal: AbortSignal.timeout(8000) });
+      if (!r.ok) continue;
+      const b = (await r.json()) as { results?: OmItem[] };
+      for (const it of b.results ?? []) {
+        const parts = [it.name, it.admin2, it.admin1].filter((x): x is string => !!x).filter((x, i, a) => a.indexOf(x) === i);
+        out.push({ label: parts.join(", "), lat: Math.round(it.latitude * 1e5) / 1e5, lon: Math.round(it.longitude * 1e5) / 1e5 });
+      }
+    } catch { /* sin respaldo */ }
+    if (out.length >= 6) break;
+  }
+  return out.slice(0, 6);
+}
+
 export async function GET(req: Request) {
   const p = new URL(req.url).searchParams;
   const q = p.get("q")?.trim() ?? "";
@@ -43,8 +62,14 @@ export async function GET(req: Request) {
   try {
     if (q) {
       if (q.length < 3 || q.length > 120) return json({ error: "Escribí al menos 3 letras." }, 400);
-      const body = await nominatim(`search?format=jsonv2&addressdetails=1&limit=6&countrycodes=ar,uy&q=${encodeURIComponent(q)}`);
-      return json({ lugares: parsePlaces(body) });
+      // OpenStreetMap a veces rechaza las consultas desde servidores en la nube: si falla o no encuentra,
+      // se busca la ciudad en Open-Meteo (el mismo servicio del clima) y después se afina en el mapa.
+      let lugares: ReturnType<typeof parsePlaces> = [];
+      try {
+        lugares = parsePlaces(await nominatim(`search?format=jsonv2&addressdetails=1&limit=6&countrycodes=ar,uy&q=${encodeURIComponent(q)}`));
+      } catch { /* se prueba el respaldo */ }
+      if (lugares.length === 0) lugares = await openMeteo(q);
+      return json({ lugares });
     }
     const lat = Number(p.get("lat"));
     const lon = Number(p.get("lon"));
