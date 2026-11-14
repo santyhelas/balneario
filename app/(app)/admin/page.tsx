@@ -6,7 +6,9 @@ import { friendlyError } from "@/lib/errors";
 import { formatDate, formatDateTime, formatMoney, parseMoney } from "@/lib/format";
 import { useWorkspace } from "@/components/workspace";
 import { PageHeader, SyncNotice } from "@/components/shell";
-import { Alert, Badge, Button, Card, ConfirmDialog, EmptyState, Input, Modal, Select, Spinner, TextField, cx } from "@/components/ui";
+import { Alert, Badge, Button, Card, ConfirmDialog, EmptyState, Field, Input, Modal, Select, Spinner, TextField, cx } from "@/components/ui";
+import { PasswordPair } from "@/components/users";
+import { USERNAME_RE, normalizeUsername } from "@/lib/remember";
 
 /** Panel del dueño de Mi Balneario: balnearios, planes y cobros, altas habilitadas y pausas. */
 
@@ -85,6 +87,7 @@ export default function AdminPage() {
   const [pausing, setPausing] = useState<Balneario | null>(null);
   const [resuming, setResuming] = useState<Balneario | null>(null);
   const [deleting, setDeleting] = useState<Balneario | null>(null);
+  const [userFor, setUserFor] = useState<Balneario | null>(null);
   const [revoking, setRevoking] = useState<Habilitacion | null>(null);
   const [planFor, setPlanFor] = useState<Balneario | null>(null);
   const [limitsFor, setLimitsFor] = useState<Balneario | null>(null);
@@ -216,7 +219,7 @@ export default function AdminPage() {
                     {list.map((b) => (
                       <BalnearioCard key={b.id} b={b} hoy={d.hoy} mine={b.id === ws.id}
                         onPlan={() => setPlanFor(b)} onPay={() => setPayFor(b)} onLimits={() => setLimitsFor(b)}
-                        onPause={() => setPausing(b)} onResume={() => setResuming(b)} onDelete={() => setDeleting(b)} />
+                        onPause={() => setPausing(b)} onResume={() => setResuming(b)} onDelete={() => setDeleting(b)} onUser={() => setUserFor(b)} />
                     ))}
                   </div>
                 );
@@ -251,6 +254,7 @@ export default function AdminPage() {
 
       {limitsFor && <LimitsModal b={limitsFor} busy={busy} onClose={() => setLimitsFor(null)}
         onSave={async (t, u) => { if (await run(() => sb.rpc("admin_set_space_limits", { p_workspace_id: limitsFor.id, p_tents: t, p_umbrellas: u }), `Cantidad de ${limitsFor.nombre} guardada.`)) setLimitsFor(null); }} />}
+      {userFor && <AdminCreateUserModal b={userFor} onClose={() => setUserFor(null)} onDone={(u) => { setUserFor(null); setMsg({ tone: "ok", text: `Usuario «${u}» creado en ${userFor.nombre}. Ya puede ingresar con su usuario y contraseña.` }); q.reload(); }} />}
       {deleting && <DeleteModal b={deleting} busy={busy} onClose={() => setDeleting(null)}
         onConfirm={async (name) => {
           const ok = await run(() => sb.rpc("admin_delete_workspace", { p_workspace_id: deleting.id, p_confirm_name: name }), `${deleting.nombre} se eliminó. Quedó guardada una copia por si hay que recuperarlo.`);
@@ -503,6 +507,55 @@ function LimitsModal({ b, busy, onClose, onSave }: { b: Balneario; busy: boolean
 }
 
 /** Ficha de un balneario: todo a la vista en filas con su nombre, y las acciones abajo. */
+/** Crear un usuario (usuario y contraseña) dentro de la cuenta de un balneario. */
+function AdminCreateUserModal({ b, onClose, onDone }: { b: Balneario; onClose: () => void; onDone: (u: string) => void }) {
+  const [usuario, setUsuario] = useState("");
+  const [pw, setPw] = useState("");
+  const [pw2, setPw2] = useState("");
+  const [rol, setRol] = useState("administrador");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    const u = normalizeUsername(usuario);
+    if (!USERNAME_RE.test(u)) return setError("El usuario debe tener entre 3 y 30 caracteres: letras, números, punto, guion o guion bajo (sin espacios).");
+    if (pw.length < 8) return setError("La contraseña debe tener al menos 8 caracteres.");
+    if (pw !== pw2) return setError("Las contraseñas no coinciden.");
+    setBusy(true);
+    setError(null);
+    try {
+      const r = await fetch("/api/admin/usuarios", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ workspace_id: b.id, usuario: u, password: pw, password2: pw2, rol }) });
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok) { setError(body.error ?? "No se pudo crear el usuario."); return; }
+      onDone(u);
+    } catch {
+      setError("Sin conexión. Probá de nuevo.");
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <Modal open onClose={onClose} title={`Crear usuario en ${b.nombre}`} busy={busy}>
+      <form onSubmit={submit} className="flex flex-col gap-3">
+        <TextField label="Usuario" autoCapitalize="none" autoCorrect="off" spellCheck={false} value={usuario} onChange={(e) => setUsuario(e.target.value)} hint="Con esto va a ingresar. Ej: maria" required />
+        <PasswordPair pw={pw} setPw={setPw} pw2={pw2} setPw2={setPw2} />
+        <Field label="Rol">
+          <Select value={rol} onChange={(e) => setRol(e.target.value)}>
+            <option value="administrador">Administrador (todo menos gestionar administradores)</option>
+            <option value="operador">Operador (reservas, cobros, caja y clientes)</option>
+          </Select>
+        </Field>
+        <p className="text-xs text-muted">El usuario queda adentro de la cuenta de {b.nombre}: ve y trabaja con los datos de ese balneario. El propietario lo ve en Configuración → Usuarios y puede quitarlo.</p>
+        {error && <Alert tone="danger">{error}</Alert>}
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="secondary" onClick={onClose} disabled={busy}>Cancelar</Button>
+          <Button type="submit" loading={busy} disabled={!!pw2 && pw !== pw2}>Crear usuario</Button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
 /** Eliminar un balneario con todos sus datos: hay que escribir su nombre para confirmar. */
 function DeleteModal({ b, busy, onClose, onConfirm }: { b: Balneario; busy: boolean; onClose: () => void; onConfirm: (name: string) => void }) {
   const [name, setName] = useState("");
@@ -521,8 +574,8 @@ function DeleteModal({ b, busy, onClose, onConfirm }: { b: Balneario; busy: bool
   );
 }
 
-function BalnearioCard({ b, hoy, mine, onPlan, onPay, onLimits, onPause, onResume, onDelete }: {
-  b: Balneario; hoy: string; mine: boolean; onPlan: () => void; onPay: () => void; onLimits: () => void; onPause: () => void; onResume: () => void; onDelete: () => void;
+function BalnearioCard({ b, hoy, mine, onPlan, onPay, onLimits, onPause, onResume, onDelete, onUser }: {
+  b: Balneario; hoy: string; mine: boolean; onPlan: () => void; onPay: () => void; onLimits: () => void; onPause: () => void; onResume: () => void; onDelete: () => void; onUser: () => void;
 }) {
   const p = b.plan;
   const ago = daysAgo(b.ultimo_uso);
@@ -580,6 +633,7 @@ function BalnearioCard({ b, hoy, mine, onPlan, onPay, onLimits, onPause, onResum
         {!mine && (b.pausado
           ? <Button variant="primary" onClick={onResume}>Reactivar</Button>
           : <Button variant="ghost" className="text-danger" onClick={onPause}>Pausar</Button>)}
+        <Button variant="ghost" onClick={onUser}>Crear usuario</Button>
         {!mine && <Button variant="ghost" className="text-danger" onClick={onDelete}>Eliminar</Button>}
       </div>
     </div>

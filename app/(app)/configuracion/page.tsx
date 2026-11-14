@@ -1,4 +1,5 @@
 "use client";
+import { HotkeysCard } from "@/components/hotkeys";
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { getSupabase } from "@/lib/supabase/client";
 import { unwrap, useLoader } from "@/lib/data";
@@ -44,6 +45,9 @@ export default function ConfiguracionPage() {
           </ConfigSection>
           <ConfigSection id="reglas" title="Caja, descuentos y reservas" sub="Límite de efectivo, tope de descuento y personas por carpa" icon={CONFIG_ICONS.reglas}>
             <div data-tour="config-reglas"><RulesCard /></div>
+          </ConfigSection>
+          <ConfigSection id="atajos" title="Atajos de teclado" sub="Teclas para ir directo a cada pantalla (F2 nueva reserva, F4 mapa…)" icon={CONFIG_ICONS.atajos}>
+            <HotkeysCard />
           </ConfigSection>
           {!isGuest && (
             <ConfigSection id="cuentas" title="Cuentas vinculadas" sub="Entrar con Google" icon={CONFIG_ICONS.cuentas}>

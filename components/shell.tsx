@@ -1,5 +1,6 @@
 "use client";
-import { HOTKEYS } from "@/lib/hotkeys";
+import { keyName } from "@/lib/hotkeys";
+import { useHotkeys, useLoadHotkeys } from "@/components/hotkeys";
 import { SupportModal } from "@/components/support";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -42,6 +43,7 @@ export const CONFIG_ICONS = {
   balneario: "M3 21h18M5 21V8l7-5 7 5v13M9 21v-6h6v6",
   mensajes: "M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z",
   reglas: "M3 7h18v12H3zM3 11h18M7 15h3",
+  atajos: "M3 6h18v12H3zM7 10h.01M11 10h.01M15 10h.01M7 14h10",
   cuentas: "M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1",
   usuarios: "M16 19v-1a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v1M9.5 10a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM21 19v-1a4 4 0 0 0-3-3.9M16 3.1a3.5 3.5 0 0 1 0 6.8",
   plan: "M12 3v18M16.5 7.5c0-1.7-2-3-4.5-3s-4.5 1.3-4.5 3 2 2.5 4.5 3 4.5 1.3 4.5 3-2 3-4.5 3-4.5-1.3-4.5-3",
@@ -52,6 +54,7 @@ export const CONFIG_SECTIONS: { id: keyof typeof CONFIG_ICONS; label: string; ow
   { id: "balneario", label: "Datos del balneario" },
   { id: "mensajes", label: "Mensajes a clientes" },
   { id: "reglas", label: "Caja, descuentos y reservas" },
+  { id: "atajos", label: "Atajos de teclado" },
   { id: "cuentas", label: "Cuentas vinculadas", owners: true },
   { id: "usuarios", label: "Usuarios", owners: true },
   { id: "plan", label: "Mi plan", owners: true },
@@ -105,7 +108,7 @@ function longDate(iso: string, timeZone: string) {
 export function Shell({ children }: { children: ReactNode }) {
   const [supportOpen, setSupportOpen] = useState(false);
   const [configOpen, setConfigOpen] = useState(false);
-  const { ws, email, theme, setTheme, role, profile, isGuest, guideDone, setGuideDone, isPlatformAdmin, adminAlerts } = useWorkspace();
+  const { ws, userId, email, theme, setTheme, role, profile, isGuest, guideDone, setGuideDone, isPlatformAdmin, adminAlerts } = useWorkspace();
   const status = useStatus();
   const pathname = usePathname();
   const router = useRouter();
@@ -114,17 +117,19 @@ export function Shell({ children }: { children: ReactNode }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
   useEffect(() => setDrawerOpen(false), [pathname]);
   // Atajos de teclado (F2 nueva reserva, F4 mapa…): en cualquier pantalla, salvo con una ventana abierta.
+  const hotkeys = useHotkeys();
+  useLoadHotkeys(userId);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.ctrlKey || e.altKey || e.metaKey || e.shiftKey) return;
-      const hk = HOTKEYS.find((h) => h.key === e.key);
+      const name = keyName(e);
+      const hk = name ? hotkeys.find((h) => h.key === name) : undefined;
       if (!hk || document.querySelector('[role="dialog"][aria-modal="true"]')) return;
       e.preventDefault();
       router.push(hk.href);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [router]);
+  }, [router, hotkeys]);
   // El tutorial abre el menú para señalar dónde está cada sección.
   useEffect(() => {
     const on = (e: Event) => setDrawerOpen(!!(e as CustomEvent<boolean>).detail);
@@ -217,7 +222,7 @@ export function Shell({ children }: { children: ReactNode }) {
           </div>
         )}
         <nav className="flex-1 overflow-y-auto px-2 pb-2" aria-label="Secciones">
-          {NAV.map((item, i) => {
+          {NAV.map((item) => {
             const active = isActive(item.href);
             if (item.href === "/configuracion") {
               return (
@@ -226,7 +231,7 @@ export function Shell({ children }: { children: ReactNode }) {
                     className={cx("mb-0.5 flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-medium",
                       active ? "bg-accent text-accent-fg" : "text-fg hover:bg-surface-2")}>
                     <Icon d={item.icon} className="h-[18px] w-[18px]" />
-                    <span className="flex-1 truncate">{i + 1}. {item.label}</span>
+                    <span className="flex-1 truncate">{item.label}</span>
                     <Icon d="M6 9l6 6 6-6" className={cx("h-4 w-4 transition-transform duration-200", configOpen && "rotate-180")} />
                   </button>
                   <div className={cx("grid transition-[grid-template-rows] duration-200 ease-out", configOpen ? "grid-rows-[1fr]" : "grid-rows-[0fr]")}>
@@ -257,7 +262,7 @@ export function Shell({ children }: { children: ReactNode }) {
                 aria-current={active ? "page" : undefined}
               >
                 <Icon d={item.icon} className="h-[18px] w-[18px]" />
-                <span className="flex-1 truncate">{i + 1}. {item.label}</span>
+                <span className="flex-1 truncate">{item.label}</span>
                 {item.href === "/" && alerts > 0 && (
                   <span className="rounded-full bg-warn px-1.5 text-xs font-bold text-bg">{alerts}</span>
                 )}

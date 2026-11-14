@@ -7,7 +7,7 @@ import { useWorkspace } from "@/components/workspace";
 import { useStatus, type ResItem } from "@/components/status";
 import { WeekAhead } from "@/components/week-ahead";
 import { Icon, NAV } from "@/components/shell";
-import { HOTKEYS } from "@/lib/hotkeys";
+import { useHotkeys } from "@/components/hotkeys";
 import { Alert, Button, Spinner, cx } from "@/components/ui";
 import { CloseCashModal, OpenCashModal, type CashSummary } from "@/components/cash";
 import { WeatherStrip } from "@/components/weather";
@@ -27,6 +27,7 @@ const icon = (href: string) => NAV.find((n) => n.href === href)!.icon;
 
 export default function DashboardPage() {
   const { ws, isGuest, role, guideDone } = useWorkspace();
+  const hotkeys = useHotkeys();
   const st = useStatus();
   const data = st.summary;
   // En la demo, el pedido de abrir la caja espera a que termine el tutorial.
@@ -151,7 +152,7 @@ export default function DashboardPage() {
       {/* Atajos de teclado (reemplazan los botones de accesos rápidos): solo en compu */}
       <p className="hidden flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted md:flex" data-tour="atajos">
         <span className="font-semibold">Atajos:</span>
-        {HOTKEYS.map((h) => (
+        {hotkeys.filter((h) => h.key).map((h) => (
           <span key={h.key} className="inline-flex items-center gap-1">
             <kbd className="rounded border border-line bg-surface-2 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-fg">{h.key}</kbd>{h.label}
           </span>

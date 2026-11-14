@@ -20,7 +20,7 @@ async function api(method: "POST" | "PATCH", body: unknown) {
 }
 
 /** Campos de contraseña con "Repetí la contraseña". */
-function PasswordPair({ pw, setPw, pw2, setPw2 }: { pw: string; setPw: (v: string) => void; pw2: string; setPw2: (v: string) => void }) {
+export function PasswordPair({ pw, setPw, pw2, setPw2 }: { pw: string; setPw: (v: string) => void; pw2: string; setPw2: (v: string) => void }) {
   return (
     <div className="grid gap-3 sm:grid-cols-2">
       <TextField label="Contraseña" type="password" autoComplete="new-password" value={pw} onChange={(e) => setPw(e.target.value)} hint="Mínimo 8 caracteres." />
