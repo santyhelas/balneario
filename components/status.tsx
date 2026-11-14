@@ -44,6 +44,8 @@ type StatusCtx = {
   updatedAt: Date | null;
   online: boolean;
   reload: () => Promise<void>;
+  /** false = fuera de temporada: no se pide abrir la caja ni se avisa que está sin abrir. */
+  cashPrompts: boolean;
 };
 
 const Ctx = createContext<StatusCtx | null>(null);
@@ -104,7 +106,10 @@ export function StatusProvider({ children }: { children: ReactNode }) {
     // Límite de efectivo en caja (actualización 0033; si falta, no se avisa).
     const lim = await sb.from("workspaces").select("cash_limit").eq("id", ws.id).single();
     const cashLimit = lim.error ? null : ((lim.data as { cash_limit: number | null }).cash_limit ?? null);
-    return { summary, debts, endingSoon, futureCount: fut.count ?? 0, cashLimit };
+    // Avisos de caja apagados fuera de temporada (actualización 0051; si falta, encendidos).
+    const cp = await sb.from("workspaces").select("cash_prompts").eq("id", ws.id).single();
+    const cashPrompts = cp.error ? true : (cp.data as { cash_prompts: boolean }).cash_prompts !== false;
+    return { summary, debts, endingSoon, futureCount: fut.count ?? 0, cashLimit, cashPrompts };
   }, [ws.id], 60_000);
 
   // Copia de seguridad automática: una por día como máximo (la base controla que no se repita).
@@ -129,7 +134,7 @@ export function StatusProvider({ children }: { children: ReactNode }) {
     const list: Notice[] = [];
     if (s.caja_anterior_sin_cerrar) {
       list.push({ id: "caja-ant", tone: "danger", title: "Caja anterior sin cerrar", detail: `La caja del ${formatDate(s.caja_anterior_sin_cerrar.fecha)} quedó abierta.`, href: "/caja" });
-    } else if (s.caja.estado === "sin_abrir") {
+    } else if (s.caja.estado === "sin_abrir" && q.data?.cashPrompts !== false) {
       list.push({ id: "caja", tone: "warn", title: "Caja sin abrir", detail: "Abrila para registrar cobros y gastos.", href: "/caja" });
     }
     const limit = q.data?.cashLimit;
@@ -201,6 +206,7 @@ export function StatusProvider({ children }: { children: ReactNode }) {
     updatedAt: q.updatedAt,
     online,
     reload: q.reload,
+    cashPrompts: q.data?.cashPrompts ?? true,
   };
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

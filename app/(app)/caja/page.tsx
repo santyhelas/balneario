@@ -9,8 +9,8 @@ import { formatDate, formatDateTime, formatMoney, formatTime, parseMoney, todayI
 import { useWorkspace } from "@/components/workspace";
 import { useStatus } from "@/components/status";
 import { PageHeader, SyncNotice } from "@/components/shell";
-import { Alert, Button, Card, ConfirmDialog, EmptyState, Field, Input, Modal, Select, Spinner, Textarea, TextField } from "@/components/ui";
-import { CloseCashModal, ExpenseModal, IncomeModal, OpenCashModal, type CashSummary } from "@/components/cash";
+import { Alert, Button, Card, ConfirmDialog, EmptyState, Field, Input, Modal, Select, Spinner, Textarea, TextField, cx } from "@/components/ui";
+import { CashSeasonSwitch, CloseCashModal, ExpenseModal, IncomeModal, OpenCashModal, type CashSummary } from "@/components/cash";
 import { METHOD_LABEL, PAYMENT_METHODS } from "@/lib/methods";
 
 type Session = { id: string; business_date: string; opening_cash: number; closed_at: string | null; expected_cash: number | null; counted_cash: number | null; difference: number | null; version: number };
@@ -115,6 +115,16 @@ export default function CajaPage() {
         }
       />
       <SyncNotice error={error} stale={stale} updatedAt={updatedAt} onRetry={reload} />
+      {isAdmin && !isOpen && (
+        <div className={cx("mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border p-3 text-sm", status.cashPrompts ? "border-line" : "border-warn/40 bg-warn-soft")}>
+          <span>
+            {status.cashPrompts
+              ? <>¿Fuera de temporada? Apagá la caja y deja de pedirse al entrar y de avisar «Caja sin abrir».</>
+              : <><strong>La caja está apagada (fuera de temporada).</strong> No se pide abrirla ni se avisa. Si hace falta cobrar en efectivo, podés abrirla igual con «Abrir caja».</>}
+          </span>
+          <CashSeasonSwitch workspaceId={ws.id} on={status.cashPrompts} onChanged={() => status.reload()} />
+        </div>
+      )}
 
       {isPrevious && (
         <Alert tone="danger" className="mb-4">

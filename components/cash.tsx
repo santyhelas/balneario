@@ -27,7 +27,7 @@ export type CashSummary = {
 export type ExpenseCategory = { id: string; name: string; active: boolean };
 
 /** Apertura de caja: pide el efectivo inicial (no es un ingreso). */
-export function OpenCashModal({ open, workspaceId, onClose, onDone }: { open: boolean; workspaceId: string; onClose: () => void; onDone: () => void }) {
+export function OpenCashModal({ open, workspaceId, onClose, onDone, onSeasonOff }: { open: boolean; workspaceId: string; onClose: () => void; onDone: () => void; onSeasonOff?: () => void }) {
   const [amount, setAmount] = useState("");
   const [notes, setNotes] = useState("");
   const [busy, setBusy] = useState(false);
@@ -63,7 +63,12 @@ export function OpenCashModal({ open, workspaceId, onClose, onDone }: { open: bo
           <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} maxLength={1000} />
         </Field>
         {error && <Alert tone="danger">{error}</Alert>}
-        <div className="flex justify-end gap-2">
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          {onSeasonOff && (
+            <button type="button" onClick={onSeasonOff} disabled={busy} className="mr-auto text-xs text-muted hover:text-fg hover:underline">
+              Fuera de temporada: no pedir más la caja
+            </button>
+          )}
           <Button type="button" variant="secondary" onClick={onClose} disabled={busy}>Ahora no</Button>
           <Button type="submit" loading={busy}>Abrir caja</Button>
         </div>
@@ -252,3 +257,31 @@ export function IncomeModal({ open, onClose, onDone }: { open: boolean; onClose:
   );
 }
 
+
+/** Encender o apagar los avisos de la caja diaria (fuera de temporada). Queda para todo el balneario. */
+export async function setCashPrompts(workspaceId: string, on: boolean): Promise<string | null> {
+  const sb = getSupabase();
+  const cur = await sb.from("workspaces").select("version").eq("id", workspaceId).single();
+  if (cur.error) return friendlyError(cur.error);
+  const { error } = await sb.from("workspaces").update({ cash_prompts: on, version: (cur.data as { version: number }).version + 1 }).eq("id", workspaceId).select("id").single();
+  if (error) return error.code === "PGRST204" || error.code === "42703" ? "Para apagar la caja fuera de temporada hay que aplicar la actualización 0051 de la base de datos." : friendlyError(error);
+  return null;
+}
+
+/** Interruptor de la caja diaria para la pantalla de Caja. */
+export function CashSeasonSwitch({ workspaceId, on, onChanged }: { workspaceId: string; on: boolean; onChanged: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  return (
+    <div className="flex flex-col items-end gap-1">
+      <Button variant="secondary" loading={busy} onClick={async () => {
+        setBusy(true); setError(null);
+        const err = await setCashPrompts(workspaceId, !on);
+        setBusy(false);
+        if (err) return setError(err);
+        onChanged();
+      }}>{on ? "Apagar la caja (fuera de temporada)" : "Encender la caja (temporada)"}</Button>
+      {error && <span className="text-xs text-danger">{error}</span>}
+    </div>
+  );
+}

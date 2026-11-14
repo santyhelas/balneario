@@ -12,7 +12,7 @@ import { useStatus, type Notice } from "@/components/status";
 import { useUndo } from "@/components/undo";
 import { ConfirmDialog, cx } from "@/components/ui";
 import { DayNotes, usePendingNotes } from "@/components/day-notes";
-import { CloseCashModal, OpenCashModal, type CashSummary } from "@/components/cash";
+import { CloseCashModal, OpenCashModal, setCashPrompts, type CashSummary } from "@/components/cash";
 import { DemoTour, TOUR_MENU_EVENT, Tour, startTour, useTourActive } from "@/components/demo-tour";
 import { PrintHeader } from "@/components/print-header";
 
@@ -520,13 +520,13 @@ function CashGuard({ closeRequest, onClosedForLogout, onCancelClose }: { closeRe
       sb.rpc("cash_session_summary", { p_session_id: s.caja_anterior_sin_cerrar.session_id }).then(({ data, error }) => {
         if (!error && data) setClosing({ summary: data as CashSummary, forLogout: false });
       });
-    } else if (s.caja.estado === "sin_abrir") {
+    } else if (s.caja.estado === "sin_abrir" && st.cashPrompts) {
       const k = `abrir:${s.fecha}`;
       if (asked(k)) return;
       mark(k);
       setOpenNew(true);
     }
-  }, [s?.fecha, s?.caja.estado, s?.caja_anterior_sin_cerrar?.session_id, isGuest, touring]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [s?.fecha, s?.caja.estado, s?.caja_anterior_sin_cerrar?.session_id, isGuest, touring, st.cashPrompts]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Cerrar la pestaña con la caja abierta: el navegador pregunta si salir.
   useEffect(() => {
@@ -547,7 +547,8 @@ function CashGuard({ closeRequest, onClosedForLogout, onCancelClose }: { closeRe
 
   return (
     <>
-      <OpenCashModal open={openNew} workspaceId={ws.id} onClose={() => setOpenNew(false)} onDone={() => { setOpenNew(false); st.reload(); }} />
+      <OpenCashModal open={openNew} workspaceId={ws.id} onClose={() => setOpenNew(false)} onDone={() => { setOpenNew(false); st.reload(); }}
+        onSeasonOff={role === "operador" ? undefined : async () => { const err = await setCashPrompts(ws.id, false); setOpenNew(false); if (!err) st.reload(); }} />
       <CloseCashModal
         open={closing !== null}
         summary={closing?.summary ?? null}
@@ -620,6 +621,7 @@ function CashChip() {
   const [text, tone] = prev ? ["Caja anterior sin cerrar", "danger"] as const
     : c === "abierta" ? ["Caja abierta", "ok"] as const
     : c === "cerrada" ? ["Caja cerrada (hoy)", "muted"] as const
+    : !s.cashPrompts ? ["Caja apagada (fuera de temporada)", "muted"] as const
     : ["Caja cerrada (abrir turno)", "warn"] as const;
   const cls = { ok: "border-ok/40 bg-ok-soft text-ok", warn: "border-warn/40 bg-warn-soft text-warn", danger: "border-danger/40 bg-danger-soft text-danger", muted: "border-line bg-surface-2 text-muted" }[tone];
   if (!s.summary) return null;
