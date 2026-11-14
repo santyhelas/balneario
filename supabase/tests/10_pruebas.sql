@@ -1356,6 +1356,21 @@ select t.throws($$select public.admin_metrics()$$, '', 'Dueño: nadie más ve la
 select t.throws(format($$select public.admin_support_view(%L)$$, t.get('ws')), '', 'Soporte: nadie más puede ver otro balneario');
 select set_config('request.jwt.claims', '{"sub":"11111111-1111-1111-1111-111111111111","email":"duenio@test.com"}', false);
 
+-- 50. Gastos del dueño: se cargan, suman por año y se anulan sin borrarse
+select set_config('request.jwt.claims', '{"sub":"11111111-1111-1111-1111-111111111111","email":"duenio@test.com"}', false);
+select t.set('gasto1', public.admin_add_expense(make_date(extract(year from private.today_ar())::int, 3, 10), 'Vercel', 'servidores', 30000.50, null)::text);
+select public.admin_add_expense(make_date(extract(year from private.today_ar())::int, 3, 20), 'Publicidad Instagram', 'publicidad', 20000, 'reel');
+select t.ok((select (x -> 'por_mes' -> 2 ->> 'gastos')::numeric = 50000.50 and jsonb_array_length(x -> 'gastos') = 2 and (x -> 'por_categoria' ->> 'publicidad')::numeric = 20000
+              from (select public.admin_expenses(extract(year from private.today_ar())::int) x) q), 'Gastos del dueño: suman por mes y por categoría');
+select public.admin_void_expense(t.uid('gasto1'), 'cargado dos veces');
+select t.ok((select (x -> 'por_mes' -> 2 ->> 'gastos')::numeric = 20000 and jsonb_array_length(x -> 'gastos') = 2
+              from (select public.admin_expenses(extract(year from private.today_ar())::int) x) q), 'Gastos del dueño: anular resta pero el gasto queda en la lista');
+select t.throws(format($$select public.admin_void_expense(%L)$$, t.get('gasto1')), 'ya estaba anulado', 'Gastos del dueño: no se anula dos veces');
+select t.throws($$select public.admin_add_expense(private.today_ar(), 'X', 'otros', 0)$$, 'mayor a cero', 'Gastos del dueño: importe mayor a cero');
+select set_config('request.jwt.claims', '{"sub":"22222222-2222-2222-2222-222222222222","email":"extranio@test.com"}', false);
+select t.throws($$select public.admin_expenses(2026)$$, '', 'Gastos del dueño: nadie más los ve');
+select set_config('request.jwt.claims', '{"sub":"11111111-1111-1111-1111-111111111111","email":"duenio@test.com"}', false);
+
 reset role;
 \o
 -- Resultado ----------------------------------------------------------

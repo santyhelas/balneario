@@ -13,6 +13,7 @@ const NAV = [
   { href: "/dueno", label: "Resumen", icon: "M4 13h4v7H4zM10 8h4v12h-4zM16 4h4v16h-4z" },
   { href: "/dueno/balnearios", label: "Balnearios", icon: KPI_ICON.casa },
   { href: "/dueno/altas", label: "Altas habilitadas", icon: "M12 5v14M5 12h14" },
+  { href: "/dueno/gastos", label: "Gastos", icon: "M3 17l6-6 4 4 8-8M14 7h7v7" },
   { href: "/dueno/precios", label: "Precios", icon: KPI_ICON.plata },
   { href: "/dueno/soporte", label: "Soporte", icon: KPI_ICON.ojo },
 ];
