@@ -28,6 +28,9 @@ export function LocationPicker({ lat, lon, onChange, disabled }: {
   const [showMap, setShowMap] = useState(false);
   const [mLat, setMLat] = useState(lat?.toString() ?? "");
   const [mLon, setMLon] = useState(lon?.toString() ?? "");
+  // «Usar mi ubicación actual» solo en el celular: en la compu Windows casi nunca logra ubicarse.
+  const [mobile, setMobile] = useState(false);
+  useEffect(() => { setMobile(/Android|iPhone|iPad|iPod/i.test(navigator.userAgent) && "geolocation" in navigator); }, []);
 
   // Nombre del lugar elegido ("Pinamar, Buenos Aires").
   useEffect(() => {
@@ -135,10 +138,14 @@ export function LocationPicker({ lat, lon, onChange, disabled }: {
       </div>
       {!disabled && (
         <>
-          <Button type="button" variant="secondary" onClick={useMyLocation} loading={busy === "gps"}>Usar mi ubicación actual</Button>
-          <p className="text-xs text-muted">Conviene hacerlo estando en el balneario: el celular o la compu te van a pedir permiso.</p>
+          {mobile && (
+            <>
+              <Button type="button" variant="secondary" onClick={useMyLocation} loading={busy === "gps"}>Usar mi ubicación actual</Button>
+              <p className="text-xs text-muted">Conviene hacerlo estando en el balneario: el celular te va a pedir permiso.</p>
+            </>
+          )}
           <div className="flex gap-2">
-            <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="O buscá: Punta Mogotes, Pinamar, Villa Gesell…" aria-label="Buscar lugar"
+            <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder={mobile ? "O buscá: Punta Mogotes, Pinamar, Villa Gesell…" : "Buscá: Punta Mogotes, Pinamar, Villa Gesell…"} aria-label="Buscar lugar"
               onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); search(); } }} />
             <Button type="button" variant="secondary" onClick={search} disabled={busy !== null} className="shrink-0">{busy === "buscar" ? <Spinner small /> : "Buscar"}</Button>
           </div>
