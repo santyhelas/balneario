@@ -34,7 +34,7 @@ type Overview = {
 const daysAgo = (ts: string | null) => (ts ? Math.floor((Date.now() - new Date(ts).getTime()) / 86_400_000) : null);
 const PLAN_LABEL: Record<PlanKind, string> = { mensual: "Mensual", anual: "Anual", temporada: "Temporada" };
 
-/** Lo que se carga de un plan: anual = un precio; temporada = entrada + cuota (2 cuotas iguales, 1/1 y 1/2). */
+/** Lo que se carga de un plan: anual = un precio; temporada = entrada + cuota (2 cuotas iguales que vencen el 1/2 y el 1/3; habilita todo el año). */
 type PlanValue = { plan: "anual" | "temporada"; price: string; entry: string; installment: string };
 const planDefaults = (prices: Overview["precios"], plan: PlanValue["plan"] = "temporada"): PlanValue => ({
   plan, price: String(prices.anual || ""), entry: String(prices.entrada || ""), installment: String(prices.cuota || ""),
@@ -55,6 +55,17 @@ const planSummary = (p: { plan: PlanKind; precio: number | null; entrada?: numbe
     : `${PLAN_LABEL[p.plan]}${p.precio != null ? ` ${formatMoney(p.precio)}` : ""}`;
 const daysBetween = (a: string, b: string) => Math.round((new Date(b + "T12:00:00Z").getTime() - new Date(a + "T12:00:00Z").getTime()) / 86_400_000);
 
+/** Temporada: vencimiento de cada cuota (cuota de enero → 1/2, cuota de febrero → 1/3) de la temporada en curso. */
+const seasonYear = (hoy: string) => { const [y, m] = hoy.split("-").map(Number); return m >= 4 ? y + 1 : y; };
+function cuotas(p: PlanInfo, hoy: string) {
+  const y = seasonYear(hoy), paid = p.cuotas_pagas ?? 0;
+  return [
+    { nombre: "Cuota 1 (enero)", vence: `${y}-02-01`, pagada: paid >= 2 },
+    { nombre: "Cuota 2 (febrero)", vence: `${y}-03-01`, pagada: paid >= 3 },
+  ].map((c) => ({ ...c, vencida: !c.pagada && hoy > c.vence }));
+}
+const sinPagos = (p: PlanInfo) => !p.ultimo_pago && p.estado !== "exenta" && !p.debito;
+
 function planBadge(p: PlanInfo | null, hoy: string) {
   if (!p) return <Badge tone="info">Sin plan</Badge>;
   if (p.estado === "exenta") return <Badge tone="ok">Sin vencimiento</Badge>;
@@ -62,6 +73,8 @@ function planBadge(p: PlanInfo | null, hoy: string) {
   if (p.ultimo_estado === "rechazado") return <Badge tone="danger">Débito rechazado</Badge>;
   if (p.estado === "cancelada") return <Badge tone="warn">No renueva</Badge>;
   if (p.debito) return <Badge tone="ok">Débito activo</Badge>;
+  if (sinPagos(p)) return <Badge tone="warn">Falta registrar el pago</Badge>;
+  if (p.plan === "temporada" && cuotas(p, hoy).some((c) => c.vencida)) return <Badge tone="danger">Cuota vencida</Badge>;
   if (p.pago_hasta && daysBetween(hoy, p.pago_hasta) <= 7) return <Badge tone="warn">Vence pronto</Badge>;
   if (p.estado === "pendiente") return <Badge tone="warn">Sin activar</Badge>;
   return <Badge tone="info">Pago manual</Badge>;
@@ -71,7 +84,8 @@ type FilterKey = "todos" | "atencion" | "al_dia" | "pausa" | "sin_plan";
 const needsAttention = (b: Balneario, hoy: string) => {
   const p = b.plan;
   if (!p || p.estado === "exenta") return false;
-  return p.vencido || p.ultimo_estado === "rechazado" || (!p.debito && !!p.pago_hasta && daysBetween(hoy, p.pago_hasta) <= 7);
+  return p.vencido || p.ultimo_estado === "rechazado" || sinPagos(p) || (p.plan === "temporada" && cuotas(p, hoy).some((c) => c.vencida))
+    || (!p.debito && !!p.pago_hasta && daysBetween(hoy, p.pago_hasta) <= 7);
 };
 const FILTERS: { key: FilterKey; label: string; test: (b: Balneario, hoy: string) => boolean }[] = [
   { key: "todos", label: "Todos", test: () => true },
@@ -307,7 +321,7 @@ function PlanFields({ v, setV }: { v: PlanValue; setV: (v: PlanValue) => void })
         <>
           <div className="grid grid-cols-2 gap-2">
             <TextField label="Entrada (al contratar)" inputMode="decimal" value={v.entry} onChange={(ev) => setV({ ...v, entry: ev.target.value })} />
-            <TextField label="Cada cuota (1/1 y 1/2)" inputMode="decimal" value={v.installment} onChange={(ev) => setV({ ...v, installment: ev.target.value })} />
+            <TextField label="Cada cuota (vencen el 1/2 y el 1/3)" inputMode="decimal" value={v.installment} onChange={(ev) => setV({ ...v, installment: ev.target.value })} />
           </div>
           <p className="-mt-1 text-xs text-muted">Total de la temporada: <strong className="tabular">{formatMoney(e + 2 * c)}</strong> (entrada + 2 cuotas).</p>
         </>
@@ -386,7 +400,7 @@ function PricesCard({ prices, busy, onSave }: { prices: Overview["precios"]; bus
       <p className="mb-3 text-sm text-muted">Son los precios que se proponen al habilitar un cliente nuevo. Cambiarlos no modifica lo que ya paga cada balneario.</p>
       <div className="flex flex-col gap-3">
         <div className="rounded-xl border border-line p-3">
-          <div className="mb-2 text-sm font-semibold">Temporada <span className="font-normal text-muted">· entrada al contratar + 2 cuotas (1/1 y 1/2)</span></div>
+          <div className="mb-2 text-sm font-semibold">Temporada <span className="font-normal text-muted">· entrada al contratar + 2 cuotas (vencen el 1/2 y el 1/3) · habilita todo el año</span></div>
           <div className="grid grid-cols-2 gap-2">
             <TextField label="Entrada" inputMode="decimal" value={entrada} onChange={(ev) => setEntrada(ev.target.value)} />
             <TextField label="Cada cuota" inputMode="decimal" value={cuota} onChange={(ev) => setCuota(ev.target.value)} />
@@ -438,7 +452,7 @@ function PlanModal({ b, prices, busy, onClose, onSave }: {
 function PaymentModal({ b, busy, onClose, onSave }: { b: Balneario; busy: boolean; onClose: () => void; onSave: (amount: number, until: string | null, note: string) => void }) {
   // Temporada: cada pago es la parte que sigue (entrada, cuota 1, cuota 2).
   const part = b.plan?.plan === "temporada" ? Math.min((b.plan.cuotas_pagas ?? 0) + 1, 3) : null;
-  const partLabel = part === 1 ? "la entrada (paga hasta el 31/12)" : part === 2 ? "la cuota 1 de enero (paga hasta el 31/1)" : part === 3 ? "la cuota 2 de febrero (paga hasta el 31/3)" : null;
+  const partLabel = part === 1 ? "la entrada (habilita todo el año)" : part === 2 ? "la cuota 1 de enero (vence a principio de febrero)" : part === 3 ? "la cuota 2 de febrero (vence a principio de marzo)" : null;
   const [amount, setAmount] = useState(String(part === 1 ? b.plan?.entrada ?? "" : part ? b.plan?.cuota ?? "" : b.plan?.precio ?? ""));
   const [until, setUntil] = useState("");
   const [note, setNote] = useState("Transferencia");
@@ -610,10 +624,19 @@ function BalnearioCard({ b, hoy, mine, onPlan, onPay, onLimits, onPause, onResum
       <dl className="mt-3 divide-y divide-line border-y border-line">
         <Row k="Plan">{p && p.estado !== "exenta" ? <>{planSummary(p)}{p.plan === "temporada" ? <span className="text-muted"> · {p.cuotas_pagas ?? 0}/3 pagas</span> : null}</> : p ? "Sin vencimiento" : "—"}</Row>
         {p && p.estado !== "exenta" && (
-          <Row k={p.debito ? "Próximo débito" : "Pagado hasta"}>
-            <span className="tabular">{formatDate(p.debito && p.proximo_debito ? p.proximo_debito : p.pago_hasta)}</span>
+          <Row k={p.debito ? "Próximo débito" : "Habilitado hasta"}>
+            {sinPagos(p)
+              ? <span className="text-warn">Sin pagos registrados</span>
+              : <span className="tabular">{formatDate(p.debito && p.proximo_debito ? p.proximo_debito : p.pago_hasta)}</span>}
           </Row>
         )}
+        {p && p.plan === "temporada" && p.estado !== "exenta" && !sinPagos(p) && cuotas(p, hoy).map((c) => (
+          <Row key={c.nombre} k={c.nombre}>
+            <span className={cx("tabular", c.vencida ? "text-danger font-semibold" : c.pagada ? "text-ok" : "")}>
+              {c.pagada ? "Pagada" : c.vencida ? `Vencida (${formatDate(c.vence)})` : `Vence ${formatDate(c.vence)}`}
+            </span>
+          </Row>
+        ))}
         <Row k="Carpas">
           <button type="button" onClick={onLimits} className="tabular hover:underline" title="Cambiar la cantidad contratada">
             {b.carpas}{b.max_carpas != null ? ` de ${b.max_carpas}` : ""}

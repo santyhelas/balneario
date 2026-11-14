@@ -1086,12 +1086,14 @@ update public.subscriptions set paid_until = private.today_ar(), installments_pa
 select t.ok((select price = 160000 and entry_amount = 60000 and installment_amount = 50000 from public.subscriptions where workspace_id = t.uid('wsC')), 'Temporada: total = entrada + 2 cuotas (60.000 + 2 × 50.000)');
 set role authenticated;
 select t.set('p1', public.admin_register_payment(t.uid('wsC'), 60000)::text);
-select t.ok(t.get('p1')::date = greatest(make_date(extract(year from private.season_end(private.today_ar()))::int, 1, 1) - 1, private.today_ar()), 'Temporada: la entrada paga hasta el 31/12', t.get('p1'));
+select t.ok(t.get('p1')::date = (private.today_ar() + interval '1 year')::date, 'Temporada: la entrada habilita todo el año (12 meses)', t.get('p1'));
 select t.set('p2', public.admin_register_payment(t.uid('wsC'), 50000)::text);
-select t.ok(t.get('p2')::date = greatest(make_date(extract(year from private.season_end(private.today_ar()))::int, 2, 1) - 1, private.today_ar()), 'Temporada: la cuota 1 paga hasta el 31/1', t.get('p2'));
+select t.ok(t.get('p2')::date = t.get('p1')::date, 'Temporada: pagar la cuota 1 no cambia el vencimiento', t.get('p2'));
 select t.set('p3', public.admin_register_payment(t.uid('wsC'), 50000)::text);
-select t.ok(t.get('p3')::date = private.season_end(private.today_ar()), 'Temporada: la cuota 2 paga hasta el 31/3', t.get('p3'));
+select t.ok(t.get('p3')::date = t.get('p1')::date, 'Temporada: pagar la cuota 2 no cambia el vencimiento', t.get('p3'));
 select set_config('request.jwt.claims', '{"sub":"99999999-9999-9999-9999-999999999999","email":"cliente@test.com"}', false);
+select t.ok((public.my_plan(t.uid('wsC')) -> 'partes' -> 1 ->> 'vence')::date = make_date(extract(year from private.season_end(private.today_ar()))::int, 2, 1)
+        and (public.my_plan(t.uid('wsC')) -> 'partes' -> 2 ->> 'vence')::date = make_date(extract(year from private.season_end(private.today_ar()))::int, 3, 1), 'Temporada: las cuotas vencen el 1/2 y el 1/3');
 select t.ok((public.my_plan(t.uid('wsC')) ->> 'cuotas_pagas')::int = 3 and jsonb_array_length(public.my_plan(t.uid('wsC')) -> 'partes') = 3, 'Temporada: el balneario ve sus 3 partes pagas');
 select set_config('request.jwt.claims', '{"sub":"22222222-2222-2222-2222-222222222222","email":"extranio@test.com"}', false);
 select t.throws(format($$select public.my_plan(%L)$$, t.get('wsC')), 'No tenés permiso', 'Planes: otro balneario no ve el plan');
