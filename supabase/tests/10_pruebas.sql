@@ -1250,6 +1250,11 @@ select t.ok(not exists (select 1 from public.workspaces where id = t.uid('wsC'))
 select t.ok(exists (select 1 from private.deleted_workspaces where id = t.uid('wsC') and snapshot ? 'reservations'), 'Borrar balneario: queda una copia completa por si hay que recuperarlo');
 select t.ok(exists (select 1 from public.workspaces where id = t.uid('ws')), 'Borrar balneario: los demás balnearios siguen intactos');
 set role authenticated;
+select public.admin_allow_signup('cliente@test.com', 'La Ola de nuevo', 'anual', 500000, 79, 10);
+reset role;
+select t.ok(private.can_create_workspace('99999999-9999-9999-9999-999999999999'),
+  'Borrar balneario: volver a habilitar el correo le permite crear un balneario nuevo');
+set role authenticated;
 
 -- 45. Personas y reservas de grupo (varias carpas juntas, un solo cobro)
 select public.reopen_cash_session(t.uid('session'), (select version from public.cash_sessions where id = t.uid('session')), 'Prueba de grupos');
