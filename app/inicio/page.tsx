@@ -71,7 +71,7 @@ const PHOTOS: { src: string; caption: string }[] = [];
 
 const FAQ = [
   { q: "¿Vale la pena pasar del cuaderno o el Excel al sistema?", a: "Sí. Dejás de tener reservas en un lado, pagos en otro y la caja en un papel: todo queda en un solo lugar y al día. Sabés al instante qué carpa está libre, quién te debe y cuánta plata tendría que haber en la caja, sin sumar a mano ni reservar dos veces la misma carpa." },
-  { q: "¿Cuánto se tarda en empezar a usarlo?", a: "En 72 horas tenés tu balneario funcionando, con tu mapa armado y tus tarifas cargadas. Igual, cuanto antes empieces mejor: así llegás a la temporada con tus clientes y reservas ya cargados." },
+  { q: "¿Cuánto se tarda en implementar el sistema?", a: "En 72 horas tenés tu balneario funcionando, con tu mapa armado y tus tarifas cargadas. Igual, cuanto antes empieces mejor: así llegás a la temporada con tus clientes y reservas ya cargados." },
   { q: "¿Lo pueden usar mis empleados?", a: "Sí. Cada uno con su usuario, desde su celular o la compu del balneario, y todos ven lo mismo al instante. Queda registrado quién hizo cada reserva y cada cobro." },
   { q: "¿Si tengo un problema, qué pasa?", a: "Tenés soporte 24/7 por WhatsApp. Nos escribís y te ayudamos, sea una duda o algo que no funciona." },
   { q: "¿Es difícil de aprender?", a: "No. Reservar, cobrar y ver el mapa se hace en pocos pasos, pensado para el ritmo del verano. Si te trabás en algo, nos escribís y te ayudamos." },
