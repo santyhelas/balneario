@@ -101,14 +101,14 @@ export default function DashboardPage() {
       {st.error && <Alert tone="danger">No se pudo actualizar ({st.error}). Los datos pueden estar desactualizados. <button className="underline" onClick={st.reload}>Reintentar</button></Alert>}
 
       {/* Encabezado: nombre del balneario, resumen del día y el clima */}
-      <section className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#0b6a87] via-[#0a5670] to-[#0d2533] p-5 text-white shadow-sm md:p-6">
+      <section className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#0b6a87] via-[#0a5670] to-[#0d2533] px-4 py-3.5 text-white shadow-sm md:px-5 md:py-4">
         <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-cyan-200">Panel de control operativo</div>
-        <h1 className="mt-1 text-2xl font-extrabold tracking-tight md:text-3xl">{ws.name}</h1>
+        <h1 className="mt-0.5 text-xl font-extrabold tracking-tight md:text-2xl">{ws.name}</h1>
         <p className="mt-1 text-sm text-cyan-50/90">
           {formatDate(data.fecha)} · {carpa?.total_activos ?? 0} carpas y {sombrilla?.total_activos ?? 0} sombrillas · {pct(ocupados)}% de ocupación hoy
           {st.futureCount > 0 ? ` · ${st.futureCount} ${st.futureCount === 1 ? "reserva futura" : "reservas futuras"}` : ""}
         </p>
-        <WeatherStrip onDark className="mt-4" />
+        <WeatherStrip onDark className="mt-3" />
       </section>
 
       {!isGuest && <Announcements />}
