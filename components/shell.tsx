@@ -61,7 +61,7 @@ export const CONFIG_SECTIONS: { id: keyof typeof CONFIG_ICONS; label: string; ow
 const sec = (h: string) => SECTIONS.find((n) => n.href === h)!;
 
 /**
- * Menú simplificado: 8 secciones. Las pantallas que se usan juntas quedan como pestañas de una misma sección
+ * Menú simplificado: 9 secciones. Las pantallas que se usan juntas quedan como pestañas de una misma sección
  * (arriba de cada pantalla), y sus direcciones de siempre siguen funcionando.
  */
 export const NAV_GROUPS: { href: string; label: string; tabs: { href: string; label: string }[] }[] = [
@@ -69,7 +69,8 @@ export const NAV_GROUPS: { href: string; label: string; tabs: { href: string; la
   { href: "/mapa", label: "Mapa", tabs: [{ href: "/mapa", label: "Mapa" }, { href: "/disponibilidad", label: "Disponibilidad" }] },
   { href: "/reservas", label: "Reservas", tabs: [] },
   { href: "/clientes", label: "Clientes", tabs: [{ href: "/clientes", label: "Clientes" }, { href: "/renovacion", label: "Renovación de temporada" }] },
-  { href: "/caja", label: "Caja", tabs: [{ href: "/caja", label: "Caja del día" }, { href: "/cobros", label: "Cobros y señas" }, { href: "/gastos", label: "Gastos" }] },
+  { href: "/cobros", label: "Cobros y señas", tabs: [] },
+  { href: "/caja", label: "Caja", tabs: [{ href: "/caja", label: "Caja del día" }, { href: "/gastos", label: "Gastos" }] },
   { href: "/tarifas", label: "Precios", tabs: [{ href: "/tarifas", label: "Tarifario" }, { href: "/convenios", label: "Descuentos y convenios" }] },
   { href: "/reportes", label: "Reportes", tabs: [] },
   { href: "/configuracion", label: "Configuración", tabs: [{ href: "/configuracion", label: "Configuración" }, { href: "/copias", label: "Copias de seguridad" }, { href: "/historial", label: "Historial" }] },
