@@ -24,6 +24,8 @@ export type Workspace = {
   /** En pausa (lo decide el dueño del sistema): se ve todo pero no se cargan cambios. */
   paused_at?: string | null;
   paused_reason?: string | null;
+  /** Funciones opcionales que el balneario prendió (sin la actualización 0060: no viene y se ve todo). */
+  features?: { dolares?: boolean; redondeo?: boolean; paquetes?: boolean } | null;
   version: number;
 };
 
@@ -156,7 +158,10 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
           data: MemberRow | null;
           error: { code?: string; message: string } | null;
         };
-      let mem = await memberQuery("id, name, timezone, latitude, longitude, map_width, map_height, sea_side, logo_data, subtitle, sea_bearing, paused_at, paused_reason, version");
+      let mem = await memberQuery("id, name, timezone, latitude, longitude, map_width, map_height, sea_side, logo_data, subtitle, sea_bearing, paused_at, paused_reason, features, version");
+      if (mem.error?.code === "42703") {
+        mem = await memberQuery("id, name, timezone, latitude, longitude, map_width, map_height, sea_side, logo_data, subtitle, sea_bearing, paused_at, paused_reason, version");
+      }
       if (mem.error?.code === "42703") {
         mem = await memberQuery("id, name, timezone, latitude, longitude, map_width, map_height, sea_side, logo_data, subtitle, sea_bearing, version");
       }

@@ -6,6 +6,7 @@ import { newKey, unwrap } from "@/lib/data";
 import { friendlyError } from "@/lib/errors";
 import { addDays, formatDate, formatMoney, inclusiveDays, parseMoney, todayISO } from "@/lib/format";
 import { COLLECT_METHODS, METHOD_LABEL } from "@/lib/methods";
+import { featuresOf } from "@/lib/features";
 import { DollarFields, type DollarValue } from "@/components/dollar";
 import { buildSegments, candidatesFor, daysOf, indexGrid, isFreeFor, mapDistance, nearestGroup, splitDays, type GridRow, type Pos, type Segment } from "@/lib/stay";
 import { useWorkspace } from "@/components/workspace";
@@ -270,6 +271,12 @@ export default function NuevaReservaPage() {
   const [manualBase, setManualBase] = useState("");
   const [notes, setNotes] = useState("");
   const [roundTotal, setRoundTotal] = useState(false);
+  const [moreOpts, setMoreOpts] = useState(false);
+  const [askPeople, setAskPeople] = useState(false);
+  const feats = featuresOf(ws);
+  // «Dólares» solo si el balneario prendió esa función.
+  const methods = COLLECT_METHODS.filter((m) => m.value !== "dolares" || feats.dolares);
+  const showMore = moreOpts || courtesy || manualValue.trim() !== "" || useManualBase;
 
   useEffect(() => {
     if (agreementId && !validAgreements.some((a) => a.id === agreementId)) setAgreementId("");
@@ -598,6 +605,9 @@ export default function NuevaReservaPage() {
               {datesOk ? <>Del <strong>{formatDate(start)}</strong> al <strong>{formatDate(end)}</strong> · {nDays} {nDays === 1 ? "día" : "días"}</> : <span className="text-danger">{nDays > 120 ? "Máximo 120 días." : "La salida no puede ser anterior a la entrada."}</span>}
               {start < today && <Badge tone="warn">Fecha pasada</Badge>}
             </p>
+            {!(askPeople || people !== "") ? (
+              <button type="button" onClick={() => setAskPeople(true)} className="mt-3 text-sm font-medium text-accent hover:underline">+ Cantidad de personas (para grupos de varias carpas)</button>
+            ) : (
             <div className="mt-3 flex flex-wrap items-end gap-3 border-t border-line pt-3">
               <Field label="Personas">
                 <Input inputMode="numeric" value={people} onChange={(e) => setPeople(e.target.value.replace(/\D/g, "").slice(0, 3))} placeholder="Opcional" className="w-28" aria-label="Cantidad de personas" />
@@ -607,6 +617,7 @@ export default function NuevaReservaPage() {
                   : caps.ready ? <>Sin máximo de personas. {isAdmin && <Link href="/configuracion#reglas" className="text-accent underline">Fijarlo en Configuración</Link>}</> : null}
               </p>
             </div>
+            )}
           </Card>
 
           {/* 3. Espacio */}
@@ -808,13 +819,7 @@ export default function NuevaReservaPage() {
 
           {/* 4. Precio y descuentos */}
           <Card title="4. Precio y descuentos">
-            <label className="mb-3 flex items-center gap-2 text-sm">
-              <input type="checkbox" checked={courtesy} onChange={(e) => setCourtesy(e.target.checked)} />
-              <span><strong>Cortesía familiar</strong> ($0, ocupa el espacio sin generar deuda)</span>
-            </label>
-            {courtesy ? (
-              <TextField label="Familiar beneficiario" value={beneficiary} onChange={(e) => setBeneficiary(e.target.value)} maxLength={120} required />
-            ) : (
+            {!courtesy && (
               <div className="grid gap-3 sm:grid-cols-2">
                 <Field label="Convenio">
                   <Select value={agreementId} onChange={(e) => setAgreementId(e.target.value)}>
@@ -828,8 +833,21 @@ export default function NuevaReservaPage() {
                     <span>Paga en efectivo ({cashPercent ?? 10}% de descuento){cash && method === "efectivo" && payMode !== "despues" && <span className="block text-xs text-muted">Se marcó solo porque el pago es en efectivo.</span>}</span>
                   </label>
                 )}
-                {isAdmin && (
-                  <>
+              </div>
+            )}
+            {!showMore ? (
+              <button type="button" onClick={() => setMoreOpts(true)} className="mt-3 text-sm font-medium text-accent hover:underline">
+                + Más opciones (cortesía familiar{isAdmin ? ", descuento manual, precio acordado" : ""})
+              </button>
+            ) : (
+              <div className="mt-3 flex flex-col gap-3 border-t border-line pt-3">
+                <label className="flex items-center gap-2 text-sm">
+                  <input type="checkbox" checked={courtesy} onChange={(e) => setCourtesy(e.target.checked)} />
+                  <span><strong>Cortesía familiar</strong> ($0, ocupa el espacio sin generar deuda)</span>
+                </label>
+                {courtesy && <TextField label="Familiar beneficiario" value={beneficiary} onChange={(e) => setBeneficiary(e.target.value)} maxLength={120} required />}
+                {!courtesy && isAdmin && (
+                  <div className="grid gap-3 sm:grid-cols-2">
                     <Field label="Descuento manual (opcional)">
                       <div className="flex gap-2">
                         <Select value={manualType} onChange={(e) => setManualType(e.target.value as "monto" | "porcentaje")} className="w-28">
@@ -840,17 +858,17 @@ export default function NuevaReservaPage() {
                       </div>
                     </Field>
                     <TextField label="Motivo del descuento manual" value={manualReason} onChange={(e) => setManualReason(e.target.value)} maxLength={300} />
-                  </>
+                  </div>
                 )}
-              </div>
-            )}
-            {isAdmin && (
-              <div className="mt-3 border-t border-line pt-3">
-                <label className="flex items-center gap-2 text-sm">
-                  <input type="checkbox" checked={useManualBase} onChange={(e) => setUseManualBase(e.target.checked)} />
-                  Usar un precio manual acordado (en lugar del tarifario)
-                </label>
-                {useManualBase && <TextField label="Precio acordado (antes de descuentos)" inputMode="decimal" value={manualBase} onChange={(e) => setManualBase(e.target.value)} />}
+                {isAdmin && (
+                  <div>
+                    <label className="flex items-center gap-2 text-sm">
+                      <input type="checkbox" checked={useManualBase} onChange={(e) => setUseManualBase(e.target.checked)} />
+                      Usar un precio manual acordado (en lugar del tarifario)
+                    </label>
+                    {useManualBase && <TextField label="Precio acordado (antes de descuentos)" inputMode="decimal" value={manualBase} onChange={(e) => setManualBase(e.target.value)} />}
+                  </div>
+                )}
               </div>
             )}
             <div className="mt-3 border-t border-line pt-3" data-tour="nr-extras">
@@ -914,7 +932,7 @@ export default function NuevaReservaPage() {
                 )}
                 {!courtesy && extrasTotal > 0 && <div className="flex justify-between gap-3"><span>Extras</span><span className="tabular">+ {formatMoney(extrasTotal)}</span></div>}
                 <div className="mt-1 flex justify-between gap-3 border-t border-line pt-2 text-base font-semibold"><span>Total</span><span className="tabular">{formatMoney(total)}</span></div>
-                {!courtesy && (
+                {!courtesy && (feats.redondeo || roundTotal) && (
                   <label className="flex items-center gap-2 text-xs text-muted">
                     <input type="checkbox" checked={roundTotal} onChange={(e) => setRoundTotal(e.target.checked)} />
                     Redondear para abajo a $500 (ej. $400.040 → $400.000 · $23.730 → $23.500)
@@ -955,7 +973,7 @@ export default function NuevaReservaPage() {
                 <div className="flex flex-col gap-3">
                   <Field label="Medio de pago">
                     <Select value={method} onChange={(e) => setMethod(e.target.value)}>
-                      {COLLECT_METHODS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
+                      {methods.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
                     </Select>
                   </Field>
                   <DollarFields due={total ?? 0} onChange={setUsd} />
@@ -970,7 +988,7 @@ export default function NuevaReservaPage() {
                   )}
                   <Field label="Medio de pago">
                     <Select value={method} onChange={(e) => setMethod(e.target.value)}>
-                      {COLLECT_METHODS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
+                      {methods.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
                     </Select>
                   </Field>
                 </div>

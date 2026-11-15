@@ -1,5 +1,6 @@
 "use client";
 import { HotkeysCard } from "@/components/hotkeys";
+import { FeaturesCard } from "@/components/features-card";
 import { PASSWORD_HINT, passwordWeak } from "@/lib/password";
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { getSupabase } from "@/lib/supabase/client";
@@ -35,8 +36,18 @@ export default function ConfiguracionPage() {
       <SyncNotice error={q.error} stale={q.stale} updatedAt={q.updatedAt} onRetry={q.reload} />
       {!q.data ? (q.loading && <div className="flex items-center gap-2 text-muted"><Spinner small /> Cargando…</div>) : (
         <div className="flex max-w-4xl flex-col gap-3">
-          <ConfigSection id="perfil" title="Mi perfil" sub="Tu nombre, foto, usuario, contraseña, tema y temperatura" icon={CONFIG_ICONS.perfil}>
+          <ConfigSection id="perfil" aliases={["atajos", "cuentas"]} title="Mi perfil" sub="Tu nombre, foto, usuario, contraseña, tema, entrar con Google y atajos de teclado" icon={CONFIG_ICONS.perfil}>
             <ProfileCard />
+            {!isGuest && (
+              <div id="cuentas" className="mt-5 border-t border-line pt-4">
+                <h3 className="mb-2 text-sm font-semibold">Entrar con Google</h3>
+                <LinkedAccountsCard />
+              </div>
+            )}
+            <div id="atajos" className="mt-5 border-t border-line pt-4">
+              <h3 className="mb-2 text-sm font-semibold">Atajos de teclado</h3>
+              <HotkeysCard />
+            </div>
           </ConfigSection>
           <ConfigSection id="balneario" title="Datos del balneario" sub="Nombre, logo, contacto y ubicación (para el clima)" icon={CONFIG_ICONS.balneario}>
             <BalnearioCard key={q.data.row.version} row={q.data.row} editable={isAdmin} onSaved={async () => { await reloadWorkspace(); q.reload(); }} onConflict={q.reload} />
@@ -44,17 +55,10 @@ export default function ConfiguracionPage() {
           <ConfigSection id="mensajes" title="Mensajes a clientes" sub="Textos de WhatsApp y correo para recordatorios y comprobantes" icon={CONFIG_ICONS.mensajes}>
             <MessagesCard key={`m${q.data.row.version}`} editable={isAdmin} onSaved={q.reload} />
           </ConfigSection>
-          <ConfigSection id="reglas" title="Caja, descuentos y reservas" sub="Límite de efectivo, tope de descuento y personas por carpa" icon={CONFIG_ICONS.reglas}>
-            <div data-tour="config-reglas"><RulesCard /></div>
+          <ConfigSection id="reglas" title="Caja, descuentos y reservas" sub="Funciones opcionales (dólares, redondeo, paquetes), límite de efectivo, tope de descuento y personas por carpa" icon={CONFIG_ICONS.reglas}>
+            <FeaturesCard />
+            <div data-tour="config-reglas" className="mt-5 border-t border-line pt-4"><RulesCard /></div>
           </ConfigSection>
-          <ConfigSection id="atajos" title="Atajos de teclado" sub="Teclas para ir directo a cada pantalla (F2 nueva reserva, F4 mapa…)" icon={CONFIG_ICONS.atajos}>
-            <HotkeysCard />
-          </ConfigSection>
-          {!isGuest && (
-            <ConfigSection id="cuentas" title="Cuentas vinculadas" sub="Entrar con Google" icon={CONFIG_ICONS.cuentas}>
-              <LinkedAccountsCard />
-            </ConfigSection>
-          )}
           {!isGuest && (
             <ConfigSection id="usuarios" title="Usuarios" sub="Tu equipo: quién puede entrar y con qué permisos" icon={CONFIG_ICONS.usuarios}>
               <div data-tour="config-usuarios"><UsersCard /></div>
@@ -75,12 +79,13 @@ export default function ConfiguracionPage() {
  * Apartado plegable de Configuración. Adentro va la tarjeta de siempre, sin su borde ni su título
  * (el título ya está en el encabezado). Se abre solo si la dirección termina en #<id>.
  */
-function ConfigSection({ id, title, sub, icon, children }: { id: string; title: string; sub: string; icon: string; children: ReactNode }) {
+function ConfigSection({ id, aliases, title, sub, icon, children }: { id: string; aliases?: string[]; title: string; sub: string; icon: string; children: ReactNode }) {
   const ref = useRef<HTMLDetailsElement>(null);
   useEffect(() => {
     // Se abre al llegar con #<id> (también desde el menú, estando ya en Configuración).
     const check = () => {
-      if (window.location.hash === `#${id}` && ref.current) {
+      const h = window.location.hash.slice(1);
+      if ((h === id || aliases?.includes(h)) && ref.current) {
         ref.current.open = true;
         ref.current.scrollIntoView({ block: "start", behavior: "smooth" });
       }
@@ -88,6 +93,7 @@ function ConfigSection({ id, title, sub, icon, children }: { id: string; title: 
     check();
     window.addEventListener("hashchange", check);
     return () => window.removeEventListener("hashchange", check);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
   return (
     <details ref={ref} id={id} className="group scroll-mt-20 rounded-2xl border border-line bg-surface open:shadow-sm">

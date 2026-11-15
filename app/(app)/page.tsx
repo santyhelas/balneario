@@ -6,8 +6,7 @@ import { formatDate, formatMoney } from "@/lib/format";
 import { useWorkspace } from "@/components/workspace";
 import { useStatus, type ResItem } from "@/components/status";
 import { WeekAhead } from "@/components/week-ahead";
-import { Icon, NAV } from "@/components/shell";
-import { useHotkeys } from "@/components/hotkeys";
+import { Icon, SECTIONS } from "@/components/shell";
 import { Alert, Button, Spinner, cx } from "@/components/ui";
 import { CloseCashModal, OpenCashModal, type CashSummary } from "@/components/cash";
 import { WeatherStrip } from "@/components/weather";
@@ -25,11 +24,10 @@ const TONE: Record<Tone, { box: string; label: string; value: string }> = {
   orange: { box: "border-orange-500/40", label: "text-orange-500", value: "text-orange-500" },
   neutral: { box: "border-line", label: "text-muted", value: "text-fg" },
 };
-const icon = (href: string) => NAV.find((n) => n.href === href)!.icon;
+const icon = (href: string) => SECTIONS.find((n) => n.href === href)!.icon;
 
 export default function DashboardPage() {
   const { ws, isGuest, role, guideDone } = useWorkspace();
-  const hotkeys = useHotkeys();
   const st = useStatus();
   const data = st.summary;
   // En la demo, el pedido de abrir la caja espera a que termine el tutorial.
@@ -103,14 +101,14 @@ export default function DashboardPage() {
       {st.error && <Alert tone="danger">No se pudo actualizar ({st.error}). Los datos pueden estar desactualizados. <button className="underline" onClick={st.reload}>Reintentar</button></Alert>}
 
       {/* Encabezado: nombre del balneario, resumen del día y el clima */}
-      <section className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#0b6a87] via-[#0a5670] to-[#0d2533] p-5 text-white shadow-sm md:p-6">
+      <section className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#0b6a87] via-[#0a5670] to-[#0d2533] px-4 py-3.5 text-white shadow-sm md:px-5 md:py-4">
         <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-cyan-200">Panel de control operativo</div>
-        <h1 className="mt-1 text-2xl font-extrabold tracking-tight md:text-3xl">{ws.name}</h1>
+        <h1 className="mt-0.5 text-xl font-extrabold tracking-tight md:text-2xl">{ws.name}</h1>
         <p className="mt-1 text-sm text-cyan-50/90">
           {formatDate(data.fecha)} · {carpa?.total_activos ?? 0} carpas y {sombrilla?.total_activos ?? 0} sombrillas · {pct(ocupados)}% de ocupación hoy
           {st.futureCount > 0 ? ` · ${st.futureCount} ${st.futureCount === 1 ? "reserva futura" : "reservas futuras"}` : ""}
         </p>
-        <WeatherStrip onDark className="mt-4" />
+        <WeatherStrip onDark className="mt-3" />
       </section>
 
       {!isGuest && <Announcements />}
@@ -152,17 +150,6 @@ export default function DashboardPage() {
         </StatGroup>
       </div>
 
-      <div data-tour="semana"><WeekAhead /></div>
-
-      {/* Atajos de teclado (reemplazan los botones de accesos rápidos): solo en compu */}
-      <p className="hidden flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted md:flex" data-tour="atajos">
-        <span className="font-semibold">Atajos:</span>
-        {hotkeys.filter((h) => h.key).map((h) => (
-          <span key={h.key} className="inline-flex items-center gap-1">
-            <kbd className="rounded border border-line bg-surface-2 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-fg">{h.key}</kbd>{h.label}
-          </span>
-        ))}
-      </p>
 
       <div className="grid gap-4 lg:grid-cols-2">
         <ResCard title={`Inician hoy (${data.ingresan_hoy.length})`} tone="accent" items={data.ingresan_hoy} empty="No hay ingresos previstos para hoy."
@@ -173,6 +160,8 @@ export default function DashboardPage() {
           arrivals={arrivals} onArrival={(id, v) => setArrivals((a) => ({ ...a, [id]: v }))} />
         <ResCard title={`Finalizan hoy (${data.finalizan_hoy.length})`} tone="orange" items={data.finalizan_hoy} empty="No hay finalizaciones previstas para hoy." right="Liberación de espacios" />
       </div>
+
+      <div data-tour="semana"><WeekAhead /></div>
 
       <OpenCashModal open={openCash} workspaceId={ws.id} onClose={() => setOpenCash(false)} onDone={() => { setOpenCash(false); st.reload(); }} />
       <CloseCashModal open={closing !== null} summary={closing} onClose={() => setClosing(null)} onDone={() => { setClosing(null); st.reload(); }} />
