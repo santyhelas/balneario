@@ -69,36 +69,17 @@ const NAV = [
 const PHOTOS: { src: string; caption: string }[] = [];
 
 
-const FAQ: { tema: string; items: { q: string; a: string }[] }[] = [
-  { tema: "Reservas y carpas", items: [
-    { q: "¿Puedo cambiar a un cliente de carpa en medio de su estadía?", a: "Sí, de dos formas: por un solo día (mañana va a la 20 y al otro día vuelve solo a la 12) o por el resto de la estadía. Sigue siendo la misma reserva, con sus pagos y su historial, y el sistema revisa que la carpa nueva esté libre antes de aceptar." },
-    { q: "¿Qué pasa si la carpa que quiere está ocupada solo algunos días?", a: "El sistema te muestra qué días está libre y te propone otras carpas para los días que faltan, con la diferencia de precio si la hay. Vos elegís y la reserva sigue siendo una sola." },
-    { q: "¿Puedo ver si una carpa va a estar libre dentro de una semana?", a: "Sí. Elegís cualquier fecha en el mapa o en la línea de tiempo y ves cómo va a estar el balneario ese día: libres, ocupadas, reservadas y en mantenimiento." },
-    { q: "¿Sirve para grupos o familias que alquilan varias carpas?", a: "Sí. Cargás la cantidad de personas, el sistema te sugiere carpas juntas en el mapa y guarda todo como un grupo, con un solo cobro." },
-    { q: "¿Se pueden reservar días sueltos o fechas a medida?", a: "Sí: 1, 5, 7, 15 o 30 días, o las fechas que quieras. El precio se calcula solo según tu tarifario, aunque la estadía caiga en dos quincenas distintas." },
-    { q: "¿Y si me equivoco al cargar algo?", a: "Podés deshacer el último cambio o volver atrás desde el historial de cada reserva. Nada se borra a escondidas: queda registrado quién hizo qué y cuándo." },
-    { q: "¿El mapa es igual a mi balneario?", a: "Sí. Lo armamos con tus carpas y sombrillas en su lugar, y después las podés mover, agregar o desactivar vos. También bloqueás las que están en arreglo para que nadie las reserve." },
-  ] },
-  { tema: "Cobros y caja", items: [
-    { q: "¿Puedo cobrar una seña y el resto después?", a: "Sí. Podés cobrar todo, una seña o nada al reservar. El sistema lleva el saldo exacto de cada cliente y te avisa quién debe, sobre todo el día que se va." },
-    { q: "¿Acepta efectivo, transferencia, tarjeta y dólares?", a: "Sí, y en una misma reserva se pueden mezclar. Si cobrás en dólares, ponés la cotización del día y queda registrado lo que entró en cada moneda." },
-    { q: "¿Puedo hacer descuentos?", a: "Sí: descuento por pago en efectivo, convenios, paquetes con precio fijo, descuentos a mano con su motivo y cortesías para la familia (la carpa queda ocupada y no genera deuda)." },
-    { q: "¿Cómo funciona la caja del día?", a: "Abrís la caja con el efectivo inicial, cada cobro y cada gasto se suma solo, y al cerrar contás la plata: el sistema te dice cuánto tendría que haber y si sobra o falta." },
-    { q: "¿Puedo mandarle a un cliente el precio o lo que debe por WhatsApp?", a: "Sí. Con un toque se arma el mensaje con las fechas, la carpa y el importe, y se abre WhatsApp para mandarlo." },
-  ] },
-  { tema: "Empezar a usarlo", items: [
-    { q: "¿Tengo que instalar algo?", a: "No. Funciona desde el navegador (Chrome, Edge, Safari) en la computadora o en el celular. En el celular lo podés agregar a la pantalla de inicio y se abre como una app." },
-    { q: "¿Lo pueden usar mis empleados?", a: "Sí. Cada uno con su usuario, desde su celular o la compu del balneario, y todos ven lo mismo al instante." },
-    { q: "¿Es difícil de aprender?", a: "No. Lo más común (reservar, cobrar, ver el mapa) se hace en pocos pasos, y te ayudamos por WhatsApp cuando lo necesites." },
-    { q: "¿Qué pasa con lo que cargo en la demo?", a: "La demo es un balneario de prueba solo para vos. Cuando salís o cerrás la pestaña se borra todo." },
-    { q: "¿Puedo ver cómo me fue en la temporada?", a: "Sí. Tenés informes de ocupación, lo cobrado y lo que falta cobrar, gastos, descuentos y clientes que más vuelven, y los podés bajar en una planilla que se abre con Excel." },
-  ] },
-  { tema: "Seguridad y precio", items: [
-    { q: "¿Mis datos y los de mis clientes están seguros?", a: "Cada balneario ve solo sus datos. Todo se guarda en una base de datos protegida, no en tu computadora, y podés tener una copia diaria en tu propio Google Drive." },
-    { q: "¿Y si se corta internet?", a: "Para guardar hace falta internet. Si se corta, el sistema te avisa y no te muestra datos viejos como si fueran los de ahora, así no reservás algo que ya está ocupado." },
-    { q: "¿Y si se me rompe la compu?", a: "No perdés nada: tus datos no están en la compu sino guardados en internet. Entrás desde otra computadora o desde el celular y está todo igual." },
-    { q: "¿Cuánto cuesta?", a: "Depende del tamaño de tu balneario. Podés calcularlo en «Calculá el precio para tu balneario» o pedirnos un presupuesto sin compromiso por WhatsApp o por mail." },
-  ] },
+const FAQ = [
+  { q: "¿Vale la pena pasar del cuaderno o el Excel al sistema?", a: "Sí. Dejás de tener reservas en un lado, pagos en otro y la caja en un papel: todo queda en un solo lugar y al día. Sabés al instante qué carpa está libre, quién te debe y cuánta plata tendría que haber en la caja, sin sumar a mano ni reservar dos veces la misma carpa." },
+  { q: "¿Cuánto se tarda en empezar a usarlo?", a: "En 72 horas tenés tu balneario funcionando, con tu mapa armado y tus tarifas cargadas. Igual, cuanto antes empieces mejor: así llegás a la temporada con tus clientes y reservas ya cargados." },
+  { q: "¿Lo pueden usar mis empleados?", a: "Sí. Cada uno con su usuario, desde su celular o la compu del balneario, y todos ven lo mismo al instante. Queda registrado quién hizo cada reserva y cada cobro." },
+  { q: "¿Si tengo un problema, qué pasa?", a: "Tenés soporte 24/7 por WhatsApp. Nos escribís y te ayudamos, sea una duda o algo que no funciona." },
+  { q: "¿Es difícil de aprender?", a: "No. Reservar, cobrar y ver el mapa se hace en pocos pasos, pensado para el ritmo del verano. Si te trabás en algo, nos escribís y te ayudamos." },
+  { q: "¿Puedo cambiar a un cliente de carpa en medio de su estadía?", a: "Sí, por un solo día o por el resto de la estadía. Sigue siendo la misma reserva, con sus pagos y su historial, y el sistema revisa que la carpa nueva esté libre." },
+  { q: "¿Puedo cobrar una seña y el resto después?", a: "Sí. Cobrás todo, una seña o nada al reservar, en efectivo, transferencia, tarjeta o dólares. El sistema lleva el saldo exacto de cada cliente y te avisa quién debe." },
+  { q: "¿Tengo que instalar algo?", a: "No. Funciona desde el navegador en la computadora o en el celular. En el celular lo podés agregar a la pantalla de inicio y se abre como una app." },
+  { q: "¿Mis datos están seguros? ¿Y si se me rompe la compu?", a: "Tus datos no están en la compu: se guardan en internet, protegidos, y cada balneario ve solo lo suyo. Si se rompe, entrás desde otra o desde el celular y está todo igual. Además podés tener una copia diaria en tu Google Drive." },
+  { q: "¿Cuánto cuesta?", a: "Depende del tamaño de tu balneario. Calculalo en «Calculá el precio para tu balneario» o pedinos un presupuesto sin compromiso por WhatsApp." },
 ];
 
 /** Ícono de Instagram (dibujo simple de cámara). */
@@ -424,22 +405,17 @@ export default function InicioPage() {
         <section id="preguntas" className="scroll-mt-16 bg-white">
           <div className="mx-auto max-w-3xl px-4 py-20">
             <h2 data-reveal className="text-4xl font-extrabold sm:text-5xl">Preguntas frecuentes</h2>
-            {FAQ.map((g) => (
-              <div key={g.tema} className="mt-10">
-                <h3 data-reveal className="text-sm font-bold uppercase tracking-widest text-[var(--atl)]">{g.tema}</h3>
-                <div className="mt-2 divide-y divide-[var(--sand-2)] border-y border-[var(--sand-2)]">
-                  {g.items.map((f, k) => (
-                    <details key={f.q} data-reveal style={dl(Math.min(k, 4) * 60)} className="group py-5">
-                      <summary className="flex cursor-pointer list-none items-center justify-between gap-4 text-lg font-bold">
-                        {f.q}
-                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--foam)] text-[var(--atl)] transition group-open:rotate-45" aria-hidden>+</span>
-                      </summary>
-                      <p className="mt-2 max-w-2xl leading-relaxed text-[var(--gris)]">{f.a}</p>
-                    </details>
-                  ))}
-                </div>
-              </div>
-            ))}
+            <div className="mt-8 divide-y divide-[var(--sand-2)] border-y border-[var(--sand-2)]">
+              {FAQ.map((f, k) => (
+                <details key={f.q} data-reveal style={dl(Math.min(k, 5) * 60)} className="group py-5">
+                  <summary className="flex cursor-pointer list-none items-center justify-between gap-4 text-lg font-bold">
+                    {f.q}
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--foam)] text-[var(--atl)] transition group-open:rotate-45" aria-hidden>+</span>
+                  </summary>
+                  <p className="mt-2 max-w-2xl leading-relaxed text-[var(--gris)]">{f.a}</p>
+                </details>
+              ))}
+            </div>
           </div>
         </section>
 
