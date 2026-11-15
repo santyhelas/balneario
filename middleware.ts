@@ -78,5 +78,5 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   // Archivos públicos de la app instalable (manifiesto, service worker, pantalla sin conexión) no requieren sesión.
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|manifest.webmanifest|sw.js|offline.html|.*\\.(?:svg|png|jpg|jpeg|webp|ico)$).*)"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|robots.txt|sitemap.xml|manifest.webmanifest|sw.js|offline.html|.*\\.(?:svg|png|jpg|jpeg|webp|ico)$).*)"],
 };
