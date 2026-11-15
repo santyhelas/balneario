@@ -11902,7 +11902,8 @@ grant update (features) on public.workspaces to authenticated;
 update public.workspaces w set features = jsonb_build_object(
     'dolares', exists (select 1 from public.payments p where p.workspace_id = w.id and p.method = 'dolares'),
     'redondeo', exists (select 1 from public.reservation_discounts d where d.workspace_id = w.id and d.kind = 'redondeo'),
-    'paquetes', exists (select 1 from public.package_prices pp where pp.workspace_id = w.id))
+    'paquetes', exists (select 1 from public.package_prices pp where pp.workspace_id = w.id)),
+  version = w.version + 1
  where w.features = '{}'::jsonb;
 
 commit;
