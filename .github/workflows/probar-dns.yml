@@ -1,0 +1,16 @@
+name: Probar DNS
+on: workflow_dispatch
+jobs:
+  probar:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          sudo apt-get install -y -qq dnsutils bind9-dnsutils >/dev/null 2>&1 || true
+          for t in A AAAA CAA DS DNSKEY NS; do echo "== Google DoH $t"; curl -s "https://dns.google/resolve?name=mibalneario.com.ar&type=$t" ; echo; done
+          echo "== Cloudflare DoH A"; curl -s -H 'accept: application/dns-json' "https://cloudflare-dns.com/dns-query?name=mibalneario.com.ar&type=A"; echo
+          echo "== dig @8.8.8.8"; dig +dnssec mibalneario.com.ar A @8.8.8.8 | grep -E "status|flags|IN\s+A" 
+          echo "== dig AAAA"; dig mibalneario.com.ar AAAA @8.8.8.8 +short
+          echo "== NS"; dig mibalneario.com.ar NS +short @8.8.8.8
+          echo "== DS en .com.ar"; dig mibalneario.com.ar DS +short @8.8.8.8
+          echo "== delv"; delv @8.8.8.8 mibalneario.com.ar A 2>&1 | head -5
+          for ip in $(dig mibalneario.com.ar A +short @8.8.8.8); do echo "== robots via $ip"; curl -sS --resolve mibalneario.com.ar:443:$ip -o /dev/null -w "%{http_code} %{time_total}s\n" -A "Googlebot/2.1" https://mibalneario.com.ar/robots.txt; done
