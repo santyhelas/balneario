@@ -2,9 +2,10 @@
 import asyncio, json, sys, edge_tts
 VOICE = sys.argv[1] if len(sys.argv) > 1 else "es-AR-TomasNeural"
 RATE = sys.argv[2] if len(sys.argv) > 2 else "+10%"
+PITCH = sys.argv[3] if len(sys.argv) > 3 else "+0Hz"
 async def one(i, text):
     words = []
-    c = edge_tts.Communicate(text, VOICE, rate=RATE, boundary="WordBoundary")
+    c = edge_tts.Communicate(text, VOICE, rate=RATE, pitch=PITCH, boundary="WordBoundary")
     with open(f"out/l{i:02d}.mp3", "wb") as f:
         async for ch in c.stream():
             if ch["type"] == "audio": f.write(ch["data"])

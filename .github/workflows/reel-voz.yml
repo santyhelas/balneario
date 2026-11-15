@@ -4,6 +4,7 @@ on:
     inputs:
       voz: { default: "es-AR-TomasNeural" }
       velocidad: { default: "+10%" }
+      tono: { default: "+0Hz" }
 permissions:
   contents: write
 jobs:
@@ -11,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: pip install -q edge-tts && mkdir -p out && python scripts/reel/voz.py "${{ inputs.voz }}" "${{ inputs.velocidad }}"
+      - run: pip install -q edge-tts && mkdir -p out && python scripts/reel/voz.py "${{ inputs.voz }}" "${{ inputs.velocidad }}" "${{ inputs.tono }}"
       - name: Guardar en la rama "reel-voz"
         run: |
           cd out
