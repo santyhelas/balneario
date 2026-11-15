@@ -24,6 +24,7 @@ jobs:
                 console.log(`   LCP ${a["largest-contentful-paint"]?.displayValue} · CLS ${a["cumulative-layout-shift"]?.displayValue} · TBT ${a["total-blocking-time"]?.displayValue} · peso ${a["total-byte-weight"]?.displayValue}`);
                 const bad=Object.values(a).filter(x=>x.score!==null&&x.score<0.9&&(x.details?.type==="opportunity"||["accessibility","seo","best-practices"].some(g=>r.categories[g].auditRefs.some(ar=>ar.id===x.id&&ar.weight>0))));
                 bad.slice(0,12).forEach(x=>console.log(`   - ${x.id}: ${x.title}${x.displayValue?" ("+x.displayValue+")":""}`));
+                (a["color-contrast"]?.details?.items??[]).slice(0,8).forEach(i=>console.log(`     · contraste: ${i.node?.snippet?.slice(0,160)} — ${i.node?.explanation?.split("\n").pop()?.slice(0,140)}`));
               ' "$u" "$f" | tee -a "$GITHUB_STEP_SUMMARY"
             done
           done
