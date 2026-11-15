@@ -8,6 +8,7 @@ import "@fontsource-variable/figtree";
 import { SITE_EMAIL, SITE_INSTAGRAM, SITE_INSTAGRAM_URL, SITE_URL, SITE_WHATSAPP_URL } from "@/lib/site";
 import { Analytics } from "@vercel/analytics/next";
 import { CopyEmailButton, DemoButton, DemoEndedNotice, LandingThemeToggle, LoginLink, MobileMenu, ScrollReveal, TB_THEME_SCRIPT } from "@/components/landing";
+import { ZONAS } from "@/lib/zonas";
 import { DayTimeline, HeroBeach, PhotoStrip, Slider, type DayStep } from "@/components/landing-interactive";
 import "./landing.css";
 
@@ -25,9 +26,9 @@ export const metadata: Metadata = {
     type: "website", locale: "es_AR", url: "/", siteName: "Mi Balneario",
     title: "Mi Balneario · Sistema de gestión de balnearios",
     description: DESCRIPTION,
-    images: [{ url: "/icon-512.png", width: 512, height: 512, alt: "Mi Balneario" }],
+    images: [{ url: "/og.png", width: 1200, height: 630, alt: "Mi Balneario: tu balneario entero, en un mapa" }],
   },
-  twitter: { card: "summary", title: "Mi Balneario · Sistema de gestión de balnearios", description: DESCRIPTION, images: ["/icon-512.png"] },
+  twitter: { card: "summary_large_image", title: "Mi Balneario · Sistema de gestión de balnearios", description: DESCRIPTION, images: ["/og.png"] },
   // Código de verificación de Google Search Console (se carga en Vercel; ver README).
   verification: process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION ? { google: process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION } : undefined,
 };
@@ -277,6 +278,10 @@ export default function InicioPage() {
   return (
     <div id="arriba" className="tb min-h-dvh">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(JSON_LD) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify({
+        "@context": "https://schema.org", "@type": "FAQPage",
+        mainEntity: FAQ.map((f) => ({ "@type": "Question", name: f.q, acceptedAnswer: { "@type": "Answer", text: f.a } })),
+      }) }} />
       {/* Tema de la página (claro u oscuro): se aplica antes de pintar para que no parpadee. */}
       <script dangerouslySetInnerHTML={{ __html: TB_THEME_SCRIPT }} />
       <header className="tb-header sticky top-0 z-40 bg-[#fbf7ee]/90 backdrop-blur">
@@ -313,8 +318,8 @@ export default function InicioPage() {
               </p>
               <div className="tb-in mt-8 flex flex-wrap items-start gap-3" style={dl(300)}>
                 <DemoButton className="tb-shine tb-press rounded-full bg-[var(--lona)] px-7 text-white shadow-[0_10px_25px_-10px_rgba(214,51,47,0.8)] hover:brightness-110" />
-                <a href="#planes" className="tb-press inline-flex items-center justify-center rounded-full border-2 border-[var(--atl)] px-7 py-3 text-base font-bold text-[var(--atl)] hover:bg-[var(--atl)] hover:text-white">
-                  Pedí tu presupuesto
+                <a href="/presupuesto" className="tb-press inline-flex items-center justify-center rounded-full border-2 border-[var(--atl)] px-7 py-3 text-base font-bold text-[var(--atl)] hover:bg-[var(--atl)] hover:text-white">
+                  Calculá tu precio
                 </a>
               </div>
               <p className="tb-in mt-3 text-sm text-[var(--gris)]" style={dl(420)}>La demo abre un balneario de prueba con datos inventados. No hace falta registrarse.</p>
@@ -331,6 +336,25 @@ export default function InicioPage() {
         )}
 
         {/* Un día en el balneario */}
+        {/* Video corto del sistema (se carga recién cuando lo tocan) */}
+        <section id="video" className="scroll-mt-16" aria-label="Video">
+          <div className="mx-auto grid max-w-6xl items-center gap-10 px-4 py-16 md:grid-cols-[1fr_auto]">
+            <div>
+              <h2 data-reveal className="text-4xl font-extrabold sm:text-5xl">Miralo funcionar en 36 segundos</h2>
+              <p data-reveal className="mt-4 max-w-xl text-lg leading-relaxed text-[var(--gris)]">
+                Del cuaderno al mapa: reservas sin superponer, señas y deudas al peso, y el mensaje de WhatsApp listo para mandar.
+              </p>
+              <div data-reveal className="mt-6 flex flex-wrap gap-3">
+                <DemoButton className="tb-press rounded-full bg-[var(--lona)] px-7 text-white hover:brightness-110" />
+              </div>
+            </div>
+            <div data-reveal className="mx-auto w-[260px] overflow-hidden rounded-[32px] border-[6px] border-[var(--tinta)] bg-[var(--tinta)] shadow-2xl sm:w-[300px]">
+              <video src="/landing/reel.mp4" poster="/landing/reel.jpg" controls playsInline preload="none" className="block aspect-[9/16] w-full"
+                aria-label="Video de Mi Balneario: cómo se usa el sistema" />
+            </div>
+          </div>
+        </section>
+
         <section id="un-dia" className="scroll-mt-16 bg-[var(--atl)] text-white">
           <div className="mx-auto max-w-6xl px-4 py-20">
             <h2 data-reveal className="max-w-2xl text-4xl font-extrabold leading-tight sm:text-5xl">Un día de enero, de la apertura al cierre.</h2>
@@ -449,7 +473,7 @@ export default function InicioPage() {
       </main>
 
       <footer className="bg-[var(--tinta)] text-white/70">
-        <div className="mx-auto grid max-w-6xl gap-10 px-4 pb-8 pt-14 sm:grid-cols-2 lg:grid-cols-[1.4fr_1fr_1fr_1fr]">
+        <div className="mx-auto grid max-w-6xl gap-10 px-4 pb-8 pt-14 sm:grid-cols-2 lg:grid-cols-[1.4fr_1fr_1fr_1fr_1fr]">
           <div>
             <img src="/brand/mi-balneario-logo-blanco.svg" alt="Mi Balneario" className="h-10 w-auto" />
             <p className="mt-4 max-w-xs text-sm leading-relaxed">
@@ -467,6 +491,12 @@ export default function InicioPage() {
               <li><a href="#funciones" className="hover:text-white">Funciones</a></li>
               <li><a href="#planes" className="hover:text-white">Planes y presupuesto</a></li>
               <li><a href="#preguntas" className="hover:text-white">Preguntas frecuentes</a></li>
+            </ul>
+          </nav>
+          <nav aria-label="Zonas">
+            <h2 className="text-xs font-bold uppercase tracking-[0.18em] text-white/90">Balnearios en</h2>
+            <ul className="mt-4 flex flex-col gap-3 text-sm">
+              {ZONAS.map((z) => <li key={z.slug}><a href={`/sistema-para-balnearios/${z.slug}`} className="hover:text-white">{z.nombre}</a></li>)}
             </ul>
           </nav>
           <nav aria-label="Contacto">

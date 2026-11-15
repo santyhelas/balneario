@@ -47,7 +47,7 @@ export function WeekAhead() {
       ? (unwrap(await sb.from("reservation_balances").select("reservation_id, due_amount").in("reservation_id", ids)) as { reservation_id: string; due_amount: number }[])
       : [];
     return { segs, due: new Map(bal.map((b) => [b.reservation_id, Number(b.due_amount)])) };
-  }, [ws.id, today], 60_000);
+  }, [ws.id, today], 120_000);
 
   const segs = q.data?.segs ?? [];
   const place = (s: Seg) => `${s.spaces?.kind === "sombrilla" ? "Sombrilla" : "Carpa"} ${s.spaces?.code ?? "?"}`;

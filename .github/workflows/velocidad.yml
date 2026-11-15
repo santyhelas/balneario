@@ -1,0 +1,29 @@
+name: Velocidad (Lighthouse)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  lighthouse:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Medir portada, presupuesto y una página por zona
+        run: |
+          npm i -g lighthouse@12 >/dev/null 2>&1
+          for u in "https://mibalneario.com.ar/" "https://mibalneario.com.ar/presupuesto" "https://mibalneario.com.ar/sistema-para-balnearios/mar-del-plata"; do
+            for f in mobile desktop; do
+              extra=""; [ "$f" = desktop ] && extra="--preset=desktop"
+              lighthouse "$u" $extra --quiet --chrome-flags="--headless=new --no-sandbox" --output=json --output-path=/tmp/r.json --only-categories=performance,accessibility,best-practices,seo || continue
+              node -e '
+                const r=require("/tmp/r.json"); const c=r.categories; const a=r.audits;
+                const s=k=>Math.round((c[k]?.score??0)*100);
+                console.log(`## ${process.argv[1]} (${process.argv[2]}): rendimiento ${s("performance")} · accesibilidad ${s("accessibility")} · buenas prácticas ${s("best-practices")} · SEO ${s("seo")}`);
+                console.log(`   LCP ${a["largest-contentful-paint"]?.displayValue} · CLS ${a["cumulative-layout-shift"]?.displayValue} · TBT ${a["total-blocking-time"]?.displayValue} · peso ${a["total-byte-weight"]?.displayValue}`);
+                const bad=Object.values(a).filter(x=>x.score!==null&&x.score<0.9&&(x.details?.type==="opportunity"||["accessibility","seo","best-practices"].some(g=>r.categories[g].auditRefs.some(ar=>ar.id===x.id&&ar.weight>0))));
+                bad.slice(0,12).forEach(x=>console.log(`   - ${x.id}: ${x.title}${x.displayValue?" ("+x.displayValue+")":""}`));
+              ' "$u" "$f" | tee -a "$GITHUB_STEP_SUMMARY"
+            done
+          done

@@ -44,7 +44,7 @@ export function DriveCard() {
     if (error && (error.code === "PGRST202" || error.code === "42883")) return { conectado: false, missing: true };
     if (error) throw error;
     return data as Status;
-  }, [ws.id], 60_000);
+  }, [ws.id], 300_000);
 
   async function post(path: string, kind: "subir" | "desconectar") {
     setBusy(kind);

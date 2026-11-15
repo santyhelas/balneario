@@ -47,7 +47,7 @@ export default function ClientesPage() {
     requestAnimationFrame(() => document.getElementById("ficha-cliente")?.scrollIntoView({ behavior: "smooth", block: "start" }));
   }, [selected]);
 
-  const list = useLoader(() => searchCustomers(ws.id, debounced), [ws.id, debounced], 60_000);
+  const list = useLoader(() => searchCustomers(ws.id, debounced), [ws.id, debounced], 300_000);
   const [exporting, setExporting] = useState(false);
   const [exportMsg, setExportMsg] = useState<{ tone: "ok" | "danger"; text: string } | null>(null);
   async function exportXlsx() {

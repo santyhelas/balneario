@@ -34,7 +34,7 @@ export function DayNotes() {
           .eq("workspace_id", ws.id).eq("active", true).eq("done", false).lt("day", today).gte("day", addDays(today, -14)).order("day")) as Note[])
       : [];
     return { notes, pending };
-  }, [ws.id, day, today], 60_000);
+  }, [ws.id, day, today], 120_000);
 
   async function add(e: FormEvent) {
     e.preventDefault();
@@ -135,7 +135,7 @@ export function usePendingNotes(): number {
     const { count, error } = await getSupabase().from("day_notes").select("id", { count: "exact", head: true })
       .eq("workspace_id", ws.id).eq("active", true).eq("done", false).lte("day", today).gte("day", addDays(today, -14));
     return error ? 0 : count ?? 0;
-  }, [ws.id, today], 60_000);
+  }, [ws.id, today], 120_000);
   const { reload } = q;
   useEffect(() => {
     window.addEventListener("notas-cambiaron", reload);

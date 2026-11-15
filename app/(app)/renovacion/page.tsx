@@ -81,7 +81,7 @@ export default function RenovacionPage() {
     const missing = !!m.error && (m.error.code === "42P01" || m.error.code === "PGRST205");
     const marks = missing ? [] : (unwrap(m) as Mark[]);
     return { list: buildRenewals(prev, people, next, marks), missing };
-  }, [ws.id, season], 60_000);
+  }, [ws.id, season], 300_000);
 
   const list = useMemo(() => q.data?.list ?? [], [q.data]);
   const counts = useMemo(() => {
