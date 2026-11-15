@@ -54,7 +54,7 @@ export default async function ZonaPage({ params }: { params: Promise<{ zona: str
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(ld) }} />
       <header className="mx-auto flex max-w-5xl items-center justify-between px-4 py-4">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <a href="/" className="flex items-center gap-2 font-bold"><img src="/logo.png" alt="" className="h-9 w-9 rounded-xl" />Mi Balneario</a>
+        <a href="/" className="flex items-center gap-2 font-bold"><img src="/logo-96.png" alt="" className="h-9 w-9 rounded-xl" />Mi Balneario</a>
         <a href="/presupuesto" className="rounded-full border-2 border-[#0b6a87] px-4 py-1.5 text-sm font-bold text-[#0b6a87] hover:bg-[#0b6a87] hover:text-white">Calculá tu precio</a>
       </header>
       <main className="mx-auto max-w-5xl px-4 pb-20">

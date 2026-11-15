@@ -97,7 +97,7 @@ export default function WelcomePage() {
     <main className="flex min-h-dvh items-center justify-center p-4">
       <div className="w-full max-w-sm rounded-2xl border border-line bg-surface p-6 shadow-sm">
         <div className="mb-5 flex flex-col items-center gap-2 text-center">
-          <img src="/logo.png" alt="" className="h-16 w-16" />
+          <img src="/logo-96.png" alt="" className="h-16 w-16" />
           <h1 className="text-xl font-bold">¡Bienvenido a Mi Balneario!</h1>
           {state === "listo" && <p className="text-sm text-muted">Creá tu usuario y tu contraseña para ingresar.</p>}
         </div>

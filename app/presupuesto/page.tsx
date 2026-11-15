@@ -11,7 +11,7 @@ export default function PresupuestoPage() {
     <div className="min-h-dvh bg-gradient-to-b from-[#e6f4f8] via-[#fbf7ee] to-[#f3e3bd] text-[#1f2a30]">
       <header className="mx-auto flex max-w-3xl items-center justify-between px-4 py-4">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <a href="/" className="flex items-center gap-2 font-bold"><img src="/logo.png" alt="" className="h-9 w-9 rounded-xl" />Mi Balneario</a>
+        <a href="/" className="flex items-center gap-2 font-bold"><img src="/logo-96.png" alt="" className="h-9 w-9 rounded-xl" />Mi Balneario</a>
         <a href="/" className="text-sm font-medium text-[#0b6a87] hover:underline">Volver al inicio</a>
       </header>
       <main className="mx-auto max-w-3xl px-4 pb-16 pt-4">

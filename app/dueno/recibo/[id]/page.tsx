@@ -25,7 +25,7 @@ export default function ReceiptPage() {
         <header className="flex items-start justify-between gap-4 border-b border-[#e5dcc8] pb-5">
           <div className="flex items-center gap-3">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/logo.png" alt="" className="h-14 w-14 rounded-xl" />
+            <img src="/logo-96.png" alt="" className="h-14 w-14 rounded-xl" />
             <div>
               <div className="text-xl font-extrabold">{r.emisor.nombre || "Mi Balneario"}</div>
               {r.emisor.cuit && <div className="text-xs text-[#5b666c]">CUIT {r.emisor.cuit}</div>}

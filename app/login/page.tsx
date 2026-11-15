@@ -125,7 +125,7 @@ export default function LoginPage() {
       <a href="/" className="mb-3 inline-flex items-center gap-1 text-sm text-muted hover:text-fg">← Volver a la página principal</a>
       <div className="rounded-2xl border border-line bg-surface p-6 shadow-sm">
         <div className="mb-6 flex flex-col items-center gap-2 text-center">
-          <img src="/logo.png" alt="" className="h-20 w-20" />
+          <img src="/logo-96.png" alt="" className="h-20 w-20" />
           <h1 className="text-xl font-bold">Mi Balneario</h1>
           <p className="text-sm text-muted">
             {mode === "ingresar" ? "Gestión de balnearios · Ingresá con tu usuario" : mode === "crear" ? "Creá tu cuenta y tu balneario" : "Recuperar acceso"}

@@ -64,7 +64,7 @@ export default function OwnerLayout({ children }: { children: ReactNode }) {
           <div className="mx-auto flex max-w-7xl items-center gap-2 px-3 pt-1.5">
             <Link href="/dueno" className="flex min-w-0 flex-1 items-center gap-2">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/logo.png" alt="" className="h-7 w-7 rounded-lg" />
+              <img src="/logo-96.png" alt="" className="h-7 w-7 rounded-lg" />
               <span className="truncate text-sm font-bold">Panel del dueño</span>
             </Link>
             <button type="button" onClick={toggleTheme} className="shrink-0 rounded-full p-1.5 text-muted hover:bg-surface-2 hover:text-fg" title={theme === "oscuro" ? "Tema claro" : "Tema oscuro"} aria-label="Cambiar tema">
