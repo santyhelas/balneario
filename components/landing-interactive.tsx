@@ -150,7 +150,7 @@ export function HeroBeach() {
         <div className="min-h-[52px] rounded-2xl bg-[var(--foam)] px-4 py-2.5 text-sm" aria-live="polite">
           {sel && selInfo ? (
             <>
-              <div className="font-bold">Carpa {sel} · <span style={{ color: COLOR[selInfo.st] === "var(--sol)" ? "#9a6b00" : COLOR[selInfo.st] }}>{LABEL[selInfo.st]}</span></div>
+              <div className="font-bold">Carpa {sel} · <span style={{ color: COLOR[selInfo.st] === "var(--sol)" ? "#9a6b00" : COLOR[selInfo.st] === "var(--lona)" ? "#b0201c" : COLOR[selInfo.st] }}>{LABEL[selInfo.st]}</span></div>
               <div className="text-[var(--gris)]">
                 {selInfo.r
                   ? `${selInfo.r.name}${selInfo.r.courtesy ? " (cortesía familiar)" : ""} · del ${fmt(selInfo.r.from)} al ${fmt(selInfo.r.to)} · ${selInfo.r.courtesy ? "sin cargo" : selInfo.r.paid ? "pagado" : "debe saldo"}`
@@ -248,7 +248,7 @@ export function DayTimeline({ steps }: { steps: DayStep[] }) {
         <label htmlFor="tb-hora" className="text-sm font-semibold text-[var(--atl-3)]">Deslizá la hora</label>
         <input id="tb-hora" type="range" min={0} max={steps.length - 1} step={1} value={i} onChange={(e) => setI(Number(e.target.value))}
           className="mt-2 w-full accent-[var(--sol)]" aria-valuetext={`${s.time}: ${s.title}`} />
-        <div className="mt-1 flex justify-between text-xs font-semibold text-white/60">
+        <div className="mt-1 flex justify-between text-xs font-semibold text-white/85">
           {steps.map((x, k) => (
             <button key={x.time} onClick={() => setI(k)} className={k === i ? "text-[var(--sol)]" : "hover:text-white"}>{x.time}</button>
           ))}

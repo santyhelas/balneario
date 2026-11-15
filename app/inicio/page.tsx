@@ -247,7 +247,7 @@ function GroupSlide({ g, n, total }: { g: (typeof GROUPS)[number]; n: number; to
           <path d="M0 120 Q25 100 50 120 T100 120 T150 120 T200 120 M0 150 Q25 130 50 150 T100 150 T150 150 T200 150 M0 180 Q25 160 50 180 T100 180 T150 180 T200 180" fill="none" stroke="#fff" strokeWidth="8" />
         </svg>
         <div>
-          <span className="text-sm font-semibold text-white/70">Parte {n} de {total}</span>
+          <span className="text-sm font-semibold text-white/90">Parte {n} de {total}</span>
           <h3 className="mt-2 text-5xl font-extrabold leading-none sm:text-6xl">{g.title}</h3>
           <p className="mt-4 max-w-xs text-xl leading-snug text-white/90">{g.lead}</p>
         </div>
@@ -420,7 +420,7 @@ export default function InicioPage() {
               <a href="/presupuesto" className="tb-press mt-4 inline-flex h-12 items-center justify-center rounded-full border-2 border-white/80 px-6 text-base font-bold text-white hover:bg-white hover:text-[var(--atl)]">
                 Calculá el precio para tu balneario
               </a>
-              <p className="mt-6 text-sm text-white/70">Mientras tanto, probá todo en la demo, sin registrarte.</p>
+              <p className="mt-6 text-sm text-white/90">Mientras tanto, probá todo en la demo, sin registrarte.</p>
             </div>
           </div>
         </section>
@@ -459,7 +459,7 @@ export default function InicioPage() {
           <div className="mx-auto flex max-w-6xl flex-col items-start gap-6 px-4 pb-16 pt-24 md:flex-row md:items-end md:justify-between">
             <div data-reveal="left">
               <h2 className="max-w-xl text-4xl font-extrabold leading-tight sm:text-5xl">¿Lo querés para tu balneario?</h2>
-              <p className="mt-3 max-w-md text-white/80">Escribinos y te ayudamos a cargar tus carpas y tus tarifas.</p>
+              <p className="mt-3 max-w-md text-white/95">Escribinos y te ayudamos a cargar tus carpas y tus tarifas.</p>
               <CopyEmailButton email={SITE_EMAIL} className="mt-5 inline-flex items-center gap-2 text-lg font-bold underline decoration-[var(--sol)] decoration-2 underline-offset-4">
                 <Icon d="M4 6h16v12H4zM4 7l8 6 8-6" />{SITE_EMAIL}
               </CopyEmailButton>
@@ -472,7 +472,7 @@ export default function InicioPage() {
         </section>
       </main>
 
-      <footer className="bg-[var(--tinta)] text-white/70">
+      <footer className="bg-[var(--tinta)] text-white/85">
         <div className="mx-auto grid max-w-6xl gap-10 px-4 pb-8 pt-14 sm:grid-cols-2 lg:grid-cols-[1.4fr_1fr_1fr_1fr_1fr]">
           <div>
             <img src="/brand/mi-balneario-logo-blanco.svg" alt="Mi Balneario" className="h-10 w-auto" />

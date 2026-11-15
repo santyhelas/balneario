@@ -41,7 +41,7 @@ export function DemoButton({ className, children = "Probar la demo", countClassN
         {busy ? "Preparando la demo…" : children}
       </button>
       {count != null && count > 0 && (
-        <span className={cx("mt-1.5 text-center text-xs opacity-80", countClassName)}>
+        <span className={cx("mt-1.5 text-center text-xs", countClassName)}>
           Ya la {count === 1 ? "probó 1 persona" : `probaron ${count.toLocaleString("es-AR")} personas`}
         </span>
       )}
