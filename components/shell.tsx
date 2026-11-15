@@ -18,8 +18,8 @@ import { PrintHeader } from "@/components/print-header";
 
 type NavItem = { href: string; label: string; icon: string };
 
-// Las 13 secciones del sistema, en el orden del menú.
-export const NAV: NavItem[] = [
+// Todas las pantallas del sistema (para íconos y atajos).
+export const SECTIONS: NavItem[] = [
   { href: "/", label: "Inicio / Panel", icon: "M4 4h7v7H4zM13 4h7v4h-7zM13 10h7v10h-7zM4 13h7v7H4z" },
   { href: "/mapa", label: "Mapa del balneario", icon: "M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21zM12 12a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z" },
   { href: "/disponibilidad", label: "Disponibilidad", icon: "M8 3v3M16 3v3M4 8h16M5 5h14v15H5zM8 12h2M12 12h2M16 12h0M8 16h2M12 16h2" },
@@ -54,12 +54,32 @@ export const CONFIG_SECTIONS: { id: keyof typeof CONFIG_ICONS; label: string; ow
   { id: "balneario", label: "Datos del balneario" },
   { id: "mensajes", label: "Mensajes a clientes" },
   { id: "reglas", label: "Caja, descuentos y reservas" },
-  { id: "atajos", label: "Atajos de teclado" },
-  { id: "cuentas", label: "Cuentas vinculadas", owners: true },
   { id: "usuarios", label: "Usuarios", owners: true },
   { id: "plan", label: "Mi plan", owners: true },
 ];
 
+const sec = (h: string) => SECTIONS.find((n) => n.href === h)!;
+
+/**
+ * Menú simplificado: 8 secciones. Las pantallas que se usan juntas quedan como pestañas de una misma sección
+ * (arriba de cada pantalla), y sus direcciones de siempre siguen funcionando.
+ */
+export const NAV_GROUPS: { href: string; label: string; tabs: { href: string; label: string }[] }[] = [
+  { href: "/", label: "Panel", tabs: [] },
+  { href: "/mapa", label: "Mapa", tabs: [{ href: "/mapa", label: "Mapa" }, { href: "/disponibilidad", label: "Disponibilidad" }] },
+  { href: "/reservas", label: "Reservas", tabs: [] },
+  { href: "/clientes", label: "Clientes", tabs: [{ href: "/clientes", label: "Clientes" }, { href: "/renovacion", label: "Renovación de temporada" }] },
+  { href: "/caja", label: "Caja", tabs: [{ href: "/caja", label: "Caja del día" }, { href: "/cobros", label: "Cobros y señas" }, { href: "/gastos", label: "Gastos" }] },
+  { href: "/tarifas", label: "Precios", tabs: [{ href: "/tarifas", label: "Tarifario" }, { href: "/convenios", label: "Descuentos y convenios" }] },
+  { href: "/reportes", label: "Reportes", tabs: [] },
+  { href: "/configuracion", label: "Configuración", tabs: [{ href: "/configuracion", label: "Configuración" }, { href: "/copias", label: "Copias de seguridad" }, { href: "/historial", label: "Historial" }] },
+];
+export const NAV: NavItem[] = NAV_GROUPS.map((g) => ({ href: g.href, label: g.label, icon: sec(g.href).icon }));
+const inPath = (pathname: string, href: string) => (href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(href + "/"));
+/** Sección del menú a la que pertenece una pantalla. */
+export function groupOf(pathname: string) {
+  return NAV_GROUPS.find((g) => g.href !== "/" && (inPath(pathname, g.href) || g.tabs.some((t) => inPath(pathname, t.href)))) ?? (pathname === "/" ? NAV_GROUPS[0] : null);
+}
 const byHref = (h: string) => NAV.find((n) => n.href === h)!;
 const TABS = ["/", "/mapa", "+", "/reservas", "#mas"];
 const MORE = NAV.filter((n) => !["/", "/mapa", "/reservas"].includes(n.href));
@@ -179,7 +199,7 @@ export function Shell({ children }: { children: ReactNode }) {
     });
   }
 
-  const isActive = (href: string) => (href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(href + "/")) && !(href === "/reservas" && pathname.startsWith("/reservas/nueva"));
+  const isActive = (href: string) => groupOf(pathname)?.href === href && !(href === "/reservas" && pathname.startsWith("/reservas/nueva"));
   const alerts = status.unseen;
   const carpa = status.summary?.espacios.carpa;
   const sombrilla = status.summary?.espacios.sombrilla;
@@ -242,6 +262,13 @@ export function Shell({ children }: { children: ReactNode }) {
                             className="flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-sm text-fg/90 hover:bg-surface-2">
                             <Icon d={CONFIG_ICONS[c.id]} className="h-4 w-4 text-muted" />
                             {c.label}
+                          </Link>
+                        ))}
+                        {["/copias", "/historial"].map((h) => (
+                          <Link key={h} href={h} onClick={() => setDrawerOpen(false)} tabIndex={configOpen ? 0 : -1}
+                            className="flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-sm text-fg/90 hover:bg-surface-2">
+                            <Icon d={sec(h).icon} className="h-4 w-4 text-muted" />
+                            {sec(h).label}
                           </Link>
                         ))}
                       </div>
@@ -699,8 +726,29 @@ function NoticesBell({ notices, count }: { notices: Notice[]; count: number }) {
   );
 }
 
+/** Pestañas de la sección (ej. Caja: Caja del día · Cobros y señas · Gastos). Van arriba del título. */
+export function SectionTabs() {
+  const pathname = usePathname();
+  const g = groupOf(pathname);
+  if (!g || g.tabs.length < 2) return null;
+  const current = [...g.tabs].sort((a, b) => b.href.length - a.href.length).find((t) => inPath(pathname, t.href));
+  return (
+    <nav className="-mt-1 mb-3 flex gap-1 overflow-x-auto border-b border-line print:hidden" aria-label={`Secciones de ${g.label}`}>
+      {g.tabs.map((t) => (
+        <Link key={t.href} href={t.href} data-tour={`tab-${t.href}`} aria-current={current?.href === t.href ? "page" : undefined}
+          className={cx("-mb-px shrink-0 border-b-2 px-3 py-2 text-sm font-medium",
+            current?.href === t.href ? "border-accent text-accent" : "border-transparent text-muted hover:text-fg")}>
+          {t.label}
+        </Link>
+      ))}
+    </nav>
+  );
+}
+
 export function PageHeader({ title, subtitle, actions }: { title: string; subtitle?: ReactNode; actions?: ReactNode }) {
   return (
+    <>
+    <SectionTabs />
     <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
@@ -708,6 +756,7 @@ export function PageHeader({ title, subtitle, actions }: { title: string; subtit
       </div>
       {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
     </div>
+    </>
   );
 }
 

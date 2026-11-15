@@ -5,6 +5,7 @@ import { newKey } from "@/lib/data";
 import { friendlyError } from "@/lib/errors";
 import { formatMoney, parseMoney } from "@/lib/format";
 import { COLLECT_METHODS } from "@/lib/methods";
+import { featuresOf } from "@/lib/features";
 import { DollarFields, type DollarValue } from "@/components/dollar";
 import { useWorkspace } from "@/components/workspace";
 import { Alert, Button, Field, Modal, Select, TextField } from "@/components/ui";
@@ -62,7 +63,7 @@ export function PaymentModal({ open, full, onClose, onDone }: { open: boolean; f
     <Modal open={open} onClose={onClose} title={`Registrar pago · saldo ${formatMoney(due)}`} busy={a.busy}>
       <form onSubmit={submit} className="flex flex-col gap-3">
         <Field label="Medio de pago">
-          <Select value={method} onChange={(e) => setMethod(e.target.value)}>{COLLECT_METHODS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}</Select>
+          <Select value={method} onChange={(e) => setMethod(e.target.value)}>{COLLECT_METHODS.filter((m) => m.value !== "dolares" || featuresOf(ws).dolares || method === "dolares").map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}</Select>
         </Field>
         {method === "dolares" ? (
           <DollarFields due={due} onChange={setUsd} />

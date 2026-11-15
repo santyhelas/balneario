@@ -1459,6 +1459,12 @@ select set_config('request.jwt.claims', '{"sub":"11111111-1111-1111-1111-1111111
 select t.ok((public.admin_metrics() -> 'totales' ->> 'clientes_pagos')::int = 0 and (public.admin_metrics() -> 'totales' ->> 'consultas')::int >= 1,
   'Métricas: el balneario del dueño no cuenta como cliente; las consultas sí se cuentan');
 
+-- 55. Funciones opcionales del balneario
+select set_config('request.jwt.claims', '{"sub":"11111111-1111-1111-1111-111111111111","email":"duenio@test.com"}', false);
+update public.workspaces set features = '{"dolares":true,"redondeo":false,"paquetes":false}', version = version + 1 where id = t.uid('ws');
+select t.ok((select features ->> 'dolares' = 'true' from public.workspaces where id = t.uid('ws')), 'Funciones: el administrador las prende y apaga');
+select t.throws(format($$update public.workspaces set features = '[]', version = version + 1 where id = %L$$, t.get('ws')), '', 'Funciones: tiene que ser un objeto');
+
 reset role;
 \o
 -- Resultado ----------------------------------------------------------

@@ -3,6 +3,7 @@ import { getSupabase } from "@/lib/supabase/client";
 import { unwrap, useLoader } from "@/lib/data";
 import { useWorkspace } from "@/components/workspace";
 import { PageHeader, SyncNotice } from "@/components/shell";
+import { featuresOf } from "@/lib/features";
 import { Alert, Spinner } from "@/components/ui";
 import { AgreementsCard, DiscountCapCard, DiscountModeCard, PackagePricesCard, PackagesCard, loadAgreements, loadPackagePrices, type DiscountMode, type Pkg } from "@/components/pricing";
 
@@ -28,7 +29,7 @@ export default function ConveniosPage() {
       {!q.data ? (q.loading && <div className="flex items-center gap-2 text-muted"><Spinner small /> Cargando…</div>) : (
         <div className="grid gap-4 lg:grid-cols-2">
           <div className="flex flex-col gap-4">
-            <PackagePricesCard rows={q.data.fixed} editable={isAdmin} onChanged={q.reload} />
+            {(featuresOf(ws).paquetes || (q.data.fixed?.length ?? 0) > 0) && <PackagePricesCard rows={q.data.fixed} editable={isAdmin} onChanged={q.reload} />}
             <PackagesCard pkgs={q.data.pkgs} cashPercent={q.data.wsRow.cash_discount_percent} wsVersion={q.data.wsRow.version} editable={isAdmin} onChanged={q.reload} />
           </div>
           <div className="flex flex-col gap-4">

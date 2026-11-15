@@ -6,8 +6,7 @@ import { formatDate, formatMoney } from "@/lib/format";
 import { useWorkspace } from "@/components/workspace";
 import { useStatus, type ResItem } from "@/components/status";
 import { WeekAhead } from "@/components/week-ahead";
-import { Icon, NAV } from "@/components/shell";
-import { useHotkeys } from "@/components/hotkeys";
+import { Icon, SECTIONS } from "@/components/shell";
 import { Alert, Button, Spinner, cx } from "@/components/ui";
 import { CloseCashModal, OpenCashModal, type CashSummary } from "@/components/cash";
 import { WeatherStrip } from "@/components/weather";
@@ -25,11 +24,10 @@ const TONE: Record<Tone, { box: string; label: string; value: string }> = {
   orange: { box: "border-orange-500/40", label: "text-orange-500", value: "text-orange-500" },
   neutral: { box: "border-line", label: "text-muted", value: "text-fg" },
 };
-const icon = (href: string) => NAV.find((n) => n.href === href)!.icon;
+const icon = (href: string) => SECTIONS.find((n) => n.href === href)!.icon;
 
 export default function DashboardPage() {
   const { ws, isGuest, role, guideDone } = useWorkspace();
-  const hotkeys = useHotkeys();
   const st = useStatus();
   const data = st.summary;
   // En la demo, el pedido de abrir la caja espera a que termine el tutorial.
@@ -152,17 +150,6 @@ export default function DashboardPage() {
         </StatGroup>
       </div>
 
-      <div data-tour="semana"><WeekAhead /></div>
-
-      {/* Atajos de teclado (reemplazan los botones de accesos rápidos): solo en compu */}
-      <p className="hidden flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted md:flex" data-tour="atajos">
-        <span className="font-semibold">Atajos:</span>
-        {hotkeys.filter((h) => h.key).map((h) => (
-          <span key={h.key} className="inline-flex items-center gap-1">
-            <kbd className="rounded border border-line bg-surface-2 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-fg">{h.key}</kbd>{h.label}
-          </span>
-        ))}
-      </p>
 
       <div className="grid gap-4 lg:grid-cols-2">
         <ResCard title={`Inician hoy (${data.ingresan_hoy.length})`} tone="accent" items={data.ingresan_hoy} empty="No hay ingresos previstos para hoy."
@@ -173,6 +160,8 @@ export default function DashboardPage() {
           arrivals={arrivals} onArrival={(id, v) => setArrivals((a) => ({ ...a, [id]: v }))} />
         <ResCard title={`Finalizan hoy (${data.finalizan_hoy.length})`} tone="orange" items={data.finalizan_hoy} empty="No hay finalizaciones previstas para hoy." right="Liberación de espacios" />
       </div>
+
+      <div data-tour="semana"><WeekAhead /></div>
 
       <OpenCashModal open={openCash} workspaceId={ws.id} onClose={() => setOpenCash(false)} onDone={() => { setOpenCash(false); st.reload(); }} />
       <CloseCashModal open={closing !== null} summary={closing} onClose={() => setClosing(null)} onDone={() => { setClosing(null); st.reload(); }} />
