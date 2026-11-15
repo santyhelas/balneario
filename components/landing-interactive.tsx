@@ -150,7 +150,7 @@ export function HeroBeach() {
         <div className="min-h-[52px] rounded-2xl bg-[var(--foam)] px-4 py-2.5 text-sm" aria-live="polite">
           {sel && selInfo ? (
             <>
-              <div className="font-bold">Carpa {sel} · <span style={{ color: COLOR[selInfo.st] === "var(--sol)" ? "#9a6b00" : COLOR[selInfo.st] === "var(--lona)" ? "#b0201c" : COLOR[selInfo.st] }}>{LABEL[selInfo.st]}</span></div>
+              <div className="font-bold">Carpa {sel} · <span style={{ color: COLOR[selInfo.st] === "var(--sol)" ? "#9a6b00" : COLOR[selInfo.st] === "var(--lona)" ? "var(--lona-texto)" : COLOR[selInfo.st] }}>{LABEL[selInfo.st]}</span></div>
               <div className="text-[var(--gris)]">
                 {selInfo.r
                   ? `${selInfo.r.name}${selInfo.r.courtesy ? " (cortesía familiar)" : ""} · del ${fmt(selInfo.r.from)} al ${fmt(selInfo.r.to)} · ${selInfo.r.courtesy ? "sin cargo" : selInfo.r.paid ? "pagado" : "debe saldo"}`

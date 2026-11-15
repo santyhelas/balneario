@@ -10,6 +10,7 @@
   --sand: #f1dfb6;
   --sand-2: #e3c98f;
   --lona: #d6332f;
+  --lona-texto: #b0201c;
   --sol: #f2b233;
   --tinta: #13252e;
   --gris: #51656e;
@@ -62,6 +63,7 @@ html[data-tb="oscuro"] .tb {
   --gris: #a7bac2;
   --foam: #17394a;
   --sand-2: #4d4330;
+  --lona-texto: #ff7a73;
   background: #0b1d26;
 }
 html[data-tb="oscuro"] body { background: #0b1d26; }
