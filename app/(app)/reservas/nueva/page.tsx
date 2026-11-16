@@ -585,7 +585,7 @@ export default function NuevaReservaPage() {
       <div className="mx-auto max-w-lg">
         <Alert tone="ok" className="mb-4 text-base">
           {done.group
-            ? <><strong>Grupo guardado: reservas {done.group.map((g) => `#${g.number}`).join(", ")}.</strong> Las carpas quedaron unidas; el cobro se repartió entre ellas.</>
+            ? <><strong>Grupo guardado: reservas {done.group.map((g) => `#${g.number}`).join(", ")}.</strong> {parking && !isGroup ? `La ${kindName(kind)} y la cochera quedaron unidas` : "Quedaron unidas"}; el cobro se repartió entre ellas.</>
             : <><strong>Reserva #{done.number} guardada.</strong> Ya figura en el mapa, en la caja (si hubo cobro) y en todas las computadoras.</>}
         </Alert>
         <div className="flex flex-wrap gap-2">

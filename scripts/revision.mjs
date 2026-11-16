@@ -110,7 +110,7 @@ for (const [view, opts] of Object.entries(VIEWS)) {
   const ctx = await browser.newContext({ ...opts, locale: "es-AR", timezoneId: "America/Argentina/San_Juan" });
   const page = await ctx.newPage();
   const issues = watch(page);
-  for (const path of ["/", "/login", "/terminos", "/privacidad", "/mapa", "/caja", "/admin", "/dueno", "/presupuesto", "/no-existe-esta-pagina"]) {
+  for (const path of ["/", "/login", "/terminos", "/privacidad", "/mapa", "/caja", "/admin", "/dueno", "/presupuesto", "/sistema-para-balnearios/mar-del-plata", "/no-existe-esta-pagina"]) {
     report.publico.push(await check(page, path, `publico${path === "/" ? "-inicio" : path}`, view, issues));
   }
   // Panel del dueño (con la cuenta de prueba, que es dueña de la plataforma en la base local)
@@ -145,7 +145,7 @@ for (const [view, opts] of Object.entries(VIEWS)) {
       await p3.waitForTimeout(500);
       await p3.screenshot({ path: `${OUT}/capturas/admin-altas-${view}.png`, fullPage: true });
       // Las demás secciones del panel abren sin errores
-      for (const [name, text] of [["Cobros", "Calendario de cobros"], ["Interesados", "De la demo a la venta"], ["Gastos", "Gastos fijos"], ["Renovación", "Renovación de temporada"], ["Instagram", "Banco de ideas"]]) {
+      for (const [name, text] of [["Cobros", "Calendario de cobros"], ["Interesados", "De la demo a la venta"], ["Gastos", "Gastos fijos"], ["Renovación", "Renovación de temporada"], ["Instagram", "Banco de ideas"], ["Precios", "Precios por tamaño"]]) {
         await p3.getByRole("link", { name, exact: true }).first().click();
         const okSec = await p3.getByText(text).first().waitFor({ timeout: 15000 }).then(() => true, () => false);
         await p3.waitForTimeout(800);
@@ -562,6 +562,93 @@ for (const [view, opts] of Object.entries(VIEWS)) {
       f7b.resultado = esperado.length ? `Revisar: ${esperado.join(", ")}` : "OK";
     } catch (e) { f7b.resultado = `Se cortó: ${String(e).slice(0, 200)}`; await page.screenshot({ path: `${OUT}/capturas/tutorial-demo-error.png` }); }
     report.flujos.push(f7b);
+
+    // g1) Cocheras: una reserva de carpa con cochera (misma reserva de grupo, con su tarifa)
+    const fc = { flujo: "Cocheras: carpa + cochera en la misma reserva", pasos: [] };
+    try {
+      await page.goto(DEMO + "/mapa", { waitUntil: "networkidle" });
+      await page.waitForTimeout(2500);
+      const nCoch = await page.locator('[aria-label^="Cochera "]').count();
+      fc.pasos.push(`cocheras en el mapa: ${nCoch}`);
+      await page.screenshot({ path: `${OUT}/capturas/cocheras-mapa.png` });
+      await page.goto(DEMO + "/reservas/nueva", { waitUntil: "networkidle" });
+      await page.getByRole("button", { name: "+ Nuevo cliente" }).click();
+      const dlg = page.getByRole("dialog");
+      await dlg.getByLabel("Nombre").fill("Auto");
+      await dlg.getByLabel("Apellido").fill("Cochera");
+      await dlg.getByRole("button", { name: /^Guardar/ }).click();
+      await page.waitForTimeout(2500);
+      const again = page.getByRole("dialog").getByRole("button", { name: "Guardar igual" });
+      if (await again.isVisible().catch(() => false)) await again.click();
+      await page.getByText("Auto Cochera").first().waitFor({ timeout: 15000 });
+      await page.getByRole("button", { name: "5 días", exact: true }).first().click();
+      await page.waitForTimeout(2500);
+      await page.locator('button[title="Libre toda la estadía"]').first().click();
+      await page.waitForTimeout(1000);
+      await page.getByRole("button", { name: /Sumar una cochera/ }).click();
+      await page.getByText("Libres toda la estadía. Va en la misma reserva").waitFor({ timeout: 15000 });
+      await page.waitForTimeout(1500);
+      const first = page.locator("div.rounded-lg.border", { hasText: "Libres toda la estadía. Va en la misma reserva" }).locator("button", { hasText: /^C\d+$/ }).first();
+      const code = (await first.textContent())?.trim();
+      await first.click();
+      fc.pasos.push(`cochera elegida: ${code}`);
+      await page.getByText(`Cochera ${code}`, { exact: false }).first().waitFor({ timeout: 10000 });
+      await page.waitForTimeout(2000);
+      await page.screenshot({ path: `${OUT}/capturas/cocheras-reserva.png`, fullPage: true });
+      await page.getByRole("button", { name: "Revisar y confirmar" }).click();
+      await page.waitForTimeout(1200);
+      await page.getByRole("button", { name: "Guardar reserva" }).click();
+      await page.waitForTimeout(2000);
+      const confirm = page.getByRole("dialog").getByRole("button", { name: /Confirmar|Guardar|Sí/ });
+      if (await confirm.first().isVisible().catch(() => false)) await confirm.first().click();
+      await page.getByRole("button", { name: "Ver la reserva" }).waitFor({ timeout: 20000 });
+      const body = await page.locator("body").innerText();
+      fc.pasos.push(/Grupo guardado/.test(body) ? "guardó la carpa y la cochera unidas" : "guardada (sin grupo)");
+      await page.screenshot({ path: `${OUT}/capturas/cocheras-guardada.png`, fullPage: true });
+      // Disponibilidad con el filtro de cocheras
+      await page.goto(DEMO + "/disponibilidad", { waitUntil: "networkidle" });
+      await page.getByRole("button", { name: "Cocheras", exact: true }).click();
+      await page.waitForTimeout(1500);
+      const rowsC = await page.getByText("Coch.", { exact: true }).count();
+      fc.pasos.push(`disponibilidad: ${rowsC} cocheras`);
+      await page.screenshot({ path: `${OUT}/capturas/cocheras-disponibilidad.png` });
+      // Tarifario con columna de cocheras
+      await page.goto(DEMO + "/tarifas", { waitUntil: "networkidle" });
+      const col = await page.getByText("Cochera ($/día)").count();
+      fc.pasos.push(col ? "tarifario: columna de cocheras" : "tarifario: falta la columna");
+      fc.resultado = nCoch >= 10 && rowsC >= 10 && col ? "OK" : "Revisar";
+    } catch (e) { fc.resultado = `Se cortó: ${String(e).slice(0, 200)}`; await page.screenshot({ path: `${OUT}/capturas/cocheras-error.png`, fullPage: true }).catch(() => {}); }
+    report.flujos.push(fc);
+
+    // g2) Reportes: botón «Comparar temporadas» lleva a la comparación
+    const fr = { flujo: "Reportes: ir a Comparar temporadas", pasos: [] };
+    try {
+      await page.goto(DEMO + "/reportes", { waitUntil: "networkidle" });
+      await page.getByRole("button", { name: "Comparar temporadas" }).click();
+      await page.waitForTimeout(1500);
+      const inView = await page.evaluate(() => { const r = document.getElementById("temporadas")?.getBoundingClientRect(); return !!r && r.top < window.innerHeight && r.bottom > 0; });
+      await page.screenshot({ path: `${OUT}/capturas/reportes-temporadas.png` });
+      fr.resultado = inView ? "OK" : "Revisar: no bajó a la comparación";
+    } catch (e) { fr.resultado = `Se cortó: ${String(e).slice(0, 200)}`; }
+    report.flujos.push(fr);
+
+    // g3) Menú por grupos: cada sección muestra sus pestañas y todas abren
+    const fm = { flujo: "Menú: pestañas de cada sección", pasos: [] };
+    try {
+      const malas = [];
+      for (const path of ["/mapa", "/reservas", "/clientes", "/caja", "/reportes", "/configuracion"]) {
+        await page.goto(DEMO + path, { waitUntil: "networkidle" });
+        await page.waitForTimeout(800);
+        const tabs = await page.locator('[data-tour^="tab-"]').evaluateAll((els) => els.map((e) => e.getAttribute("href")).filter(Boolean));
+        fm.pasos.push(`${path}: ${tabs.join(" ") || "(sin pestañas)"}`);
+        for (const t of tabs) {
+          const r = await page.request.get(DEMO + t);
+          if (r.status() >= 400) malas.push(`${t} → ${r.status()}`);
+        }
+      }
+      fm.resultado = malas.length ? `Revisar: ${malas.join(", ")}` : "OK";
+    } catch (e) { fm.resultado = `Se cortó: ${String(e).slice(0, 200)}`; }
+    report.flujos.push(fm);
 
     // g) Tutorial de novedades: cada paso encuentra lo que explica
     const f7 = { flujo: "Tutorial de novedades", pasos: [] };
