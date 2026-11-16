@@ -623,6 +623,25 @@ for (const [view, opts] of Object.entries(VIEWS)) {
     } catch (e) { fc.resultado = `Se cortó: ${String(e).slice(0, 200)}`; await page.screenshot({ path: `${OUT}/capturas/cocheras-error.png`, fullPage: true }).catch(() => {}); }
     report.flujos.push(fc);
 
+    // g1b) Estadías largas: la disponibilidad trae todas las carpas aunque pase de 1000 filas, y se puede cargar más de 120 días
+    const fl = { flujo: "Nueva reserva: estadías largas (30 y 200 días)", pasos: [] };
+    try {
+      for (const n of [30, 200]) {
+        await page.goto(DEMO + "/reservas/nueva", { waitUntil: "networkidle" });
+        const start = await page.getByLabel("Entrada").inputValue();
+        const d = new Date(start + "T12:00:00"); d.setDate(d.getDate() + n - 1);
+        await page.getByLabel("Salida (último día)").fill(d.toISOString().slice(0, 10));
+        await page.waitForTimeout(4000);
+        const cells = await page.locator('button[title="Libre toda la estadía"], button[title^="Libre "], button[title="Sin días libres"]').count();
+        const max = await page.getByText(/Máximo \d+ días/).count();
+        fl.pasos.push(`${n} días: ${cells} carpas en la grilla${max ? " · aparece el aviso de máximo" : ""}`);
+        if (n === 200) await page.screenshot({ path: `${OUT}/capturas/estadia-200-dias.png` });
+        if (cells < 79 || max) fl.mal = true;
+      }
+      fl.resultado = fl.mal ? "Revisar" : "OK";
+    } catch (e) { fl.resultado = `Se cortó: ${String(e).slice(0, 200)}`; }
+    report.flujos.push(fl);
+
     // g2) Reportes: botón «Comparar temporadas» lleva a la comparación
     const fr = { flujo: "Reportes: ir a Comparar temporadas", pasos: [] };
     try {
