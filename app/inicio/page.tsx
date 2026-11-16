@@ -345,9 +345,6 @@ export default function InicioPage() {
               <p data-reveal className="mt-4 max-w-xl text-lg leading-relaxed text-[var(--gris)]">
                 Del cuaderno al mapa: reservas sin superponer, señas y deudas al peso, y el mensaje de WhatsApp listo para mandar.
               </p>
-              <div data-reveal className="mt-6 flex flex-wrap gap-3">
-                <DemoButton className="tb-press rounded-full bg-[var(--lona)] px-7 text-white hover:brightness-110" />
-              </div>
             </div>
             <div data-reveal className="mx-auto w-[260px] overflow-hidden rounded-[32px] border-[6px] border-[var(--tinta)] bg-[var(--tinta)] shadow-2xl sm:w-[300px]">
               <video src="/landing/reel.mp4" poster="/landing/reel.jpg" controls playsInline preload="none" className="block aspect-[9/16] w-full"
