@@ -8,7 +8,7 @@ import { daysOf, indexGrid, isFreeFor, type GridRow } from "@/lib/stay";
 import { useWorkspace } from "@/components/workspace";
 import { useAction } from "@/components/payments";
 import { Alert, Button, Field, Input, Modal, Select, Spinner, TextField, cx } from "@/components/ui";
-import type { SpaceKind } from "@/lib/space-kinds";
+import { kindName, type SpaceKind } from "@/lib/space-kinds";
 
 /** Cambiar de carpa a una reserva: por un solo día o por el resto de la estadía. La usa la reserva y el mapa. */
 export function RelocateModal({ open, full, today, onClose, onDone, initialDay, initialTarget }: {

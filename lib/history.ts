@@ -204,7 +204,7 @@ export function describeAudit(row: AuditRow, l: Lookups): Described {
       return { category: "convenios", title: `Convenio modificado: ${str(d.name)}`, details: changes };
     }
     case "spaces": {
-      const name = spaceName(l, row.row_id) === "Espacio" ? `${KindName(d.kind)} ${str(d.code)}` : spaceName(l, row.row_id);
+      const name = spaceName(l, row.row_id) === "Espacio" ? `${KindName(str(d.kind))} ${str(d.code)}` : spaceName(l, row.row_id);
       if (row.action === "alta") return { category: "espacios", title: `${name} agregada`, details: [] };
       if (changes.length > 0) return { category: "espacios", title: `${name} modificada`, details: changes };
       if (o.x !== n.x || o.y !== n.y || o.rotation !== n.rotation) return { category: "mapa", title: `${name} movida en el plano`, details: [] };
