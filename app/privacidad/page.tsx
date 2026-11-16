@@ -25,7 +25,6 @@ export default function PrivacidadPage() {
         <li><strong>Cuenta:</strong> nombre de usuario, correo electrónico y, si ingresás con Google, el nombre y la foto de esa cuenta.</li>
         <li><strong>Datos que carga el balneario:</strong> clientes (nombre, apellido, teléfono, correo, observaciones), reservas, pagos, caja, gastos, tarifas y notas.</li>
         <li><strong>Ubicación del balneario:</strong> la que se carga en Configuración, para mostrar el clima. No guardamos la ubicación de las personas.</li>
-        <li><strong>Pedido de presupuesto:</strong> si lo completás en la web, el nombre, balneario, teléfono, correo, ciudad y cantidad de carpas y sombrillas que nos dejes. Los usamos solo para responderte.</li>
         <li><strong>Datos técnicos:</strong> registros de seguridad (por ejemplo, intentos de ingreso) y estadísticas de visitas de la página de presentación, anónimas y sin cookies.</li>
       </ul>
 

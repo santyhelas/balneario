@@ -80,7 +80,7 @@ const FAQ = [
   { q: "¿Puedo cobrar una seña y el resto después?", a: "Sí. Cobrás todo, una seña o nada al reservar, en efectivo, transferencia, tarjeta o dólares. El sistema lleva el saldo exacto de cada cliente y te avisa quién debe." },
   { q: "¿Tengo que instalar algo?", a: "No. Funciona desde el navegador en la computadora o en el celular. En el celular lo podés agregar a la pantalla de inicio y se abre como una app." },
   { q: "¿Mis datos están seguros? ¿Y si se me rompe la compu?", a: "Tus datos no están en la compu: se guardan en internet, protegidos, y cada balneario ve solo lo suyo. Si se rompe, entrás desde otra o desde el celular y está todo igual. Además podés tener una copia diaria en tu Google Drive." },
-  { q: "¿Cuánto cuesta?", a: "Depende del tamaño de tu balneario. Calculalo en «Calculá el precio para tu balneario» o pedinos un presupuesto sin compromiso por WhatsApp." },
+  { q: "¿Cuánto cuesta?", a: "Depende del tamaño de tu balneario. Escribinos por WhatsApp contándonos cuántas carpas y sombrillas tenés y te pasamos el presupuesto sin compromiso." },
 ];
 
 /** Ícono de Instagram (dibujo simple de cámara). */
@@ -318,8 +318,9 @@ export default function InicioPage() {
               </p>
               <div className="tb-in mt-8 flex flex-wrap items-start gap-3" style={dl(300)}>
                 <DemoButton className="tb-shine tb-press rounded-full bg-[var(--lona)] px-7 text-white shadow-[0_10px_25px_-10px_rgba(214,51,47,0.8)] hover:brightness-110" />
-                <a href="/presupuesto" className="tb-press inline-flex items-center justify-center rounded-full border-2 border-[var(--atl)] px-7 py-3 text-base font-bold text-[var(--atl)] hover:bg-[var(--atl)] hover:text-white">
-                  Calculá tu precio
+                <a href={SITE_WHATSAPP_URL || "#planes"} {...(SITE_WHATSAPP_URL ? { target: "_blank", rel: "noopener noreferrer" } : {})}
+                  className="tb-press inline-flex items-center justify-center gap-2 rounded-full border-2 border-[var(--atl)] px-7 py-3 text-base font-bold text-[var(--atl)] hover:bg-[var(--atl)] hover:text-white">
+                  <WhatsAppIcon className="h-5 w-5" />Pedí tu presupuesto
                 </a>
               </div>
               <p className="tb-in mt-3 text-sm text-[var(--gris)]" style={dl(420)}>La demo abre un balneario de prueba con datos inventados. No hace falta registrarse.</p>
@@ -417,9 +418,6 @@ export default function InicioPage() {
                   <Icon d="M4 6h16v12H4zM4 7l8 6 8-6" />Escribinos por mail
                 </CopyEmailButton>
               </div>
-              <a href="/presupuesto" className="tb-press mt-4 inline-flex h-12 items-center justify-center rounded-full border-2 border-white/80 px-6 text-base font-bold text-white hover:bg-white hover:text-[var(--atl)]">
-                Calculá el precio para tu balneario
-              </a>
               <p className="mt-6 text-sm text-white/90">Mientras tanto, probá todo en la demo, sin registrarte.</p>
             </div>
           </div>

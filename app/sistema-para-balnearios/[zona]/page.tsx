@@ -38,7 +38,7 @@ export default async function ZonaPage({ params }: { params: Promise<{ zona: str
     { q: `¿Sirve para cualquier balneario ${z.donde}?`, a: "Sí: para balnearios con carpas, sombrillas o las dos, chicos o grandes. Armamos el mapa con tu distribución real y cargamos tus tarifas." },
     { q: "¿Cuánto se tarda en implementar el sistema?", a: "En 72 horas tenés tu balneario funcionando. Cuanto antes empieces, mejor: llegás a la temporada con tus clientes y reservas ya cargados." },
     { q: "¿Si tengo un problema, qué pasa?", a: "Tenés soporte 24/7 por WhatsApp." },
-    { q: "¿Cuánto cuesta?", a: "Depende del tamaño de tu balneario. Calculalo en la página de presupuesto o escribinos por WhatsApp." },
+    { q: "¿Cuánto cuesta?", a: "Depende del tamaño de tu balneario. Escribinos por WhatsApp contándonos cuántas carpas y sombrillas tenés y te pasamos el presupuesto sin compromiso." },
   ];
   const ld = [{
     "@context": "https://schema.org", "@type": "Service", name: `Sistema de gestión para balnearios ${z.donde}`,
@@ -55,7 +55,7 @@ export default async function ZonaPage({ params }: { params: Promise<{ zona: str
       <header className="mx-auto flex max-w-5xl items-center justify-between px-4 py-4">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <a href="/" className="flex items-center gap-2 font-bold"><img src="/logo-96.png" alt="" className="h-9 w-9 rounded-xl" />Mi Balneario</a>
-        <a href="/presupuesto" className="rounded-full border-2 border-[#0b6a87] px-4 py-1.5 text-sm font-bold text-[#0b6a87] hover:bg-[#0b6a87] hover:text-white">Calculá tu precio</a>
+        <a href={SITE_WHATSAPP_URL || "/#planes"} target="_blank" rel="noopener noreferrer" className="rounded-full border-2 border-[#0b6a87] px-4 py-1.5 text-sm font-bold text-[#0b6a87] hover:bg-[#0b6a87] hover:text-white">Pedí tu presupuesto</a>
       </header>
       <main className="mx-auto max-w-5xl px-4 pb-20">
         <section className="py-10">
@@ -67,7 +67,7 @@ export default async function ZonaPage({ params }: { params: Promise<{ zona: str
           </p>
           <div className="mt-7 flex flex-wrap items-start gap-3">
             <DemoButton className="rounded-full bg-[#d6332f] px-7 text-white shadow hover:brightness-110" countClassName="text-[#4a565c]" />
-            <a href="/presupuesto" className="inline-flex items-center rounded-full border-2 border-[#0b6a87] px-7 py-3 font-bold text-[#0b6a87] hover:bg-[#0b6a87] hover:text-white">Calculá tu precio</a>
+            <a href={SITE_WHATSAPP_URL || "/#planes"} target="_blank" rel="noopener noreferrer" className="inline-flex items-center rounded-full border-2 border-[#0b6a87] px-7 py-3 font-bold text-[#0b6a87] hover:bg-[#0b6a87] hover:text-white">Pedí tu presupuesto</a>
           </div>
           <p className="mt-3 text-sm text-[#5b666c]">La demo abre un balneario de prueba con datos inventados. No hace falta registrarse.</p>
         </section>

@@ -33,14 +33,14 @@ export function PriceTiersCard() {
     setBusy(true);
     const { error } = await sb.rpc("admin_save_price_tiers", { p_tiers: out });
     setBusy(false);
-    setMsg(error ? { ok: false, text: friendlyError(error) } : { ok: true, text: "Escalas guardadas. Ya se usan en la página de presupuesto." });
+    setMsg(error ? { ok: false, text: friendlyError(error) } : { ok: true, text: "Escalas guardadas." });
   }
   const sorted = [...rows].sort((a, b) => (Number(a.hasta) || Infinity) - (Number(b.hasta) || Infinity));
   return (
-    <Card title="Precios por tamaño (presupuesto de la web)">
+    <Card title="Precios por tamaño">
       <p className="mb-3 text-sm text-muted">
-        En <a href="/presupuesto" target="_blank" className="text-accent hover:underline">mibalneario.com.ar/presupuesto</a> el interesado pone cuántas carpas y sombrillas tiene y ve el precio de su escala al instante.
-        Se cuentan carpas + sombrillas. Dejá «Hasta» vacío en la última (sin límite). Si no cargás escalas, la página solo toma el pedido sin mostrar precio.
+        Tu lista de precios según el tamaño del balneario, para tenerla a mano cuando te piden presupuesto.
+        Se cuentan carpas + sombrillas. Dejá «Hasta» vacío en la última (sin límite).
       </p>
       <div className="overflow-x-auto">
         <table className="w-full min-w-[560px] text-sm">
