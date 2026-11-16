@@ -1,9 +1,10 @@
 // Historial: convierte los registros del historial de cambios (audit_log) en frases entendibles.
 // Lógica pura (sin base de datos) para poder probarla.
 
+import { KindName } from "./space-kinds.ts";
+
 export type AuditRow = {
   id: number;
-import { KindName } from "@/lib/space-kinds";
   table_name: string;
   row_id: string | null;
   action: "alta" | "modificacion" | "baja";

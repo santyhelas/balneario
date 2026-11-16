@@ -2,8 +2,9 @@
 // La disponibilidad viene de availability_grid (la misma consulta que usa el resto del sistema)
 // y la base vuelve a validar todo al guardar.
 
+import type { SpaceKind } from "./space-kinds.ts";
+
 export type GridRow = { space_id: string; code: string; kind: SpaceKind; day: string; free: boolean; reason: string | null };
-import type { SpaceKind } from "@/lib/space-kinds";
 export type Segment = { space_id: string; start_date: string; end_date: string };
 export type Run = { start: string; end: string; days: number };
 

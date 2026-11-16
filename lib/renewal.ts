@@ -1,10 +1,11 @@
 // Renovación de temporada: clientes de la temporada pasada, su lugar habitual
 // y si ya volvieron a reservar o si su lugar ya está tomado este año.
 
+import type { SpaceKind } from "./space-kinds.ts";
+
 /** Temporada "2026/2027" → del 01/07/2026 al 30/06/2027 (igual que el historial de clientes). */
 export function seasonRange(season: string): { from: string; to: string } {
   const y = Number(season.slice(0, 4));
-import type { SpaceKind } from "@/lib/space-kinds";
   return { from: `${y}-07-01`, to: `${y + 1}-06-30` };
 }
 

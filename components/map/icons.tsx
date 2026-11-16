@@ -1,7 +1,8 @@
 // Íconos vistos desde arriba: carpa de playa y sombrilla de playa, con diseño configurable.
 
-export type SpaceState = "disponible" | "ocupada" | "cortesia" | "reservada_futura" | "mantenimiento" | "desactivada";
 import type { SpaceKind } from "@/lib/space-kinds";
+
+export type SpaceState = "disponible" | "ocupada" | "cortesia" | "reservada_futura" | "mantenimiento" | "desactivada";
 
 export const STATE_COLOR: Record<SpaceState, string> = {
   disponible: "var(--st-disponible)",
