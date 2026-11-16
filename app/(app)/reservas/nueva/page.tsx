@@ -278,6 +278,7 @@ export default function NuevaReservaPage() {
   const [manualReason, setManualReason] = useState("");
   const [useManualBase, setUseManualBase] = useState(false);
   const [manualBase, setManualBase] = useState("");
+  const [quickPrice, setQuickPrice] = useState("");
   const [notes, setNotes] = useState("");
   const [roundTotal, setRoundTotal] = useState(false);
   const [moreOpts, setMoreOpts] = useState(false);
@@ -986,7 +987,18 @@ export default function NuevaReservaPage() {
               <Alert tone="warn">
                 Faltan tarifas para:{" "}
                 {quote.faltan_tarifas.map((f) => `${f.space_kind} ${f.half === 1 ? "1ª" : "2ª"} quinc. ${MONTHS_SHORT[f.month - 1]} ${f.year}`).filter((v, i, a) => a.indexOf(v) === i).join(", ")}.{" "}
-                {isAdmin ? <><Link className="underline" href="/tarifas">Cargalas en el Tarifario</Link> o usá un precio manual.</> : "Pedile a un administrador que las cargue."}
+                {isAdmin ? <><Link className="underline" href="/tarifas">Cargalas en el Tarifario</Link>, o poné acá el precio que acordaste y seguí cargando:</> : "Pedile a un administrador que las cargue."}
+                {isAdmin && (
+                  <form className="mt-2 flex flex-wrap items-end gap-2" onSubmit={(e) => { e.preventDefault(); if (parseMoney(quickPrice) !== null) { setManualBase(quickPrice); setUseManualBase(true); } }}>
+                    <Field label={isGroup ? "Precio de cada carpa por toda la estadía" : "Precio de toda la estadía"}>
+                      <Input inputMode="decimal" value={quickPrice} onChange={(e) => setQuickPrice(e.target.value)} placeholder="$ 0" className="w-40" autoFocus />
+                    </Field>
+                    <Button type="submit" disabled={parseMoney(quickPrice) === null}>Usar este precio</Button>
+                  </form>
+                )}
+                {isAdmin && (
+                  <p className="mt-1 text-xs">Los descuentos marcados (efectivo, convenio) se aplican sobre ese precio: si ya los incluye, destildalos.</p>
+                )}
               </Alert>
             ) : quote && (
               <div className={cx("flex flex-col gap-1 text-sm", quoteLoading && "opacity-60")}>
