@@ -7,11 +7,12 @@ import { formatDate, formatDateTime, formatMoney } from "@/lib/format";
 import { SyncNotice } from "@/components/shell";
 import { Badge, Card, EmptyState, Spinner } from "@/components/ui";
 import { KPI_ICON, Kpi } from "@/components/owner/board";
+import type { SpaceKind } from "@/lib/space-kinds";
 
 type View = {
   hoy: string;
   balneario: { id: string; nombre: string; subtitulo: string | null; telefono: string | null; direccion: string | null; ancho: number; alto: number; mar: string | null; pausado: boolean; creado: string };
-  espacios: { codigo: string; tipo: "carpa" | "sombrilla"; x: number; y: number; activo: boolean; ocupado: boolean }[];
+  espacios: { codigo: string; tipo: SpaceKind; x: number; y: number; activo: boolean; ocupado: boolean }[];
   elementos: { tipo: string; nombre: string | null; x: number; y: number; ancho: number; alto: number; color: string | null }[];
   reservas: { numero: number; cliente: string; desde: string; hasta: string; estado: string; total: number; debe: number; espacios: string | null }[];
   caja: { fecha: string; abierta: boolean; apertura: number; esperado: number | null; contado: number | null; diferencia: number | null } | null;

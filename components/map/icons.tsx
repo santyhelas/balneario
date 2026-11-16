@@ -1,6 +1,7 @@
 // Íconos vistos desde arriba: carpa de playa y sombrilla de playa, con diseño configurable.
 
 export type SpaceState = "disponible" | "ocupada" | "cortesia" | "reservada_futura" | "mantenimiento" | "desactivada";
+import type { SpaceKind } from "@/lib/space-kinds";
 
 export const STATE_COLOR: Record<SpaceState, string> = {
   disponible: "var(--st-disponible)",
@@ -23,6 +24,8 @@ export const STATE_LABEL: Record<SpaceState, string> = {
 export const TENT_W = 86;
 export const TENT_H = 70;
 export const UMBRELLA_R = 38;
+export const PARK_W = 62;
+export const PARK_H = 100;
 
 /* ------------------------------------------------------------------ */
 /* Diseño configurable de carpas y sombrillas                          */
@@ -236,6 +239,29 @@ export function UmbrellaIcon({ color, selected, dashed, design }: { color: strin
   );
 }
 
+/** Cochera vista desde arriba: lugar marcado en el piso con un auto, del color del estado. */
+export function ParkingIcon({ color, selected, dashed, design }: { color: string; selected: boolean; dashed: boolean; design?: TentStyle | null }) {
+  const st = design ?? DEFAULT_TENT_STYLE;
+  const w = PARK_W;
+  const h = PARK_H;
+  const car = pick(st.fill, color);
+  return (
+    <g>
+      {selected && <rect x={-w / 2 - 14} y={-h / 2 - 14} width={w + 28} height={h + 28} rx={14} fill="none" stroke="var(--accent)" strokeWidth={4} />}
+      <rect x={-w / 2 - 5} y={-h / 2 - 5} width={w + 10} height={h + 10} rx={9} fill="none" stroke={color} strokeWidth={6} strokeDasharray={dashed ? "8 6" : undefined} />
+      {/* piso y líneas blancas del lugar */}
+      <rect x={-w / 2} y={-h / 2} width={w} height={h} rx={5} fill="#6b7177" />
+      <line x1={-w / 2 + 3} y1={-h / 2 + 4} x2={-w / 2 + 3} y2={h / 2 - 4} stroke="#ffffff" strokeWidth={3} />
+      <line x1={w / 2 - 3} y1={-h / 2 + 4} x2={w / 2 - 3} y2={h / 2 - 4} stroke="#ffffff" strokeWidth={3} />
+      {/* auto: carrocería, parabrisas y luneta */}
+      <rect x={-w / 2 + 11} y={-h / 2 + 10} width={w - 22} height={h - 20} rx={12} fill={car} stroke="rgba(0,0,0,0.3)" strokeWidth={1.5} />
+      <rect x={-w / 2 + 15} y={-h / 2 + 24} width={w - 30} height={14} rx={4} fill="rgba(255,255,255,0.55)" />
+      <rect x={-w / 2 + 15} y={h / 2 - 34} width={w - 30} height={10} rx={3} fill="rgba(255,255,255,0.45)" />
+      {st.stateDot && <StateDot x={w / 2 - 10} y={-h / 2 + 10} color={color} />}
+    </g>
+  );
+}
+
 function StateDot({ x, y, color }: { x: number; y: number; color: string }) {
   return <circle cx={x} cy={y} r={12} fill={color} stroke="#ffffff" strokeWidth={3} />;
 }
@@ -269,11 +295,11 @@ export function designForState(state: SpaceState, design: TentStyle | null | und
 }
 
 /** Apellido del cliente que ocupa el espacio ese día, debajo del número. */
-export function SpaceSurname({ name, kind }: { name: string; kind: "carpa" | "sombrilla" }) {
-  const max = kind === "carpa" ? 11 : 9;
+export function SpaceSurname({ name, kind }: { name: string; kind: SpaceKind }) {
+  const max = kind === "carpa" ? 11 : kind === "cochera" ? 7 : 9;
   const text = name.length > max ? name.slice(0, max - 1) + "…" : name;
   return (
-    <text y={kind === "carpa" ? 24 : 22} textAnchor="middle" dominantBaseline="middle" fontSize={14} fontWeight={800}
+    <text y={kind === "cochera" ? 30 : kind === "carpa" ? 24 : 22} textAnchor="middle" dominantBaseline="middle" fontSize={14} fontWeight={800}
       fill="#ffffff" stroke="rgba(0,0,0,0.35)" strokeWidth={2.5} paintOrder="stroke" pointerEvents="none">{text}</text>
   );
 }

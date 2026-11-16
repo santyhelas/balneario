@@ -11,8 +11,9 @@ import { MONTHS } from "@/lib/methods";
 import { useWorkspace } from "@/components/workspace";
 import { PageHeader, SyncNotice } from "@/components/shell";
 import { Alert, Badge, Button, Card, EmptyState, Field, Input, Modal, Select, Spinner, Textarea, TextField } from "@/components/ui";
+import { KindName, type SpaceKind } from "@/lib/space-kinds";
 
-type Rate = { id: string; space_kind: "carpa" | "sombrilla"; year: number; month: number; half: 1 | 2; season: string; daily_price: number; version: number };
+type Rate = { id: string; space_kind: SpaceKind; year: number; month: number; half: 1 | 2; season: string; daily_price: number; version: number };
 type Pkg = { id: string; min_days: number; percent: number; active: boolean; version: number };
 type Agreement = { id: string; name: string; percent: number; active: boolean; valid_from: string | null; valid_to: string | null; conditions: string | null; version: number };
 
@@ -49,8 +50,13 @@ export default function TarifasPage() {
     const pkgs = unwrap(await sb.from("package_discounts").select("id, min_days, percent, active, version").eq("workspace_id", ws.id).order("min_days")) as Pkg[];
     const agreements = await loadAgreements(sb, ws.id);
     const wsRow = unwrap(await sb.from("workspaces").select("cash_discount_percent, version").eq("id", ws.id).single()) as { cash_discount_percent: number; version: number };
-    return { rates, pkgs, agreements, wsRow };
+    const { count: parking } = await sb.from("spaces").select("id", { count: "exact", head: true }).eq("workspace_id", ws.id).eq("kind", "cochera").eq("active", true);
+    return { rates, pkgs, agreements, wsRow, parking: parking ?? 0 };
   }, [ws.id], 0);
+
+  // La columna de cocheras aparece si el balneario tiene cocheras (o ya les cargó precio).
+  const kinds: SpaceKind[] = (q.data?.parking ?? 0) > 0 || q.data?.rates.some((r) => r.space_kind === "cochera")
+    ? ["carpa", "sombrilla", "cochera"] : ["carpa", "sombrilla"];
 
   const seasons = useMemo(() => {
     const set = new Set<string>([currentSeason, nextSeason]);
@@ -94,7 +100,7 @@ export default function TarifasPage() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="text-left text-xs text-muted">
-                <tr><th className="py-2 pr-3">Período</th><th className="pr-3">Carpa ($/día)</th><th>Sombrilla ($/día)</th></tr>
+                <tr><th className="py-2 pr-3">Período</th>{kinds.map((k) => <th key={k} className="pr-3">{KindName(k)} ($/día)</th>)}</tr>
               </thead>
               <tbody className="divide-y divide-line">
                 {seasonMonths(season, allMonths).flatMap(({ year, month }) =>
@@ -104,7 +110,7 @@ export default function TarifasPage() {
                         <div className="font-medium">{MONTHS[month - 1]} {year}</div>
                         <div className="text-xs text-muted">{half === 1 ? "1ª quincena · 1 al 15" : `2ª quincena · 16 al ${lastDay(year, month)}`}</div>
                       </td>
-                      {(["carpa", "sombrilla"] as const).map((kind) => (
+                      {kinds.map((kind) => (
                         <td key={kind} className="pr-3">
                           <PriceCell
                             key={rateMap.get(`${kind}-${year}-${month}-${half}`)?.version ?? 0}

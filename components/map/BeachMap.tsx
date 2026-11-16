@@ -1,12 +1,13 @@
 "use client";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as RPointerEvent, type ReactNode } from "react";
-import { designForState, SpaceNumber, SpaceSurname, STATE_COLOR, TENT_H, TENT_W, TentIcon, UMBRELLA_R, UmbrellaIcon, type SpaceState, type TentStyle } from "./icons";
+import { designForState, PARK_H, PARK_W, ParkingIcon, SpaceNumber, SpaceSurname, STATE_COLOR, TENT_H, TENT_W, TentIcon, UMBRELLA_R, UmbrellaIcon, type SpaceState, type TentStyle } from "./icons";
 import { cx } from "@/components/ui";
+import { KindName, type SpaceKind } from "@/lib/space-kinds";
 
 export type MapSpace = {
   space_id: string;
   code: string;
-  kind: "carpa" | "sombrilla";
+  kind: SpaceKind;
   x: number;
   y: number;
   rotation: number;
@@ -263,8 +264,8 @@ export function BeachMap({
         const s = spaces.find((x) => x.space_id === g.id);
         if (!s) return [];
         const pos = spacePos(s);
-        const hw = s.kind === "carpa" ? TENT_W / 2 : UMBRELLA_R;
-        const hh = s.kind === "carpa" ? TENT_H / 2 + 9 : UMBRELLA_R;
+        const hw = s.kind === "carpa" ? TENT_W / 2 : s.kind === "cochera" ? PARK_W / 2 : UMBRELLA_R;
+        const hh = s.kind === "carpa" ? TENT_H / 2 + 9 : s.kind === "cochera" ? PARK_H / 2 : UMBRELLA_R;
         // Si ya estaba pegada al borde (o más afuera), su lugar actual sigue valiendo: así el grupo no se traba ni salta.
         return [{ ...g, x: pos.x, y: pos.y,
           lo: [Math.max(0, Math.min(hw, pos.x)), Math.max(0, Math.min(hh, pos.y))] as [number, number],
@@ -392,8 +393,8 @@ export function BeachMap({
     } else if (d.type === "space") {
       const s = spaces.find((sp) => sp.space_id === d.id);
       if (!s) return;
-      const halfW = s.kind === "carpa" ? TENT_W / 2 : UMBRELLA_R;
-      const halfH = s.kind === "carpa" ? TENT_H / 2 + 9 : UMBRELLA_R;
+      const halfW = s.kind === "carpa" ? TENT_W / 2 : s.kind === "cochera" ? PARK_W / 2 : UMBRELLA_R;
+      const halfH = s.kind === "carpa" ? TENT_H / 2 + 9 : s.kind === "cochera" ? PARK_H / 2 : UMBRELLA_R;
       // Tope: que la carpa entre entera; si ya estaba más al borde, no salta (pero nunca sale del plano).
       const cur = spacePos(s);
       const loX = Math.max(0, Math.min(halfW, cur.x)), hiX = Math.min(width, Math.max(width - halfW, cur.x));
@@ -602,17 +603,19 @@ export function BeachMap({
                 opacity={saving(s.space_id) ? 0.6 : 1}
                 tabIndex={0}
                 role="button"
-                aria-label={`${s.kind === "carpa" ? "Carpa" : "Sombrilla"} ${s.code}`}
+                aria-label={`${KindName(s.kind)} ${s.code}`}
                 data-state={s.state}
                 onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") onSelect({ type: "space", id: s.space_id }); }}
               >
                 <g transform={`rotate(${Number(s.rotation) || 0})`}>
                   {s.kind === "carpa"
                     ? <TentIcon color={color} selected={selSpace === s.space_id || (multi && inGroup("space", s.space_id))} dashed={s.state === "desactivada"} design={dsg} />
+                    : s.kind === "cochera"
+                    ? <ParkingIcon color={color} selected={selSpace === s.space_id || (multi && inGroup("space", s.space_id))} dashed={s.state === "desactivada"} design={dsg} />
                     : <UmbrellaIcon color={color} selected={selSpace === s.space_id || (multi && inGroup("space", s.space_id))} dashed={s.state === "desactivada"} design={dsg} />}
                 </g>
                 {flagged?.has(s.space_id) && (
-                  <circle r={s.kind === "carpa" ? 62 : UMBRELLA_R + 16} fill="none" stroke="var(--danger)" strokeWidth={6} strokeDasharray="12 8" pointerEvents="none" />
+                  <circle r={s.kind === "carpa" ? 62 : s.kind === "cochera" ? 64 : UMBRELLA_R + 16} fill="none" stroke="var(--danger)" strokeWidth={6} strokeDasharray="12 8" pointerEvents="none" />
                 )}
                 <SpaceNumber code={s.code} color={color} design={dsg} dy={surname ? -9 : 0} />
                 {surname && <SpaceSurname name={surname} kind={s.kind} />}

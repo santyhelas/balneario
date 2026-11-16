@@ -4,6 +4,7 @@
 /** Temporada "2026/2027" → del 01/07/2026 al 30/06/2027 (igual que el historial de clientes). */
 export function seasonRange(season: string): { from: string; to: string } {
   const y = Number(season.slice(0, 4));
+import type { SpaceKind } from "@/lib/space-kinds";
   return { from: `${y}-07-01`, to: `${y + 1}-06-30` };
 }
 
@@ -21,7 +22,7 @@ export function nextYear(iso: string): string {
 
 const days = (a: string, b: string) => Math.round((Date.parse(b + "T00:00:00Z") - Date.parse(a + "T00:00:00Z")) / 86_400_000) + 1;
 
-export type PrevSeg = { reservation_id: string; customer_id: string; space_id: string; code: string; kind: "carpa" | "sombrilla"; start_date: string; end_date: string };
+export type PrevSeg = { reservation_id: string; customer_id: string; space_id: string; code: string; kind: SpaceKind; start_date: string; end_date: string };
 export type Person = { id: string; first_name: string; last_name: string | null; phone: string | null };
 export type NewSeg = { reservation_id: string; number: number; customer_id: string; space_id: string; start_date: string; end_date: string };
 export type Mark = { customer_id: string; status: "pendiente" | "avisado" | "no_vuelve"; contacted_at: string | null };
@@ -31,7 +32,7 @@ export type RenewalStatus = "ya_reservo" | "no_vuelve" | "avisado" | "pendiente"
 export type Renewal = {
   customer: Person;
   /** Lugar donde pasó más días. */
-  main: { space_id: string; code: string; kind: "carpa" | "sombrilla" };
+  main: { space_id: string; code: string; kind: SpaceKind };
   others: string[];
   stays: number;
   totalDays: number;
@@ -56,10 +57,12 @@ export function buildRenewals(prev: PrevSeg[], people: Person[], next: NewSeg[],
   for (const s of prev) groups.set(s.customer_id, [...(groups.get(s.customer_id) ?? []), s]);
 
   const out: Renewal[] = [];
-  for (const [cid, segs] of groups) {
+  for (const [cid, allSegs] of groups) {
+    // La cochera acompaña a la carpa: si alquiló carpa o sombrilla, se cuenta eso; si solo alquiló cochera, la cochera.
+    const segs = allSegs.some((s) => s.kind !== "cochera") ? allSegs.filter((s) => s.kind !== "cochera") : allSegs;
     const customer = byPerson.get(cid);
     if (!customer) continue;
-    const perSpace = new Map<string, { code: string; kind: "carpa" | "sombrilla"; days: number; first: string }>();
+    const perSpace = new Map<string, { code: string; kind: SpaceKind; days: number; first: string }>();
     for (const s of segs) {
       const cur = perSpace.get(s.space_id) ?? { code: s.code, kind: s.kind, days: 0, first: s.start_date };
       cur.days += days(s.start_date, s.end_date);
@@ -102,6 +105,7 @@ export function buildRenewals(prev: PrevSeg[], people: Person[], next: NewSeg[],
       takenBy: clash ? { number: clash.number, start: clash.start_date, end: clash.end_date } : null,
     });
   }
-  // Primero carpas y después sombrillas, por número de lugar.
-  return out.sort((a, b) => (a.main.kind === b.main.kind ? 0 : a.main.kind === "carpa" ? -1 : 1) || a.main.code.localeCompare(b.main.code, "es", { numeric: true }));
+  // Primero carpas, después sombrillas y al final cocheras, por número de lugar.
+  const order = (k: SpaceKind) => (k === "carpa" ? 0 : k === "sombrilla" ? 1 : 2);
+  return out.sort((a, b) => order(a.main.kind) - order(b.main.kind) || a.main.code.localeCompare(b.main.code, "es", { numeric: true }));
 }

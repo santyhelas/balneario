@@ -13,6 +13,7 @@ import { PaymentModal } from "@/components/payments";
 import { debtReminder, mailMessage } from "@/lib/whatsapp-messages";
 import { MailLink, WhatsAppSend, useMailProvider, useMessageTemplates } from "@/components/whatsapp";
 import { VoucherList } from "@/components/vouchers";
+import { KindName } from "@/lib/space-kinds";
 
 type DebtRow = {
   id: string; number: number; start_date: string; end_date: string; total_amount: number;
@@ -108,7 +109,7 @@ export default function CobrosPage() {
                       <span className="tabular font-bold text-danger">{formatMoney(d.due)}</span>
                       {(() => {
                         const places = [...new Set((d.reservation_segments ?? []).filter((x) => x.active).sort((a, b) => a.start_date.localeCompare(b.start_date))
-                          .map((x) => `${x.spaces?.kind === "sombrilla" ? "Sombrilla" : "Carpa"} ${x.spaces?.code ?? ""}`))].join(" y ");
+                          .map((x) => `${KindName(x.spaces?.kind)} ${x.spaces?.code ?? ""}`))].join(" y ");
                         const info = { firstName: d.customers.first_name, lastName: d.customers.last_name, phone: d.customers.phone, email: d.customers.email ?? null,
                           balneario: ws.name, number: d.number, places, start: d.start_date, end: d.end_date, due: d.due, today,
                           total: Number(d.total_amount), paid: d.paid };

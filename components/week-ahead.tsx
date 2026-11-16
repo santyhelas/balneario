@@ -9,10 +9,11 @@ import { useStatus } from "@/components/status";
 import { describeSymbol, useWeather, WeatherIcon } from "@/components/weather";
 import { Spinner, cx } from "@/components/ui";
 import { WhatsAppSend, useMessageTemplates } from "@/components/whatsapp";
+import { KindName, type SpaceKind } from "@/lib/space-kinds";
 
 type Seg = {
   reservation_id: string; start_date: string; end_date: string;
-  spaces: { code: string; kind: "carpa" | "sombrilla" } | null;
+  spaces: { code: string; kind: SpaceKind } | null;
   reservations: {
     number: number; start_date: string; end_date: string; is_courtesy: boolean; status: string;
     customers: { first_name: string; last_name: string | null; phone: string | null } | null;
@@ -50,7 +51,7 @@ export function WeekAhead() {
   }, [ws.id, today], 120_000);
 
   const segs = q.data?.segs ?? [];
-  const place = (s: Seg) => `${s.spaces?.kind === "sombrilla" ? "Sombrilla" : "Carpa"} ${s.spaces?.code ?? "?"}`;
+  const place = (s: Seg) => `${KindName(s.spaces?.kind)} ${s.spaces?.code ?? "?"}`;
   const item = (s: Seg, places: string): Item => ({
     id: s.reservation_id, number: s.reservations?.number ?? 0,
     name: `${s.reservations?.customers?.first_name ?? ""} ${s.reservations?.customers?.last_name ?? ""}`.trim(),

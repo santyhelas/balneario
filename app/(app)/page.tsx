@@ -106,6 +106,7 @@ export default function DashboardPage() {
         <h1 className="mt-0.5 text-xl font-extrabold tracking-tight md:text-2xl">{ws.name}</h1>
         <p className="mt-1 text-sm text-cyan-50/90">
           {formatDate(data.fecha)} · {carpa?.total_activos ?? 0} carpas y {sombrilla?.total_activos ?? 0} sombrillas · {pct(ocupados)}% de ocupación hoy
+          {data.espacios.cochera?.total_activos ? ` · Cocheras: ${data.espacios.cochera.disponibles} libres de ${data.espacios.cochera.total_activos}` : ""}
           {st.futureCount > 0 ? ` · ${st.futureCount} ${st.futureCount === 1 ? "reserva futura" : "reservas futuras"}` : ""}
         </p>
         <WeatherStrip onDark className="mt-3" />

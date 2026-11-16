@@ -1,6 +1,7 @@
 "use client";
 import { getSupabase } from "@/lib/supabase/client";
 import { unwrap } from "@/lib/data";
+import type { SpaceKind } from "@/lib/space-kinds";
 
 export type ReservationDetail = {
   id: string;
@@ -27,7 +28,7 @@ export type ReservationDetail = {
   group_id?: string | null;
   customers: { id: string; first_name: string; last_name: string; phone: string | null; email: string | null; locality: string | null };
 };
-export type SegmentRow = { id: string; space_id: string; start_date: string; end_date: string; spaces: { code: string; kind: "carpa" | "sombrilla" } };
+export type SegmentRow = { id: string; space_id: string; start_date: string; end_date: string; spaces: { code: string; kind: SpaceKind } };
 export type ChargeRow = { id: string; position: number; description: string; amount: number };
 export type DiscountRow = { id: string; position: number; kind: string; label: string; percent: number | null; amount: number; reason: string | null };
 export type PaymentRow = {

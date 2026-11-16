@@ -15,6 +15,7 @@ import { QuickAddExtra } from "@/components/extras";
 import { loadReservation, type Full } from "@/lib/reservations";
 import { DEFAULT_TENT_STYLE, normalizeTentStyle, STATE_COLOR, STATE_LABEL, TENT_H, TENT_W, UMBRELLA_R, type SpaceState, type TentStyle } from "@/components/map/icons";
 import { TentDesigner } from "@/components/map/TentDesigner";
+import { KindName, kindName, type SpaceKind } from "@/lib/space-kinds";
 
 type DayStatus = MapSpace & {
   rotation: number;
@@ -293,6 +294,8 @@ export default function MapaPage() {
   const usage = {
     carpa: { used: spaces.filter((x) => x.kind === "carpa" && x.state !== "desactivada").length, max: limitsQ.data?.carpa ?? null },
     sombrilla: { used: spaces.filter((x) => x.kind === "sombrilla" && x.state !== "desactivada").length, max: limitsQ.data?.sombrilla ?? null },
+    // Las cocheras no entran en el plan.
+    cochera: { used: spaces.filter((x) => x.kind === "cochera" && x.state !== "desactivada").length, max: null },
   };
   const features = featuresQ.data ?? [];
   const selectedSpace = sel?.type === "space" ? spaces.find((s) => s.space_id === sel.id) ?? null : null;
@@ -472,7 +475,7 @@ export default function MapaPage() {
           isAdmin ? (
             <>
               {editMode && <Button variant="secondary" onClick={() => setLayoutConfirm(true)}>Diseño Parador</Button>}
-              {editMode && <Button variant="secondary" onClick={() => setAdding(true)}>Agregar carpa o sombrilla</Button>}
+              {editMode && <Button variant="secondary" onClick={() => setAdding(true)}>Agregar espacio</Button>}
               {editMode && (usage.carpa.max != null || usage.sombrilla.max != null) && (
                 <span className="text-xs text-muted" title="Lo que incluye tu plan. Podés desactivar y activar otras, sin pasar el máximo.">
                   Plan: {usage.carpa.used}/{usage.carpa.max ?? "∞"} carpas · {usage.sombrilla.used}/{usage.sombrilla.max ?? "∞"} sombrillas
@@ -794,7 +797,7 @@ function SpaceModal({ space, spaces, day, today, isAdmin, onChanged, onCheckDate
   const [moving, setMoving] = useState<{ full: Full; target?: string } | null>(null);
   const [loadingRes, setLoadingRes] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const kindLabel = space.kind === "carpa" ? "Carpa" : "Sombrilla";
+  const kindLabel = KindName(space.kind);
   const free = space.active && !space.reservation_id && space.state !== "mantenimiento";
   const pastDay = day < today;
   // Quiénes están ocupando otra carpa o sombrilla ese día (para traerlos a esta).
@@ -843,7 +846,7 @@ function SpaceModal({ space, spaces, day, today, isAdmin, onChanged, onCheckDate
                   <li key={o.space_id}>
                     <button type="button" disabled={loadingRes !== null} onClick={() => openMove(o.reservation_id!, space.space_id)}
                       className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-surface-2 disabled:opacity-60">
-                      <span><strong>{o.kind === "carpa" ? "Carpa" : "Sombrilla"} {o.code}</strong> · {o.customer_name ?? o.surname ?? "Cliente"}</span>
+                      <span><strong>{KindName(o.kind)} {o.code}</strong> · {o.customer_name ?? o.surname ?? "Cliente"}</span>
                       {loadingRes === o.reservation_id ? <Spinner small /> : <span className="text-xs text-muted">hasta {formatDate(o.reservation_end)}</span>}
                     </button>
                   </li>
@@ -905,7 +908,7 @@ function SpaceEditPanel({ space, day, onChanged, onClose }: { space: DayStatus; 
     onChanged();
   }
 
-  const kindLabel = space.kind === "carpa" ? "Carpa" : "Sombrilla";
+  const kindLabel = KindName(space.kind);
   return (
     <Card title={`${kindLabel} ${space.code}`} actions={<button onClick={onClose} className="rounded p-1 text-muted hover:bg-surface-2" aria-label="Cerrar">✕</button>}>
       <p className="mb-3 text-sm text-muted">{STATE_LABEL[space.state]} el {formatDate(day)}. Arrastrala para moverla.</p>
@@ -1002,12 +1005,12 @@ function MaintenanceModal({ open, space, today, onClose, onDone }: { open: boole
   );
 }
 
-type Usage = Record<"carpa" | "sombrilla", { used: number; max: number | null }>;
-const kindLabel = (k: "carpa" | "sombrilla", n: number) => (k === "carpa" ? (n === 1 ? "carpa" : "carpas") : n === 1 ? "sombrilla" : "sombrillas");
+type Usage = Record<SpaceKind, { used: number; max: number | null }>;
+const kindLabel = (k: SpaceKind, n: number) => kindName(k, n);
 
 function AddSpaceModal({ open, onClose, onDone, mapW, mapH, usage }: { open: boolean; onClose: () => void; onDone: (id: string) => void; mapW: number; mapH: number; usage: Usage }) {
   const { ws } = useWorkspace();
-  const [kind, setKind] = useState<"carpa" | "sombrilla">("carpa");
+  const [kind, setKind] = useState<SpaceKind>("carpa");
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -1027,12 +1030,13 @@ function AddSpaceModal({ open, onClose, onDone, mapW, mapH, usage }: { open: boo
     <Modal open={open} onClose={onClose} title="Agregar espacio" busy={busy}>
       <form onSubmit={submit} className="flex flex-col gap-3">
         <Field label="Tipo">
-          <Select value={kind} onChange={(e) => setKind(e.target.value as "carpa" | "sombrilla")}>
+          <Select value={kind} onChange={(e) => setKind(e.target.value as SpaceKind)}>
             <option value="carpa">Carpa</option>
             <option value="sombrilla">Sombrilla</option>
+            <option value="cochera">Cochera (para el auto)</option>
           </Select>
         </Field>
-        <TextField label="Identificación" value={code} onChange={(e) => setCode(e.target.value)} required maxLength={20} placeholder={kind === "carpa" ? "Ej: 90" : "Ej: 91"} />
+        <TextField label="Identificación" value={code} onChange={(e) => setCode(e.target.value)} required maxLength={20} placeholder={kind === "carpa" ? "Ej: 90" : kind === "cochera" ? "Ej: C1" : "Ej: 91"} />
         {usage[kind].max != null && (usage[kind].used >= usage[kind].max! ? (
           <Alert tone="warn">
             Ya tenés las {usage[kind].max} {kindLabel(kind, usage[kind].max!)} de tu plan activas. Podés desactivar una y sumar otra en su lugar;
@@ -1041,6 +1045,7 @@ function AddSpaceModal({ open, onClose, onDone, mapW, mapH, usage }: { open: boo
         ) : (
           <p className="text-xs text-muted">Tu plan: {usage[kind].used} de {usage[kind].max} {kindLabel(kind, usage[kind].max!)} activas.</p>
         ))}
+        {kind === "cochera" && <p className="text-xs text-muted">Las cocheras se reservan solas o junto con la carpa, y llevan su propia tarifa (cargala en el Tarifario).</p>}
         <p className="text-xs text-muted">Aparece en el centro del mapa; después arrastralo a su lugar.</p>
         {error && <Alert tone="danger">{error}</Alert>}
         <div className="flex justify-end gap-2">

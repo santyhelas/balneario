@@ -3,6 +3,7 @@
 
 export type AuditRow = {
   id: number;
+import { KindName } from "@/lib/space-kinds";
   table_name: string;
   row_id: string | null;
   action: "alta" | "modificacion" | "baja";
@@ -24,7 +25,7 @@ export const CATEGORY_LABEL: Record<Category | "cobros", string> = {
   convenios: "Convenios",
   caja: "Caja",
   gastos: "Gastos",
-  espacios: "Carpas y sombrillas",
+  espacios: "Carpas, sombrillas y cocheras",
   mapa: "Plano",
   notas: "Notas del día",
   configuracion: "Configuración",
@@ -121,7 +122,7 @@ export function diffFields(table: string, oldD: Record<string, unknown> | null, 
 
 function spaceName(l: Lookups, id: unknown): string {
   const s = l.spaces.get(String(id));
-  return s ? `${s.kind === "sombrilla" ? "Sombrilla" : "Carpa"} ${s.code}` : "Espacio";
+  return s ? `${KindName(s.kind)} ${s.code}` : "Espacio";
 }
 function resName(l: Lookups, id: unknown): string {
   const r = l.reservations.get(String(id));
@@ -185,7 +186,7 @@ export function describeAudit(row: AuditRow, l: Lookups): Described {
       return { category: "clientes", title: `Cliente modificado: ${name}`, details: changes };
     }
     case "rates": {
-      const what = `${d.space_kind === "sombrilla" ? "Sombrillas" : "Carpas"} · ${MONTHS[Number(d.month) - 1] ?? "?"} ${str(d.year)} · ${half(d.half)}`;
+      const what = `${KindName(d.space_kind as string, 2)} · ${MONTHS[Number(d.month) - 1] ?? "?"} ${str(d.year)} · ${half(d.half)}`;
       if (row.action === "alta") return { category: "tarifas", title: `Tarifa nueva: ${what}`, details: [`Precio por día ${money(n.daily_price)}`] };
       if (changes.length === 0) return null;
       return { category: "tarifas", title: `Tarifa cambiada: ${what}`, details: changes };
@@ -202,7 +203,7 @@ export function describeAudit(row: AuditRow, l: Lookups): Described {
       return { category: "convenios", title: `Convenio modificado: ${str(d.name)}`, details: changes };
     }
     case "spaces": {
-      const name = spaceName(l, row.row_id) === "Espacio" ? `${d.kind === "sombrilla" ? "Sombrilla" : "Carpa"} ${str(d.code)}` : spaceName(l, row.row_id);
+      const name = spaceName(l, row.row_id) === "Espacio" ? `${KindName(d.kind)} ${str(d.code)}` : spaceName(l, row.row_id);
       if (row.action === "alta") return { category: "espacios", title: `${name} agregada`, details: [] };
       if (changes.length > 0) return { category: "espacios", title: `${name} modificada`, details: changes };
       if (o.x !== n.x || o.y !== n.y || o.rotation !== n.rotation) return { category: "mapa", title: `${name} movida en el plano`, details: [] };

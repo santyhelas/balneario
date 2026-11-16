@@ -8,8 +8,9 @@ import { daysOf } from "@/lib/stay";
 import { useWorkspace } from "@/components/workspace";
 import { PageHeader, SyncNotice } from "@/components/shell";
 import { Button, Field, Input, Spinner, cx } from "@/components/ui";
+import { KindName, kindName, SPACE_KINDS, type SpaceKind } from "@/lib/space-kinds";
 
-type Space = { id: string; code: string; kind: "carpa" | "sombrilla"; active: boolean };
+type Space = { id: string; code: string; kind: SpaceKind; active: boolean };
 type Item = {
   item_type: "tramo" | "mantenimiento"; space_id: string; start_date: string; end_date: string;
   reservation_id: string | null; reservation_number: number | null; customer_name: string | null; is_courtesy: boolean;
@@ -30,7 +31,7 @@ export default function DisponibilidadPage() {
   const today = todayISO(ws.timezone);
   const [from, setFrom] = useState(today);
   const [toInput, setToInput] = useState(addDays(today, 20));
-  const [kind, setKind] = useState<"todas" | "carpa" | "sombrilla">("todas");
+  const [kind, setKind] = useState<"todas" | SpaceKind>("todas");
   const [search, setSearch] = useState("");
   // "Hasta" lo elige el usuario; si queda antes de "Desde", se muestra solo ese día. Máximo un año para que la grilla no se vuelva inmanejable.
   const MAX_DAYS = 366;
@@ -55,7 +56,7 @@ export default function DisponibilidadPage() {
     const spaces = q.data.spaces
       .filter((s) => (kind === "todas" || s.kind === kind) &&
         (!term || norm(s.code).includes(term) || (bySpace0.get(s.id) ?? []).some((it) => matchesName(it, term))))
-      .sort((a, b) => a.kind.localeCompare(b.kind) || a.code.localeCompare(b.code, "es", { numeric: true }));
+      .sort((a, b) => SPACE_KINDS.indexOf(a.kind) - SPACE_KINDS.indexOf(b.kind) || a.code.localeCompare(b.code, "es", { numeric: true }));
     const bySpace = new Map<string, Item[]>();
     q.data.items.forEach((it) => bySpace.set(it.space_id, [...(bySpace.get(it.space_id) ?? []), it]));
     const idx = (d: string) => days.indexOf(d < from ? from : d > to ? to : d);
@@ -70,6 +71,7 @@ export default function DisponibilidadPage() {
       return { space: s, blocks, busy, freeCount: days.length - busy.size };
     });
   }, [q.data, kind, search, days, from, to]);
+  const hasParking = !!q.data?.spaces.some((s) => s.kind === "cochera" && s.active);
   const nameTerm = norm(search.trim());
   const searchingName = !!nameTerm && rows.some((r) => r.blocks.some((b) => matchesName(b.item, nameTerm)));
 
@@ -82,7 +84,7 @@ export default function DisponibilidadPage() {
         <span className="pb-2 text-sm text-muted">{span} {span === 1 ? "día" : "días"}</span>
         <Field label="Mostrar">
           <div className="flex overflow-hidden rounded-lg border border-line" role="group" aria-label="Tipo de espacio">
-            {([["todas", "Todas"], ["carpa", "Carpas"], ["sombrilla", "Sombrillas"]] as const).map(([k, l]) => (
+            {([["todas", "Todas"], ["carpa", "Carpas"], ["sombrilla", "Sombrillas"], ...(hasParking ? [["cochera", "Cocheras"]] as const : [])] as const).map(([k, l]) => (
               <button key={k} type="button" onClick={() => setKind(k)} aria-pressed={kind === k}
                 className={cx("px-3 py-2 text-sm font-medium", kind === k ? "bg-accent text-accent-fg" : "bg-surface hover:bg-surface-2")}>{l}</button>
             ))}
@@ -125,12 +127,12 @@ export default function DisponibilidadPage() {
               <div key={space.id}>
               {kind === "todas" && (ri === 0 || rows[ri - 1].space.kind !== space.kind) && (
                 <div className="border-b border-line bg-surface-2 py-1.5 text-sm font-bold" style={{ width: LABEL_W + days.length * COL }}>
-                  <span className="sticky left-0 px-3">{space.kind === "carpa" ? "Carpas" : "Sombrillas"} ({rows.filter((r) => r.space.kind === space.kind).length})</span>
+                  <span className="sticky left-0 px-3">{KindName(space.kind, 2)} ({rows.filter((r) => r.space.kind === space.kind).length})</span>
                 </div>
               )}
               <div className="flex border-b border-line">
                 <div style={{ width: LABEL_W }} className={cx("sticky left-0 z-10 flex shrink-0 items-center gap-1.5 border-r border-line bg-surface px-2 text-base font-bold", !space.active && "text-muted line-through")}>
-                  <span className="text-xs font-normal text-muted">{space.kind === "carpa" ? "Carpa" : "Sombr."}</span>{space.code}
+                  <span className="text-xs font-normal text-muted">{space.kind === "carpa" ? "Carpa" : space.kind === "cochera" ? "Coch." : "Sombr."}</span>{space.code}
                 </div>
                 <div className="relative grid h-12 shrink-0" style={{ gridTemplateColumns: `repeat(${days.length}, ${COL}px)` }}>
                   {days.map((d, i) => busy.has(i) ? null : (
@@ -165,7 +167,7 @@ export default function DisponibilidadPage() {
       )}
       {q.data && (
         <p className="mt-2 text-sm text-muted">
-          {rows.filter((r) => r.freeCount === days.length && r.space.active).length} {kind === "sombrilla" ? "sombrillas" : kind === "carpa" ? "carpas" : "espacios"} libres todo el período ({formatDate(from)} al {formatDate(to)}).
+          {rows.filter((r) => r.freeCount === days.length && r.space.active).length} {kind === "todas" ? "espacios" : kindName(kind, 2)} libres todo el período ({formatDate(from)} al {formatDate(to)}).
         </p>
       )}
     </>

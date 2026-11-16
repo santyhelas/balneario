@@ -102,7 +102,14 @@ export default function ReportesPage() {
       <PageHeader
         title="Reportes"
         subtitle="Todo sale de los registros reales. «Contratado» es el precio de las reservas; «Cobrado» es el dinero que entró a la caja."
-        actions={<Button variant="secondary" onClick={() => window.print()}>Imprimir / PDF</Button>}
+        actions={
+          <>
+            <Button variant="secondary" className="print:hidden" onClick={() => document.getElementById("temporadas")?.scrollIntoView({ behavior: "smooth", block: "start" })}>
+              Comparar temporadas
+            </Button>
+            <Button variant="secondary" onClick={() => window.print()}>Imprimir / PDF</Button>
+          </>
+        }
       />
       <div className="mb-4 flex flex-wrap items-end gap-2 print:hidden">
         <Field label="Desde"><Input type="date" value={from} onChange={(e) => e.target.value && setFrom(e.target.value)} className="w-auto" /></Field>
@@ -239,7 +246,7 @@ export default function ReportesPage() {
           </div>
         </div>
       )}
-      <div className="mt-4" data-tour="temporadas"><SeasonCompare /></div>
+      <div id="temporadas" className="mt-4 scroll-mt-20" data-tour="temporadas"><SeasonCompare /></div>
     </>
   );
 }

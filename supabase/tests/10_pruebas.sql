@@ -1465,6 +1465,27 @@ update public.workspaces set features = '{"dolares":true,"redondeo":false,"paque
 select t.ok((select features ->> 'dolares' = 'true' from public.workspaces where id = t.uid('ws')), 'Funciones: el administrador las prende y apaga');
 select t.throws(format($$update public.workspaces set features = '[]', version = version + 1 where id = %L$$, t.get('ws')), '', 'Funciones: tiene que ser un objeto');
 
+-- 56. Cocheras: un tipo de espacio más
+select set_config('request.jwt.claims', '{"sub":"11111111-1111-1111-1111-111111111111","email":"duenio@test.com"}', false);
+select t.set('esp_antes', (public.season_stats(t.uid('ws'), 2026) ->> 'espacios'));
+insert into public.spaces (workspace_id, kind, code, x, y) values (t.uid('ws'), 'cochera', 'C1', 2600, 300), (t.uid('ws'), 'cochera', 'C2', 2700, 300);
+select t.ok((select count(*) = 2 from public.spaces where workspace_id = t.uid('ws') and kind = 'cochera' and active), 'Cocheras: se agregan como espacio');
+select t.ok(public.season_stats(t.uid('ws'), 2026) ->> 'espacios' = t.get('esp_antes'), 'Cocheras: no cuentan para la ocupación de la playa');
+select t.ok(private.space_label('cochera', 'C1') = 'Cochera C1', 'Cocheras: se nombran «Cochera»');
+select public.set_rate(t.uid('ws'), 'cochera', 2027, 6, 1::smallint, 8000);
+select t.set('rqc', gen_random_uuid()::text);
+select t.set('gc', (public.create_reservation_group(t.uid('ws'), t.uid('rqc'), t.uid('juan'), '2027-06-02', '2027-06-04',
+  jsonb_build_array(jsonb_build_object('space_id', t.space('70'), 'start_date', '2027-06-02', 'end_date', '2027-06-04')),
+  array[(select id from public.spaces where workspace_id = t.uid('ws') and code = 'C1')], '{"manual_base": 90000}'::jsonb, null, null, '[]'::jsonb, 4) ->> 'group_id'));
+select t.ok((select array_agg(r.total_amount order by r.total_amount) = array[24000, 90000]::numeric[] from public.reservations r where r.group_id = t.uid('gc')),
+  'Cocheras: con la carpa van en el mismo grupo, y la cochera se cobra con su tarifa (no con el precio manual de la carpa)');
+select t.ok((select array_agg(r.people order by r.total_amount) = array[null, 4]::int[] from public.reservations r where r.group_id = t.uid('gc')),
+  'Cocheras: las personas quedan en la carpa, no en la cochera');
+select t.throws(format($$select public.create_reservation_v3(%L, gen_random_uuid(), %L, '2027-06-03', '2027-06-03',
+  jsonb_build_array(jsonb_build_object('space_id', %L, 'start_date', '2027-06-03', 'end_date', '2027-06-03')), '{}'::jsonb, null, null, '[]'::jsonb)$$,
+  t.get('ws'), t.get('juan'), (select id from public.spaces where workspace_id = t.uid('ws') and code = 'C1')), 'no está disponible',
+  'Cocheras: no se reserva dos veces la misma cochera');
+
 reset role;
 \o
 -- Resultado ----------------------------------------------------------

@@ -19,6 +19,7 @@ import { PaymentModal, useAction } from "@/components/payments";
 import { PageHeader, SyncNotice } from "@/components/shell";
 import { RelocateModal } from "@/components/relocate";
 import { Alert, Badge, Button, Card, ConfirmDialog, EmptyState, Field, Modal, Spinner, Textarea, TextField, cx } from "@/components/ui";
+import { KindName } from "@/lib/space-kinds";
 
 export default function ReservaPage() {
   const { id } = useParams<{ id: string }>();
@@ -40,7 +41,7 @@ export default function ReservaPage() {
   const due = Number(balance.due_amount);
   const voided = new Set(payments.filter((p) => p.voids_payment_id).map((p) => p.voids_payment_id));
   const daysLeft = confirmed && today <= r.end_date ? inclusiveDays(today < r.start_date ? r.start_date : today, r.end_date) : 0;
-  const placesText = spacesSummary(segments).split(" → ").filter(Boolean).map((c) => `${segments.find((s) => s.spaces.code === c)?.spaces.kind === "sombrilla" ? "Sombrilla" : "Carpa"} ${c}`).join(" → ");
+  const placesText = spacesSummary(segments).split(" → ").filter(Boolean).map((c) => `${segments.find((s) => s.spaces.code === KindName(c)?.spaces.kind)} ${c}`).join(" → ");
   const info = {
     firstName: r.customers.first_name, lastName: r.customers.last_name, phone: r.customers.phone, email: r.customers.email,
     balneario: ws.name, number: r.number, places: placesText, start: r.start_date, end: r.end_date,
@@ -54,7 +55,7 @@ export default function ReservaPage() {
 
   const receiptText = receiptMessage({
     balneario: ws.name, number: r.number, customer: `${r.customers.first_name} ${r.customers.last_name ?? ""}`.trim(),
-    places: spacesSummary(segments).split(" → ").map((c) => `${segments.find((s) => s.spaces.code === c)?.spaces.kind === "sombrilla" ? "Sombrilla" : "Carpa"} ${c}`).join(" → "),
+    places: spacesSummary(segments).split(" → ").map((c) => `${segments.find((s) => s.spaces.code === KindName(c)?.spaces.kind)} ${c}`).join(" → "),
     start: r.start_date, end: r.end_date, total: Number(r.total_amount), paid: Number(balance.paid_amount), due, courtesy: r.is_courtesy,
     payments: payments.map((p) => ({ date: formatDateISO(p.created_at, ws.timezone), kind: p.kind, method: METHOD_LABEL[p.method] ?? p.method, amount: Number(p.amount), voided: voided.has(p.id) })),
   });
@@ -138,7 +139,7 @@ export default function ReservaPage() {
             <ul className="text-sm">
               {segments.map((s) => (
                 <li key={s.id} className="flex justify-between border-b border-line py-1.5 last:border-0">
-                  <span><strong>{s.spaces.kind === "carpa" ? "Carpa" : "Sombrilla"} {s.spaces.code}</strong></span>
+                  <span><strong>{KindName(s.spaces.kind)} {s.spaces.code}</strong></span>
                   <span className="text-muted">{formatDate(s.start_date)} al {formatDate(s.end_date)} ({inclusiveDays(s.start_date, s.end_date)} d)</span>
                 </li>
               ))}

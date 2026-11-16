@@ -12,10 +12,11 @@ import { renewalMessage } from "@/lib/whatsapp-messages";
 import { useWorkspace } from "@/components/workspace";
 import { PageHeader, SyncNotice } from "@/components/shell";
 import { Alert, Badge, Card, EmptyState, Input, Select, Spinner, cx } from "@/components/ui";
+import { KindName, type SpaceKind } from "@/lib/space-kinds";
 
 type SegRow = {
   reservation_id: string; space_id: string; start_date: string; end_date: string;
-  spaces: { code: string; kind: "carpa" | "sombrilla" } | null;
+  spaces: { code: string; kind: SpaceKind } | null;
   reservations: { number: number; customer_id: string } | null;
 };
 
@@ -101,7 +102,7 @@ export default function RenovacionPage() {
     q.reload();
   }
 
-  const place = (r: Renewal) => `${r.main.kind === "sombrilla" ? "Sombrilla" : "Carpa"} ${r.main.code}`;
+  const place = (r: Renewal) => `${KindName(r.main.kind)} ${r.main.code}`;
 
   return (
     <>

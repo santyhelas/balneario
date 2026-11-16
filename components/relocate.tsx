@@ -8,6 +8,7 @@ import { daysOf, indexGrid, isFreeFor, type GridRow } from "@/lib/stay";
 import { useWorkspace } from "@/components/workspace";
 import { useAction } from "@/components/payments";
 import { Alert, Button, Field, Input, Modal, Select, Spinner, TextField, cx } from "@/components/ui";
+import type { SpaceKind } from "@/lib/space-kinds";
 
 /** Cambiar de carpa a una reserva: por un solo día o por el resto de la estadía. La usa la reserva y el mapa. */
 export function RelocateModal({ open, full, today, onClose, onDone, initialDay, initialTarget }: {
@@ -24,7 +25,7 @@ export function RelocateModal({ open, full, today, onClose, onDone, initialDay, 
   const [day, setDay] = useState(
     initialDay && initialDay >= firstDay && initialDay <= r.end_date ? initialDay : firstDay === today && tomorrow <= r.end_date ? tomorrow : firstDay,
   );
-  const [kind, setKind] = useState<"carpa" | "sombrilla">(segments[0]?.spaces.kind ?? "carpa");
+  const [kind, setKind] = useState<SpaceKind>(segments[0]?.spaces.kind ?? "carpa");
   const [target, setTarget] = useState(initialTarget ?? "");
   const [reason, setReason] = useState("");
   const [grid, setGrid] = useState<GridRow[] | null>(null);
@@ -88,13 +89,13 @@ export function RelocateModal({ open, full, today, onClose, onDone, initialDay, 
             <Input type="date" value={day} min={r.start_date} max={r.end_date} onChange={(e) => e.target.value && setDay(e.target.value)} />
           </Field>
           <Field label="Tipo de destino">
-            <Select value={kind} onChange={(e) => setKind(e.target.value as "carpa" | "sombrilla")}><option value="carpa">Carpa</option><option value="sombrilla">Sombrilla</option></Select>
+            <Select value={kind} onChange={(e) => setKind(e.target.value as SpaceKind)}><option value="carpa">Carpa</option><option value="sombrilla">Sombrilla</option><option value="cochera">Cochera</option></Select>
           </Field>
         </div>
         {current && <p className="text-sm text-muted">Ese día está en <strong className="text-fg">{current.spaces.code}</strong>.</p>}
         <Field label={`Libres del ${formatDate(from)} al ${formatDate(to)}`}>
           {loading ? <span className="flex items-center gap-2 text-sm text-muted"><Spinner small /> Buscando…</span> : options.length === 0 ? (
-            <Alert tone="warn">No hay {kind === "carpa" ? "carpas" : "sombrillas"} libres en esas fechas.</Alert>
+            <Alert tone="warn">No hay {kindName(kind, 2)} libres en esas fechas.</Alert>
           ) : (
             <div className="grid grid-cols-[repeat(auto-fill,minmax(3.25rem,1fr))] gap-1.5">
               {options.map((o) => (

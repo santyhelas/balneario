@@ -1,6 +1,7 @@
 // Planilla de clientes: datos de contacto y todo su historial de alquileres (sin cortesías).
 import { getSupabase } from "@/lib/supabase/client";
 import { downloadXlsx, type Cell } from "@/lib/xlsx";
+import { KindName } from "@/lib/space-kinds";
 
 type Cust = { id: string; first_name: string; last_name: string | null; phone: string | null; email: string | null; other_contact: string | null; notes: string | null; created_at: string };
 type Seg = { space_id: string; start_date: string; end_date: string; active: boolean; spaces: { code: string; kind: string } | null };
@@ -46,7 +47,7 @@ export async function exportCustomersXlsx(workspaceId: string, workspaceName: st
   for (const c of customers) {
     for (const r of byCustomer.get(c.id) ?? []) {
       const segs = r.reservation_segments.filter((s) => s.active).sort((a, b) => a.start_date.localeCompare(b.start_date));
-      const places = segs.map((s) => `${s.spaces?.kind === "sombrilla" ? "Sombrilla" : "Carpa"} ${s.spaces?.code ?? "?"}${segs.length > 1 ? ` (${d(s.start_date)} al ${d(s.end_date)})` : ""}`).join(" · ");
+      const places = segs.map((s) => `${KindName(s.spaces?.kind)} ${s.spaces?.code ?? "?"}${segs.length > 1 ? ` (${d(s.start_date)} al ${d(s.end_date)})` : ""}`).join(" · ");
       const b = bal.get(r.id);
       const n = days(r.start_date, r.end_date);
       rentRows.push([

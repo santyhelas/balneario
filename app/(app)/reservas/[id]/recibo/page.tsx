@@ -8,6 +8,7 @@ import { METHOD_LABEL } from "@/lib/methods";
 import { loadReservation } from "@/lib/reservations";
 import { useWorkspace } from "@/components/workspace";
 import { Button, Spinner } from "@/components/ui";
+import { KindName } from "@/lib/space-kinds";
 
 type WsInfo = { name: string; legal_id: string | null; phone: string | null; address: string | null };
 
@@ -38,7 +39,7 @@ export default function ReciboPage() {
             const text = [
               `${info.name} · Reserva #${r.number}`,
               `${r.customers.first_name} ${r.customers.last_name}`,
-              `${segments.map((x) => `${x.spaces.kind === "carpa" ? "Carpa" : "Sombrilla"} ${x.spaces.code}`).filter((v, i, a) => a.indexOf(v) === i).join(" → ")}`,
+              `${segments.map((x) => `${KindName(x.spaces.kind)} ${x.spaces.code}`).filter((v, i, a) => a.indexOf(v) === i).join(" → ")}`,
               `Del ${formatDate(r.start_date)} al ${formatDate(r.end_date)}`,
               `Total ${formatMoney(r.total_amount)} · Abonado ${formatMoney(balance.paid_amount)} · Saldo ${formatMoney(balance.due_amount)}`,
             ].join("\n");
@@ -67,7 +68,7 @@ export default function ReciboPage() {
           <div><span className="text-neutral-600">Teléfono: </span>{r.customers.phone ?? "—"}</div>
           <div><span className="text-neutral-600">Estadía: </span>{formatDate(r.start_date)} al {formatDate(r.end_date)} ({inclusiveDays(r.start_date, r.end_date)} días)</div>
           <div><span className="text-neutral-600">Estado: </span>{r.status === "cancelada" ? "Cancelada" : r.is_courtesy ? "Cortesía" : "Confirmada"}</div>
-          <div className="sm:col-span-2"><span className="text-neutral-600">Ubicación: </span>{segments.map((s) => `${s.spaces.kind === "carpa" ? "Carpa" : "Sombrilla"} ${s.spaces.code} (${formatDate(s.start_date)} al ${formatDate(s.end_date)})`).join(" · ") || "—"}</div>
+          <div className="sm:col-span-2"><span className="text-neutral-600">Ubicación: </span>{segments.map((s) => `${KindName(s.spaces.kind)} ${s.spaces.code} (${formatDate(s.start_date)} al ${formatDate(s.end_date)})`).join(" · ") || "—"}</div>
         </section>
         <table className="mb-4 w-full text-sm">
           <tbody>

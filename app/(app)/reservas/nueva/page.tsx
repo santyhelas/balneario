@@ -17,6 +17,7 @@ import { CustomerForm, searchCustomers, type Customer } from "@/components/custo
 import { whatsappLink } from "@/lib/reservations";
 import { quoteMessage } from "@/lib/whatsapp-messages";
 import { ExtrasPicker, useExtrasTotal, type ExtraPick } from "@/components/extras";
+import { kindName, KindName, type SpaceKind } from "@/lib/space-kinds";
 
 type Agreement = { id: string; name: string; percent: number; valid_from: string | null; valid_to: string | null };
 type Quote = {
@@ -106,14 +107,17 @@ export default function NuevaReservaPage() {
   }, [sb, ws.id]);
   // Ubicación de cada espacio en el plano, para sugerir carpas pegadas (no por número).
   const [pos, setPos] = useState<Pos>(new Map());
+  const [hasParking, setHasParking] = useState(false);
   useEffect(() => {
-    sb.from("spaces").select("id, x, y").eq("workspace_id", ws.id).eq("active", true).then(({ data }) => {
-      setPos(new Map(((data ?? []) as { id: string; x: number; y: number }[]).map((r) => [r.id, { x: Number(r.x), y: Number(r.y) }])));
+    sb.from("spaces").select("id, x, y, kind").eq("workspace_id", ws.id).eq("active", true).then(({ data }) => {
+      const rows = (data ?? []) as { id: string; x: number; y: number; kind: string }[];
+      setPos(new Map(rows.map((r) => [r.id, { x: Number(r.x), y: Number(r.y) }])));
+      setHasParking(rows.some((r) => r.kind === "cochera"));
     });
   }, [sb, ws.id]);
 
   // ---------- Disponibilidad ----------
-  const [kind, setKind] = useState<"carpa" | "sombrilla">("carpa");
+  const [kind, setKind] = useState<SpaceKind>("carpa");
   const [grid, setGrid] = useState<GridRow[] | null>(null);
   const [gridError, setGridError] = useState<string | null>(null);
   const [gridLoading, setGridLoading] = useState(false);
@@ -149,6 +153,7 @@ export default function NuevaReservaPage() {
     const row = grid.find((r) => r.space_id === prefill.space);
     if (row) setSpaceId(prefill.space);
     else if (kind === "carpa") setKind("sombrilla");
+    else if (kind === "sombrilla") setKind("cochera");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [grid]);
 
@@ -172,7 +177,7 @@ export default function NuevaReservaPage() {
   }, [split, selected, idx, spaces, pos]);
 
   // ---------- Grupo: varias carpas juntas ----------
-  const cap = caps[kind];
+  const cap = kind === "cochera" ? null : caps[kind];
   const needed = cap && peopleN ? Math.ceil(peopleN / cap) : 1;
   const [groupIds, setGroupIds] = useState<string[]>([]);
   // Si las personas superan el máximo, se preseleccionan las carpas que faltan, pegadas a la elegida en el plano.
@@ -363,6 +368,59 @@ export default function NuevaReservaPage() {
   }, [groupKey, optKey, start, end, ws.id, datesOk]);
   const groupTotal = isGroup && groupQuote ? groupQuote.total * groupSpaces.length : 0;
 
+  // ---------- Cochera para el auto (con una carpa o sombrilla) ----------
+  // Va en la misma reserva de grupo, libre toda la estadía y con su propia tarifa (sin el precio manual de la carpa).
+  const [askParking, setAskParking] = useState(false);
+  const [parkingId, setParkingId] = useState<string | null>(null);
+  const [parkingGrid, setParkingGrid] = useState<GridRow[] | null>(null);
+  const parkingOn = hasParking && kind !== "cochera" && askParking;
+  useEffect(() => {
+    setParkingGrid(null);
+    if (!parkingOn || !datesOk) return;
+    let alive = true;
+    sb.rpc("availability_grid", { p_workspace_id: ws.id, p_from: start, p_to: end, p_kind: "cochera" }).then(({ data }) => {
+      if (alive) setParkingGrid((data ?? []) as GridRow[]);
+    });
+    return () => { alive = false; };
+  }, [sb, ws.id, start, end, parkingOn, datesOk]);
+  const parkingFree = useMemo(() => {
+    if (!parkingGrid) return [];
+    const pIdx = indexGrid(parkingGrid);
+    const seen = new Map<string, string>();
+    parkingGrid.forEach((r) => seen.set(r.space_id, r.code));
+    return [...seen].filter(([id]) => isFreeFor(pIdx, id, days)).map(([space_id, code]) => ({ space_id, code }))
+      .sort((a, b) => a.code.localeCompare(b.code, "es", { numeric: true }));
+  }, [parkingGrid, days]);
+  useEffect(() => {
+    if (parkingId && parkingGrid && !parkingFree.some((p) => p.space_id === parkingId)) setParkingId(null);
+  }, [parkingFree, parkingGrid, parkingId]);
+  useEffect(() => { if (!parkingOn) setParkingId(null); }, [parkingOn]);
+  const parking = parkingId ? parkingFree.find((p) => p.space_id === parkingId) ?? null : null;
+  const [parkingQuote, setParkingQuote] = useState<{ total: number; cash: number | null; ok: boolean } | null>(null);
+  useEffect(() => {
+    setParkingQuote(null);
+    if (!parkingId || !datesOk) return;
+    const o = { ...options } as Record<string, unknown>;
+    if ((o.manual as { type?: string } | undefined)?.type === "monto") delete o.manual;
+    delete o.manual_base;
+    const seg = [{ space_id: parkingId, start_date: start, end_date: end }];
+    let alive = true;
+    const t = setTimeout(async () => {
+      const [a, b] = await Promise.all([
+        sb.rpc("quote_reservation", { p_workspace_id: ws.id, p_start: start, p_end: end, p_segments: seg, p_options: o }),
+        !courtesy && !cash ? sb.rpc("quote_reservation", { p_workspace_id: ws.id, p_start: start, p_end: end, p_segments: seg, p_options: { ...o, cash: true } }) : Promise.resolve(null),
+      ]);
+      if (!alive) return;
+      const qa = a.error ? null : (a.data as Quote);
+      const qb = b && !b.error ? (b.data as Quote) : null;
+      setParkingQuote(qa ? { ok: qa.ok, total: qa.ok ? Number(qa.total) : 0, cash: qb?.ok ? Number(qb.total) : null } : null);
+    }, 300);
+    return () => { alive = false; clearTimeout(t); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [parkingId, optKey, start, end, ws.id, datesOk]);
+  const parkingTotal = parking && parkingQuote?.ok ? parkingQuote.total : 0;
+  const parkingCash = parking && parkingQuote?.ok ? parkingQuote.cash ?? parkingQuote.total : 0;
+
   // ---------- Pago ----------
   const [payMode, setPayMode] = useState<PayMode>("pagada");
   const [method, setMethod] = useState("efectivo");
@@ -383,7 +441,7 @@ export default function NuevaReservaPage() {
   const [extras, setExtras] = useState<ExtraPick[]>([]);
   const extrasForStay = courtesy ? [] : extras.map((x) => ({ ...x, days: Math.min(x.days, Math.max(1, nDays)) }));
   const extrasTotal = useExtrasTotal(extrasForStay);
-  const total = quote?.ok && (!isGroup || groupQuote) ? Number(quote.total) + groupTotal + extrasTotal : null;
+  const total = quote?.ok && (!isGroup || groupQuote) && (!parking || parkingQuote?.ok) ? Number(quote.total) + groupTotal + parkingTotal + extrasTotal : null;
   const paidNow = courtesy || payMode === "despues" ? 0
     : method === "dolares" ? Math.min(usd.ars ?? 0, total ?? 0)
     : payMode === "pagada" ? total ?? 0 : parseMoney(deposit) ?? 0;
@@ -400,7 +458,7 @@ export default function NuevaReservaPage() {
   const problems: string[] = [];
   if (!customer) problems.push("Elegí o creá el cliente.");
   if (!datesOk) problems.push(nDays > 120 ? "La estadía puede ser de hasta 120 días." : "Revisá las fechas.");
-  if (!selected) problems.push("Elegí una carpa o sombrilla.");
+  if (!selected) problems.push(hasParking ? "Elegí una carpa, sombrilla o cochera." : "Elegí una carpa o sombrilla.");
   else if (split && split.free.length === 0) problems.push(`${selected.code} está ocupada todos esos días. Elegí otra.`);
   else if (split && split.busy.length > 0 && plan !== "cambiar") problems.push(`${selected.code} está ocupada algunos días: elegí qué hacer en el paso 3.`);
   else if (noAlternative) problems.push("No hay alternativas libres para algunos días: elegí otro espacio o cambiá las fechas.");
@@ -408,6 +466,8 @@ export default function NuevaReservaPage() {
   if (isGroup && split && split.busy.length > 0) problems.push(`Para un grupo, la ${selected?.code ?? "carpa"} principal tiene que estar libre toda la estadía. Elegí otra.`);
   if (people && !peopleN) problems.push("Revisá la cantidad de personas.");
   if (quote && !quote.ok) problems.push("Faltan tarifas para esas fechas.");
+  if (parking && parkingQuote && !parkingQuote.ok) problems.push("Faltan las tarifas de cocheras para esas fechas: cargalas en el Tarifario o sacá la cochera.");
+  if (parking && !courtesy && payMode !== "despues" && method === "dolares") problems.push("Con cochera cobrá en pesos; los dólares se registran después desde cada reserva.");
   if (courtesy && beneficiary.trim().length < 2) problems.push("Indicá el familiar beneficiario de la cortesía.");
   if (!courtesy && payMode !== "despues" && method === "dolares") {
     if (!usd.usd || !usd.rate) problems.push("Ingresá los dólares recibidos y la cotización.");
@@ -421,7 +481,7 @@ export default function NuevaReservaPage() {
   if (!courtesy && payMode === "pagada" && total === 0) problems.push("El total es $0: elegí «Cobrar después» o marcá cortesía.");
   const manualDiscountValue = manualType === "monto" ? parseMoney(manualValue) : Number(manualValue.replace(",", "."));
   if (isAdmin && !courtesy && manualDiscountValue && manualDiscountValue > 0 && manualReason.trim().length < 3) problems.push("El descuento manual necesita un motivo.");
-  const canSave = problems.length === 0 && !!quote?.ok && !quoteLoading && !!segments && (!isGroup || !!groupQuote);
+  const canSave = problems.length === 0 && !!quote?.ok && !quoteLoading && !!segments && (!isGroup || !!groupQuote) && (!parking || !!parkingQuote?.ok);
 
   async function save() {
     if (!customer || !segments) return;
@@ -434,10 +494,10 @@ export default function NuevaReservaPage() {
       : null;
     const withExtras = extrasForStay.length > 0;
     // Con personas o con varias carpas se usa la operación de grupo (también sirve para una sola carpa).
-    if (isGroup || peopleN) {
+    if (isGroup || peopleN || parking) {
       const { data, error } = await sb.rpc("create_reservation_group", {
         p_workspace_id: ws.id, p_request_id: requestId, p_customer_id: customer.id, p_start_date: start, p_end_date: end,
-        p_segments: segments, p_extra_spaces: groupSpaces.map((g) => g.space_id), p_options: options, p_notes: notes.trim() || null,
+        p_segments: segments, p_extra_spaces: [...groupSpaces.map((g) => g.space_id), ...(parking ? [parking.space_id] : [])], p_options: options, p_notes: notes.trim() || null,
         p_payment: payment, p_extras: extrasForStay, p_people: peopleN,
       });
       setSaving(false);
@@ -486,6 +546,8 @@ export default function NuevaReservaPage() {
     setCustQuery("");
     setSpaceId(null);
     setGroupIds([]);
+    setParkingId(null);
+    setAskParking(false);
     setPeople("");
     setNotes("");
     setCourtesy(false);
@@ -506,14 +568,15 @@ export default function NuevaReservaPage() {
   const quoteText = quote?.ok && segments && !courtesy ? quoteMessage({
     firstName: customer?.first_name ?? null,
     balneario: ws.name,
-    places: isGroup
-      ? `${kind === "carpa" ? "Carpas" : "Sombrillas"} ${[selected?.code ?? "", ...groupSpaces.map((g) => g.code)].join(", ")}`
+    places: (isGroup
+      ? `${KindName(kind, 2)} ${[selected?.code ?? "", ...groupSpaces.map((g) => g.code)].join(", ")}`
       : segments.length === 1
-      ? `${kind === "carpa" ? "Carpa" : "Sombrilla"} ${spaces.find((x) => x.space_id === segments[0].space_id)?.code ?? ""}`
-      : segments.map((sg) => `${kind === "carpa" ? "Carpa" : "Sombrilla"} ${spaces.find((x) => x.space_id === sg.space_id)?.code ?? ""} (${formatDate(sg.start_date).slice(0, 5)} al ${formatDate(sg.end_date).slice(0, 5)})`).join(", "),
+      ? `${KindName(kind)} ${spaces.find((x) => x.space_id === segments[0].space_id)?.code ?? ""}`
+      : segments.map((sg) => `${KindName(kind)} ${spaces.find((x) => x.space_id === sg.space_id)?.code ?? ""} (${formatDate(sg.start_date).slice(0, 5)} al ${formatDate(sg.end_date).slice(0, 5)})`).join(", ")
+    ) + (parking ? ` + Cochera ${parking.code}` : ""),
     start, end,
-    total: Number(quote.total) + groupTotal + extrasTotal,
-    cashTotal: cashTotal !== null ? cashTotal + (isGroup && groupQuote ? (groupQuote.cash ?? groupQuote.total) * groupSpaces.length : 0) + extrasTotal : null,
+    total: Number(quote.total) + groupTotal + parkingTotal + extrasTotal,
+    cashTotal: cashTotal !== null ? cashTotal + (isGroup && groupQuote ? (groupQuote.cash ?? groupQuote.total) * groupSpaces.length : 0) + parkingCash + extrasTotal : null,
     discounts: quote.discounts.map((d) => clientDiscountLabel(d, agreements)),
   }) : null;
 
@@ -613,7 +676,7 @@ export default function NuevaReservaPage() {
                 <Input inputMode="numeric" value={people} onChange={(e) => setPeople(e.target.value.replace(/\D/g, "").slice(0, 3))} placeholder="Opcional" className="w-28" aria-label="Cantidad de personas" />
               </Field>
               <p className="pb-2 text-xs text-muted">
-                {cap ? <>Máximo {cap} por {kind}.{needed > 1 && <strong className="text-fg"> Son {peopleN}: hacen falta {needed} {kind === "carpa" ? "carpas" : "sombrillas"}.</strong>}</>
+                {cap ? <>Máximo {cap} por {kind}.{needed > 1 && <strong className="text-fg"> Son {peopleN}: hacen falta {needed} {kindName(kind, 2)}.</strong>}</>
                   : caps.ready ? <>Sin máximo de personas. {isAdmin && <Link href="/configuracion#reglas" className="text-accent underline">Fijarlo en Configuración</Link>}</> : null}
               </p>
             </div>
@@ -622,12 +685,13 @@ export default function NuevaReservaPage() {
 
           {/* 3. Espacio */}
           <Card
-            title="3. Carpa o sombrilla"
+            title={hasParking ? "3. Carpa, sombrilla o cochera" : "3. Carpa o sombrilla"}
             tour="nr-espacio"
             actions={
-              <Select value={kind} onChange={(e) => { setKind(e.target.value as "carpa" | "sombrilla"); setSpaceId(null); }} className="w-auto" aria-label="Tipo">
+              <Select value={kind} onChange={(e) => { setKind(e.target.value as SpaceKind); setSpaceId(null); }} className="w-auto" aria-label="Tipo">
                 <option value="carpa">Carpas</option>
                 <option value="sombrilla">Sombrillas</option>
+                {hasParking && <option value="cochera">Cocheras</option>}
               </Select>
             }
           >
@@ -639,7 +703,7 @@ export default function NuevaReservaPage() {
                 {groupMode && (
                   <div className="mb-3 rounded-lg border border-accent/40 bg-accent-soft/40 p-3 text-sm">
                     <div className="font-medium">
-                      {needed > 1 ? `Son ${peopleN} personas: hacen falta ${needed} ${kind === "carpa" ? "carpas" : "sombrillas"}.` : "Grupo de varias carpas."}{" "}
+                      {needed > 1 ? `Son ${peopleN} personas: hacen falta ${needed} ${kindName(kind, 2)}.` : "Grupo de varias carpas."}{" "}
                       <span className="font-normal text-muted">Tocá en la lista las que quieras (la primera es la principal; tocala de nuevo para empezar otra vez).</span>
                     </div>
                     {groupSuggestions.length > 0 && (
@@ -659,13 +723,13 @@ export default function NuevaReservaPage() {
                       </div>
                     )}
                     {needed > 1 && groupSuggestions.length === 0 && pos.size > 0 && (
-                      <p className="mt-1 text-xs text-warn">No hay {needed} {kind === "carpa" ? "carpas" : "sombrillas"} libres toda la estadía para armar el grupo.</p>
+                      <p className="mt-1 text-xs text-warn">No hay {needed} {kindName(kind, 2)} libres toda la estadía para armar el grupo.</p>
                     )}
                   </div>
                 )}
                 {gridNote && <Alert tone="warn" className="mb-2">{gridNote}</Alert>}
                 <p className="mb-2 text-xs text-muted">
-                  Verde: libre todos los días · Ámbar: libre solo algunos días · Gris: sin días libres. {fullyFree.length} {kind === "carpa" ? "carpas" : "sombrillas"} libres toda la estadía.
+                  Verde: libre todos los días · Ámbar: libre solo algunos días · Gris: sin días libres. {fullyFree.length} {kindName(kind, 2)} libres toda la estadía.
                 </p>
                 <div className="grid grid-cols-[repeat(auto-fill,minmax(3.25rem,1fr))] gap-1.5">
                   {spaces.map((s) => {
@@ -696,7 +760,7 @@ export default function NuevaReservaPage() {
 
             {selected && split && (
               <div className="mt-4 rounded-lg border border-line p-3 text-sm">
-                <div className="mb-2 font-medium">{kind === "carpa" ? "Carpa" : "Sombrilla"} {selected.code}</div>
+                <div className="mb-2 font-medium">{KindName(kind)} {selected.code}</div>
                 {split.busy.length === 0 ? (
                   <Alert tone="ok">Libre toda la estadía.</Alert>
                 ) : split.free.length === 0 ? (
@@ -716,7 +780,7 @@ export default function NuevaReservaPage() {
                     </Alert>
 
                     <ChoiceCard active={plan === "cambiar"} onClick={() => setPlan("cambiar")}
-                      title={<>Darle la {selected.code} los días libres y otra {kind === "carpa" ? "carpa" : "sombrilla"} los días ocupados</>}
+                      title={<>Darle la {selected.code} los días libres y otra {kindName(kind)} los días ocupados</>}
                       detail="Sigue siendo una sola reserva y un solo pago. Mismo tipo de espacio: el precio no cambia." />
                     {plan === "cambiar" && busyOptions.map(({ run, candidates }) => (
                       <div key={run.start} className="ml-4 rounded-lg border border-line p-2">
@@ -724,7 +788,7 @@ export default function NuevaReservaPage() {
                           {run.start === run.end ? `El ${formatDate(run.start)}` : `Del ${formatDate(run.start)} al ${formatDate(run.end)}`} ({run.days} {run.days === 1 ? "día" : "días"}) pasa a:
                         </div>
                         {candidates.length === 0 ? (
-                          <Badge tone="danger">No hay {kind === "carpa" ? "carpas" : "sombrillas"} libres esos días</Badge>
+                          <Badge tone="danger">No hay {kindName(kind, 2)} libres esos días</Badge>
                         ) : (
                           <>
                             <div className="flex flex-wrap gap-1.5">
@@ -750,7 +814,7 @@ export default function NuevaReservaPage() {
                     ))}
 
                     <ChoiceCard active={false} onClick={() => document.getElementById("otra-completa")?.scrollIntoView({ behavior: "smooth", block: "center" })}
-                      title={<>Darle otra {kind === "carpa" ? "carpa" : "sombrilla"} libre los {days.length} días, sin mudanza</>}
+                      title={<>Darle otra {kindName(kind)} libre los {days.length} días, sin mudanza</>}
                       detail={fullyFree.length === 0 ? `No hay ninguna libre los ${days.length} días.` : "Tocá una:"} />
                     {fullyFree.length > 0 && (
                       <div id="otra-completa" className="ml-4 flex flex-wrap gap-1.5">
@@ -774,17 +838,43 @@ export default function NuevaReservaPage() {
                     + ¿Son varios? Sumar la {groupCandidates[0].code}, que está pegada
                   </button>
                 )}
+                {spaceId && grid && hasParking && kind !== "cochera" && (
+                  !askParking ? (
+                    <button type="button" onClick={() => setAskParking(true)} className="mt-3 block text-sm text-accent hover:underline">+ ¿Viene en auto? Sumar una cochera</button>
+                  ) : (
+                    <div className="mt-3 rounded-lg border border-line p-3">
+                      <div className="mb-1 flex items-center justify-between gap-2 font-medium">
+                        <span>Cochera{parking ? ` ${parking.code}` : ""}</span>
+                        <button type="button" onClick={() => setAskParking(false)} className="text-xs font-normal text-muted hover:underline">Sin cochera</button>
+                      </div>
+                      <p className="mb-2 text-xs text-muted">Libres toda la estadía. Va en la misma reserva, con la tarifa de cocheras.</p>
+                      {!parkingGrid ? <div className="flex items-center gap-2 text-sm text-muted"><Spinner small /> Buscando cocheras libres…</div>
+                        : parkingFree.length === 0 ? <p className="text-sm text-warn">No hay cocheras libres toda la estadía.</p>
+                        : (
+                          <div className="flex flex-wrap gap-1.5">
+                            {parkingFree.map((p) => (
+                              <button key={p.space_id} type="button" onClick={() => setParkingId(parkingId === p.space_id ? null : p.space_id)}
+                                className={cx("rounded-md border px-2.5 py-1 text-sm font-semibold tabular",
+                                  parkingId === p.space_id ? "border-accent bg-accent text-accent-fg" : "border-ok/50 bg-ok-soft text-ok hover:bg-ok/20")}>
+                                {p.code}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                    </div>
+                  )
+                )}
                 {spaceId && grid && (isGroup || needed > 1) && (
                   <div className="mt-3 rounded-lg border border-accent/40 bg-accent-soft/40 p-3">
                     <div className="mb-1 font-medium">
-                      {isGroup ? <>Grupo: {[selected?.code, ...groupSpaces.map((g) => g.code)].join(" + ")}</> : `Hacen falta ${needed} ${kind === "carpa" ? "carpas" : "sombrillas"}`}
+                      {isGroup ? <>Grupo: {[selected?.code, ...groupSpaces.map((g) => g.code)].join(" + ")}</> : `Hacen falta ${needed} ${kindName(kind, 2)}`}
                     </div>
                     {isGroup && <p className="mb-2 text-xs text-muted">Se guardan juntas, mismas fechas y mismo cliente. Un solo cobro que se reparte entre las {1 + groupSpaces.length}.</p>}
                     {capacityTotal !== null && peopleN !== null && peopleN > capacityTotal && (
                       <Alert tone="warn" className="mb-2">Son {peopleN} personas y {1 + groupSpaces.length === 1 ? "esta carpa alcanza" : `estas ${1 + groupSpaces.length} alcanzan`} para {capacityTotal}. Sumá otra.</Alert>
                     )}
                     {needed > 1 && groupSpaces.length < needed - 1 && groupCandidates.length === 0 && (
-                      <Alert tone="danger" className="mb-2">No hay más {kind === "carpa" ? "carpas" : "sombrillas"} libres toda la estadía para el grupo.</Alert>
+                      <Alert tone="danger" className="mb-2">No hay más {kindName(kind, 2)} libres toda la estadía para el grupo.</Alert>
                     )}
                     <div className="flex flex-wrap gap-1.5">
                       {groupSpaces.map((g) => (
@@ -919,7 +1009,7 @@ export default function NuevaReservaPage() {
                 {isGroup && (
                   <>
                     <div className="mt-1 flex justify-between gap-3 border-t border-line pt-1">
-                      <span>{kind === "carpa" ? "Carpa" : "Sombrilla"} {selected?.code}</span><span className="tabular">{formatMoney(quote.total)}</span>
+                      <span>{KindName(kind)} {selected?.code}</span><span className="tabular">{formatMoney(quote.total)}</span>
                     </div>
                     <div className="flex justify-between gap-3">
                       <span>
@@ -930,6 +1020,12 @@ export default function NuevaReservaPage() {
                     </div>
                   </>
                 )}
+                {parking && (
+                  <div className="flex justify-between gap-3">
+                    <span>Cochera {parking.code} <span className="text-xs text-muted">(tarifa de cocheras{quote.discounts.length ? ", con los mismos descuentos" : ""})</span></span>
+                    <span className="tabular">{parkingQuote ? (parkingQuote.ok ? `+ ${formatMoney(parkingQuote.total)}` : "Faltan tarifas") : "…"}</span>
+                  </div>
+                )}
                 {!courtesy && extrasTotal > 0 && <div className="flex justify-between gap-3"><span>Extras</span><span className="tabular">+ {formatMoney(extrasTotal)}</span></div>}
                 <div className="mt-1 flex justify-between gap-3 border-t border-line pt-2 text-base font-semibold"><span>Total</span><span className="tabular">{formatMoney(total)}</span></div>
                 {!courtesy && (feats.redondeo || roundTotal) && (
@@ -939,7 +1035,7 @@ export default function NuevaReservaPage() {
                   </label>
                 )}
                 {cashTotal !== null && cashTotal < Number(quote.total) && (
-                  <div className="flex justify-between gap-3 text-xs text-muted"><span>Pagando en efectivo</span><span className="tabular">{formatMoney(cashTotal + (isGroup && groupQuote ? (groupQuote.cash ?? groupQuote.total) * groupSpaces.length : 0) + (courtesy ? 0 : extrasTotal))}</span></div>
+                  <div className="flex justify-between gap-3 text-xs text-muted"><span>Pagando en efectivo</span><span className="tabular">{formatMoney(cashTotal + (isGroup && groupQuote ? (groupQuote.cash ?? groupQuote.total) * groupSpaces.length : 0) + parkingCash + (courtesy ? 0 : extrasTotal))}</span></div>
                 )}
                 {!courtesy && quoteText && (
                   <div className="mt-3 border-t border-line pt-3">
@@ -1060,6 +1156,7 @@ export default function NuevaReservaPage() {
             <dd>
               {segments.map((s) => `${spaces.find((x) => x.space_id === s.space_id)?.code} (${formatDate(s.start_date)}–${formatDate(s.end_date)})`).join(" → ")}
               {isGroup && <> + {groupSpaces.map((g) => g.code).join(", ")} <span className="text-muted">(grupo)</span></>}
+              {parking && <> + Cochera {parking.code}</>}
             </dd>
             {peopleN && <><dt className="text-muted">Personas</dt><dd>{peopleN}</dd></>}
             <dt className="text-muted">Total</dt><dd className="font-semibold tabular">{formatMoney(total)}{!courtesy && extrasTotal > 0 ? ` (con ${formatMoney(extrasTotal)} de extras)` : ""}{courtesy ? ` · Cortesía para ${beneficiary}` : ""}</dd>

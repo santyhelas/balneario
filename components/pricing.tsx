@@ -6,6 +6,7 @@ import { friendlyError } from "@/lib/errors";
 import { formatDate, formatMoney } from "@/lib/format";
 import { useWorkspace } from "@/components/workspace";
 import { Alert, Badge, Button, Card, ConfirmDialog, EmptyState, Field, Input, Modal, Textarea, TextField, cx } from "@/components/ui";
+import { KindName, type SpaceKind } from "@/lib/space-kinds";
 
 export type Pkg = { id: string; min_days: number; percent: number; active: boolean; version: number };
 export type Agreement = { id: string; name: string; percent: number; active: boolean; valid_from: string | null; valid_to: string | null; conditions: string | null; version: number };
@@ -346,7 +347,7 @@ export function DiscountCapCard({ cap, wsVersion, editable, onChanged }: { cap: 
 }
 
 export type PackagePrice = {
-  id: string; space_kind: "carpa" | "sombrilla"; days: number; price: number; extra_day_price: number;
+  id: string; space_kind: SpaceKind; days: number; price: number; extra_day_price: number;
   valid_from: string | null; valid_to: string | null; active: boolean; version: number;
 };
 
@@ -362,7 +363,7 @@ export async function loadPackagePrices(sb: SupabaseClient, wsId: string): Promi
 export function PackagePricesCard({ rows, editable, onChanged }: { rows: PackagePrice[] | null; editable: boolean; onChanged: () => void }) {
   const { ws } = useWorkspace();
   const sb = getSupabase();
-  const [kind, setKind] = useState<"carpa" | "sombrilla">("carpa");
+  const [kind, setKind] = useState<SpaceKind>("carpa");
   const [days, setDays] = useState("");
   const [price, setPrice] = useState("");
   const [extra, setExtra] = useState("");
@@ -405,7 +406,7 @@ export function PackagePricesCard({ rows, editable, onChanged }: { rows: Package
           {rows.map((r) => (
             <li key={r.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
               <span>
-                <Badge tone="info">{r.space_kind === "carpa" ? "Carpa" : "Sombrilla"}</Badge>{" "}
+                <Badge tone="info">{KindName(r.space_kind)}</Badge>{" "}
                 <strong>{r.days} {r.days === 1 ? "día" : "días"} · {formatMoney(r.price)}</strong>
                 <span className="text-muted"> · día extra {formatMoney(r.extra_day_price)} · {validity(r)}</span>
               </span>
@@ -416,7 +417,7 @@ export function PackagePricesCard({ rows, editable, onChanged }: { rows: Package
       )}
       {editable && (
         <form onSubmit={add} className="grid gap-2 border-t border-line pt-3 sm:grid-cols-3">
-          <Field label="Para"><select value={kind} onChange={(e) => setKind(e.target.value as "carpa" | "sombrilla")} className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm"><option value="carpa">Carpas</option><option value="sombrilla">Sombrillas</option></select></Field>
+          <Field label="Para"><select value={kind} onChange={(e) => setKind(e.target.value as SpaceKind)} className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm"><option value="carpa">Carpas</option><option value="sombrilla">Sombrillas</option><option value="cochera">Cocheras</option></select></Field>
           <Field label="Días del paquete"><Input inputMode="numeric" value={days} onChange={(e) => setDays(e.target.value.replace(/\D/g, ""))} placeholder="5" /></Field>
           <Field label="Precio del paquete"><Input inputMode="decimal" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="90.000" /></Field>
           <Field label="Cada día extra"><Input inputMode="decimal" value={extra} onChange={(e) => setExtra(e.target.value)} placeholder="20.000" /></Field>

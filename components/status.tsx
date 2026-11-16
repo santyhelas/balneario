@@ -4,6 +4,7 @@ import { getSupabase } from "@/lib/supabase/client";
 import { unwrap, useLoader } from "@/lib/data";
 import { addDays, formatDate, formatMoney } from "@/lib/format";
 import { useWorkspace } from "@/components/workspace";
+import type { SpaceKind } from "@/lib/space-kinds";
 
 export type Counts = { total_activos: number; ocupados: number; cortesias: number; disponibles: number; mantenimiento: number; desactivados: number };
 export type ResItem = {
@@ -12,7 +13,7 @@ export type ResItem = {
 };
 export type Summary = {
   fecha: string;
-  espacios: Partial<Record<"carpa" | "sombrilla", Counts>>;
+  espacios: Partial<Record<SpaceKind, Counts>>;
   ingresan_hoy: ResItem[];
   finalizan_hoy: ResItem[];
   clientes_con_deuda: number;
