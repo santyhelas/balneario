@@ -451,6 +451,9 @@ for (const [view, opts] of Object.entries(VIEWS)) {
       let pair = [0, 1], best = Infinity;
       for (const a of boxes) for (const b of boxes) if (a.i < b.i) { const d = Math.hypot(a.x - b.x, a.y - b.y); if (d < best) { best = d; pair = [a.i, b.i]; } }
       const [I0, I1] = pair;
+      await tents.nth(I0).scrollIntoViewIfNeeded();
+      await page.waitForTimeout(400);
+      f6.pasos.push(`elegidas para probar: ${await tents.nth(I0).getAttribute("aria-label")} y ${await tents.nth(I1).getAttribute("aria-label")}`);
       const pos = async (i) => { const b = await tents.nth(i === 0 ? I0 : i === 1 ? I1 : i).boundingBox(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 }; };
       const a0 = await pos(0), a1 = await pos(1);
       // Elegir las dos con Ctrl + clic (en este plano las carpas están muy juntas para un recuadro de prueba).
@@ -693,7 +696,7 @@ for (const [view, opts] of Object.entries(VIEWS)) {
       await page.waitForTimeout(1500);
       const coords = await page.locator("text=/\\(-?\\d+\\.\\d+, -?\\d+\\.\\d+\\)/").first().textContent().catch(() => null);
       f8.pasos.push(`ubicación: ${coords ?? "—"}`);
-      await box.scrollIntoViewIfNeeded();
+      await box.scrollIntoViewIfNeeded({ timeout: 3000 }).catch(() => f8.pasos.push("al marcar el punto, el mapa se cerró"));
       await page.screenshot({ path: `${OUT}/capturas/ubicacion-mapa.png` });
       f8.resultado = tiles > 0 && coords ? "OK" : "Revisar";
     } catch (e) { f8.resultado = `Se cortó: ${String(e).slice(0, 200)}`; }
