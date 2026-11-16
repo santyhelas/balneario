@@ -628,9 +628,10 @@ for (const [view, opts] of Object.entries(VIEWS)) {
     try {
       for (const n of [30, 200]) {
         await page.goto(DEMO + "/reservas/nueva", { waitUntil: "networkidle" });
-        const start = await page.getByLabel("Entrada").inputValue();
+        const dates = page.locator("main input[type=date]");
+        const start = await dates.nth(0).inputValue();
         const d = new Date(start + "T12:00:00"); d.setDate(d.getDate() + n - 1);
-        await page.getByLabel("Salida (último día)").fill(d.toISOString().slice(0, 10));
+        await dates.nth(1).fill(d.toISOString().slice(0, 10));
         await page.waitForTimeout(4000);
         const cells = await page.locator('button[title="Libre toda la estadía"], button[title^="Libre "], button[title="Sin días libres"]').count();
         const max = await page.getByText(/Máximo \d+ días/).count();
