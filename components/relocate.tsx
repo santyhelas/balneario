@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { getSupabase } from "@/lib/supabase/client";
+import { fetchGrid } from "@/lib/grid";
 import { friendlyError } from "@/lib/errors";
 import { addDays, formatDate } from "@/lib/format";
 import { type Full } from "@/lib/reservations";
@@ -39,10 +40,14 @@ export function RelocateModal({ open, full, today, onClose, onDone, initialDay, 
   async function load() {
     setLoading(true);
     setTarget((t) => (t && t === initialTarget ? t : ""));
-    const res = await getSupabase().rpc("availability_grid", { p_workspace_id: ws.id, p_from: from, p_to: to, p_kind: kind });
+    let rows: GridRow[];
+    try {
+      rows = await fetchGrid<GridRow>(getSupabase(), { p_workspace_id: ws.id, p_from: from, p_to: to, p_kind: kind });
+    } catch (e) {
+      setLoading(false);
+      return a.setError(friendlyError(e));
+    }
     setLoading(false);
-    if (res.error) return a.setError(friendlyError(res.error));
-    const rows = res.data as GridRow[];
     setGrid(rows);
     // La carpa elegida en el mapa: si no está libre en esas fechas, se avisa abajo.
     if (initialTarget && !rows.some((g) => g.space_id === initialTarget)) setTarget("");

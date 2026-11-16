@@ -2,7 +2,8 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { getSupabase } from "@/lib/supabase/client";
-import { newKey, unwrap } from "@/lib/data";
+import { newKey } from "@/lib/data";
+import { fetchGrid } from "@/lib/grid";
 import { friendlyError } from "@/lib/errors";
 import { addDays, formatDate, formatMoney, inclusiveDays, parseMoney, todayISO } from "@/lib/format";
 import { COLLECT_METHODS, METHOD_LABEL } from "@/lib/methods";
@@ -18,6 +19,9 @@ import { whatsappLink } from "@/lib/reservations";
 import { quoteMessage } from "@/lib/whatsapp-messages";
 import { ExtrasPicker, useExtrasTotal, type ExtraPick } from "@/components/extras";
 import { kindName, KindName, type SpaceKind } from "@/lib/space-kinds";
+
+/** Estadía máxima: más de un año (la base acepta hasta 400 días de consulta). */
+const MAX_DAYS = 400;
 
 type Agreement = { id: string; name: string; percent: number; valid_from: string | null; valid_to: string | null };
 type Quote = {
@@ -92,7 +96,7 @@ export default function NuevaReservaPage() {
     sb.from("customers").select("*").eq("workspace_id", ws.id).eq("id", prefill.customer).maybeSingle()
       .then(({ data }) => { if (data) setCustomer(data as Customer); });
   }, [prefill.customer]); // eslint-disable-line react-hooks/exhaustive-deps
-  const datesOk = nDays >= 1 && nDays <= 120;
+  const datesOk = nDays >= 1 && nDays <= MAX_DAYS;
 
   // ---------- Personas y capacidad ----------
   const [people, setPeople] = useState("");
@@ -133,7 +137,7 @@ export default function NuevaReservaPage() {
     setGridLoading(true);
     setGridError(null);
     try {
-      const rows = unwrap(await sb.rpc("availability_grid", { p_workspace_id: ws.id, p_from: start, p_to: end, p_kind: kind })) as GridRow[];
+      const rows = await fetchGrid<GridRow>(sb, { p_workspace_id: ws.id, p_from: start, p_to: end, p_kind: kind });
       if (my === gridSeq.current) setGrid(rows);
     } catch (e) {
       if (my === gridSeq.current) setGridError(friendlyError(e));
@@ -378,9 +382,8 @@ export default function NuevaReservaPage() {
     setParkingGrid(null);
     if (!parkingOn || !datesOk) return;
     let alive = true;
-    sb.rpc("availability_grid", { p_workspace_id: ws.id, p_from: start, p_to: end, p_kind: "cochera" }).then(({ data }) => {
-      if (alive) setParkingGrid((data ?? []) as GridRow[]);
-    });
+    fetchGrid<GridRow>(sb, { p_workspace_id: ws.id, p_from: start, p_to: end, p_kind: "cochera" })
+      .then((rows) => { if (alive) setParkingGrid(rows); }, () => { if (alive) setParkingGrid([]); });
     return () => { alive = false; };
   }, [sb, ws.id, start, end, parkingOn, datesOk]);
   const parkingFree = useMemo(() => {
@@ -457,7 +460,7 @@ export default function NuevaReservaPage() {
 
   const problems: string[] = [];
   if (!customer) problems.push("Elegí o creá el cliente.");
-  if (!datesOk) problems.push(nDays > 120 ? "La estadía puede ser de hasta 120 días." : "Revisá las fechas.");
+  if (!datesOk) problems.push(nDays > MAX_DAYS ? `La estadía puede ser de hasta ${MAX_DAYS} días.` : "Revisá las fechas.");
   if (!selected) problems.push(hasParking ? "Elegí una carpa, sombrilla o cochera." : "Elegí una carpa o sombrilla.");
   else if (split && split.free.length === 0) problems.push(`${selected.code} está ocupada todos esos días. Elegí otra.`);
   else if (split && split.busy.length > 0 && plan !== "cambiar") problems.push(`${selected.code} está ocupada algunos días: elegí qué hacer en el paso 3.`);
@@ -665,7 +668,7 @@ export default function NuevaReservaPage() {
               </div>
             </div>
             <p className="mt-3 text-sm">
-              {datesOk ? <>Del <strong>{formatDate(start)}</strong> al <strong>{formatDate(end)}</strong> · {nDays} {nDays === 1 ? "día" : "días"}</> : <span className="text-danger">{nDays > 120 ? "Máximo 120 días." : "La salida no puede ser anterior a la entrada."}</span>}
+              {datesOk ? <>Del <strong>{formatDate(start)}</strong> al <strong>{formatDate(end)}</strong> · {nDays} {nDays === 1 ? "día" : "días"}</> : <span className="text-danger">{nDays > MAX_DAYS ? `Máximo ${MAX_DAYS} días.` : "La salida no puede ser anterior a la entrada."}</span>}
               {start < today && <Badge tone="warn">Fecha pasada</Badge>}
             </p>
             {!(askPeople || people !== "") ? (
