@@ -607,6 +607,8 @@ for (const [view, opts] of Object.entries(VIEWS)) {
       await page.getByRole("button", { name: "Ver la reserva" }).waitFor({ timeout: 20000 });
       const body = await page.locator("body").innerText();
       fc.pasos.push(/Grupo guardado/.test(body) ? "guardó la carpa y la cochera unidas" : "guardada (sin grupo)");
+      fc.pasos.push(/Mandar bienvenida por WhatsApp/.test(body) ? "ofrece mandar la bienvenida por WhatsApp" : "NO ofrece la bienvenida");
+      if (!/Mandar bienvenida por WhatsApp/.test(body)) fc.mal = true;
       await page.screenshot({ path: `${OUT}/capturas/cocheras-guardada.png`, fullPage: true });
       // Disponibilidad con el filtro de cocheras
       await page.goto(DEMO + "/disponibilidad", { waitUntil: "networkidle" });
@@ -619,7 +621,7 @@ for (const [view, opts] of Object.entries(VIEWS)) {
       await page.goto(DEMO + "/tarifas", { waitUntil: "networkidle" });
       const col = await page.getByText("Cochera ($/día)").count();
       fc.pasos.push(col ? "tarifario: columna de cocheras" : "tarifario: falta la columna");
-      fc.resultado = nCoch >= 10 && rowsC >= 10 && col ? "OK" : "Revisar";
+      fc.resultado = nCoch >= 10 && rowsC >= 10 && col && !fc.mal ? "OK" : "Revisar";
     } catch (e) { fc.resultado = `Se cortó: ${String(e).slice(0, 200)}`; await page.screenshot({ path: `${OUT}/capturas/cocheras-error.png`, fullPage: true }).catch(() => {}); }
     report.flujos.push(fc);
 
