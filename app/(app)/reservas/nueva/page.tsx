@@ -12,6 +12,7 @@ import { DollarFields, type DollarValue } from "@/components/dollar";
 import { buildSegments, candidatesFor, daysOf, indexGrid, isFreeFor, mapDistance, nearestGroup, splitDays, type GridRow, type Pos, type Segment } from "@/lib/stay";
 import { useWorkspace } from "@/components/workspace";
 import { useStatus } from "@/components/status";
+import { OpenCashModal } from "@/components/cash";
 import { PageHeader } from "@/components/shell";
 import { Alert, Badge, Button, Card, Field, Input, Modal, Select, Spinner, Textarea, TextField, cx } from "@/components/ui";
 import { CustomerForm, searchCustomers, type Customer } from "@/components/customers";
@@ -466,7 +467,6 @@ export default function NuevaReservaPage() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [done, setDone] = useState<{ id: string; number: number; group?: { id: string; number: number }[]; welcome?: { phone: string | null; text: string } } | null>(null);
   const templates = useMessageTemplates();
-  const status = useStatus();
   const [openCash, setOpenCash] = useState(false);
   const cajaCerrada = !!status.summary && status.summary.caja.estado !== "abierta";
   // Bienvenida por WhatsApp con los datos de la reserva recién guardada (el texto y las reglas se cambian en Configuración).
