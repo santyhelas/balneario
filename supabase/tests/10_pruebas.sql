@@ -1486,6 +1486,10 @@ select t.throws(format($$select public.create_reservation_v3(%L, gen_random_uuid
   t.get('ws'), t.get('juan'), (select id from public.spaces where workspace_id = t.uid('ws') and code = 'C1')), 'no está disponible',
   'Cocheras: no se reserva dos veces la misma cochera');
 
+-- 57. Mensaje de bienvenida
+select t.ok(private.valid_message_templates('{"bienvenida": "Hola {nombre}! Reglas: no se permiten mascotas."}'::jsonb), 'Bienvenida: se puede guardar el mensaje con las reglas');
+select t.ok(not private.valid_message_templates(jsonb_build_object('bienvenida', repeat('a', 2001))), 'Bienvenida: hasta 2000 letras');
+
 reset role;
 \o
 -- Resultado ----------------------------------------------------------

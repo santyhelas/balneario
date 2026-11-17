@@ -10,7 +10,7 @@ import { METHOD_LABEL } from "@/lib/methods";
 import { VoucherList } from "@/components/vouchers";
 import { ReservationExtras } from "@/components/extras";
 import { ArrivalButtons, NoShowPanel } from "@/components/arrival";
-import { debtReminder, mailMessage, receiptMessage } from "@/lib/whatsapp-messages";
+import { debtReminder, mailMessage, receiptMessage, welcomeMessage } from "@/lib/whatsapp-messages";
 import { MailButton, WhatsAppSend, useMessageTemplates } from "@/components/whatsapp";
 import { loadReservation, spacesSummary, whatsappLink, type Full, type PaymentRow } from "@/lib/reservations";
 import { useWorkspace } from "@/components/workspace";
@@ -53,12 +53,15 @@ export default function ReservaPage() {
     : `Hola ${r.customers.first_name}, te escribimos de ${ws.name}. Reserva #${r.number}: ${spacesSummary(segments)} del ${formatDate(r.start_date)} al ${formatDate(r.end_date)}.` +
       (due > 0 ? ` Saldo pendiente: ${formatMoney(due)}.` : " Está paga. ¡Te esperamos!");
 
+  const receiptPlaces = spacesSummary(segments).split(" → ").map((c) => `${KindName(segments.find((s) => s.spaces.code === c)?.spaces.kind)} ${c}`).join(" → ");
   const receiptText = receiptMessage({
     balneario: ws.name, number: r.number, customer: `${r.customers.first_name} ${r.customers.last_name ?? ""}`.trim(),
-    places: spacesSummary(segments).split(" → ").map((c) => `${KindName(segments.find((s) => s.spaces.code === c)?.spaces.kind)} ${c}`).join(" → "),
+    places: receiptPlaces,
     start: r.start_date, end: r.end_date, total: Number(r.total_amount), paid: Number(balance.paid_amount), due, courtesy: r.is_courtesy,
     payments: payments.map((p) => ({ date: formatDateISO(p.created_at, ws.timezone), kind: p.kind, method: METHOD_LABEL[p.method] ?? p.method, amount: Number(p.amount), voided: voided.has(p.id) })),
   });
+
+  const welcomeText = welcomeMessage({ ...info, places: receiptPlaces }, templates);
 
   function done(text: string) {
     setModal(null);
@@ -81,6 +84,7 @@ export default function ReservaPage() {
             <Link href={`/reservas/${r.id}/recibo`}><Button variant="secondary">Comprobante</Button></Link>
             {whatsappLink(r.customers.phone, waText) && <WhatsAppSend phone={r.customers.phone} text={waText} label={due > 0 && confirmed && !r.is_courtesy ? "Recordar deuda por WhatsApp" : "WhatsApp"} className="py-2" />}
             {mail && r.customers.email && <MailButton email={r.customers.email} subject={mail.subject} body={mail.body} className="py-2" />}
+            {confirmed && whatsappLink(r.customers.phone, welcomeText) && <WhatsAppSend phone={r.customers.phone} text={welcomeText} label="Bienvenida por WhatsApp" title="Mandar la bienvenida con las reglas del balneario" className="py-2" />}
             {whatsappLink(r.customers.phone, receiptText) && <WhatsAppSend phone={r.customers.phone} text={receiptText} label="Comprobante por WhatsApp" title="Mandar el comprobante con el detalle de pagos" className="py-2" />}
             {confirmed && <Button variant="danger" onClick={() => setModal("cancelar")}>Cancelar reserva</Button>}
           </>

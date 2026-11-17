@@ -16,7 +16,7 @@ import { MyUsernameField, UsersCard } from "@/components/users";
 import { LocationPicker } from "@/components/location-picker";
 import { PlanCard } from "@/components/plan-card";
 import { RulesCard } from "@/components/rules-card";
-import { DEBT_CASES, DEFAULT_MAIL, DEFAULT_TEMPLATES, PLACEHOLDERS, debtVars, fillTemplate, type DebtCase, type MailKey, type Templates } from "@/lib/whatsapp-messages";
+import { DEBT_CASES, DEFAULT_MAIL, DEFAULT_TEMPLATES, DEFAULT_WELCOME, PLACEHOLDERS, debtVars, fillTemplate, type DebtCase, type MailKey, type Templates } from "@/lib/whatsapp-messages";
 
 type WsRow = { name: string; subtitle: string | null; logo_data: string | null; legal_id: string | null; phone: string | null; address: string | null; latitude: number | null; longitude: number | null; version: number };
 type Member = { user_id: string; role: string; email: string | null; created_at: string };
@@ -52,7 +52,7 @@ export default function ConfiguracionPage() {
           <ConfigSection id="balneario" title="Datos del balneario" sub="Nombre, logo, contacto y ubicación (para el clima)" icon={CONFIG_ICONS.balneario}>
             <BalnearioCard key={q.data.row.version} row={q.data.row} editable={isAdmin} onSaved={async () => { await reloadWorkspace(); q.reload(); }} onConflict={q.reload} />
           </ConfigSection>
-          <ConfigSection id="mensajes" title="Mensajes a clientes" sub="Textos de WhatsApp y correo para recordatorios y comprobantes" icon={CONFIG_ICONS.mensajes}>
+          <ConfigSection id="mensajes" title="Mensajes a clientes" sub="Bienvenida con las reglas, recordatorios de deuda y correo" icon={CONFIG_ICONS.mensajes}>
             <MessagesCard key={`m${q.data.row.version}`} editable={isAdmin} onSaved={q.reload} />
           </ConfigSection>
           <ConfigSection id="reglas" title="Caja, descuentos y reservas" sub="Funciones opcionales (dólares, redondeo, paquetes), límite de efectivo, tope de descuento y personas por carpa" icon={CONFIG_ICONS.reglas}>
@@ -333,12 +333,12 @@ function MessagesCard({ editable, onSaved }: { editable: boolean; onSaved: () =>
     const row = res.data as { message_templates: Templates | null; version: number };
     return { missing: false, templates: row.message_templates ?? {}, version: row.version };
   }, [ws.id], 0);
-  type Key = DebtCase | MailKey;
-  type Tab = DebtCase | "mail";
-  const DEFAULTS: Record<Key, string> = { ...DEFAULT_TEMPLATES, ...DEFAULT_MAIL };
-  const KEYS = [...DEBT_CASES.map((c) => c.key), "mail_asunto", "mail_cuerpo"] as Key[];
+  type Key = DebtCase | MailKey | "bienvenida";
+  type Tab = DebtCase | "mail" | "bienvenida";
+  const DEFAULTS: Record<Key, string> = { ...DEFAULT_TEMPLATES, ...DEFAULT_MAIL, bienvenida: DEFAULT_WELCOME };
+  const KEYS = ["bienvenida", ...DEBT_CASES.map((c) => c.key), "mail_asunto", "mail_cuerpo"] as Key[];
   const [draft, setDraft] = useState<Record<Key, string> | null>(null);
-  const [tab, setTab] = useState<Tab>("deuda_hoy");
+  const [tab, setTab] = useState<Tab>("bienvenida");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ tone: "ok" | "danger"; text: string } | null>(null);
   const area = useRef<HTMLTextAreaElement>(null);
@@ -380,14 +380,15 @@ function MessagesCard({ editable, onSaved }: { editable: boolean; onSaved: () =>
     const out: Templates = {};
     for (const k of KEYS) {
       const v = draft![k].trim();
-      const max = k === "mail_asunto" ? 200 : k === "mail_cuerpo" ? 3000 : 1000;
+      const max = k === "mail_asunto" ? 200 : k === "mail_cuerpo" ? 3000 : k === "bienvenida" ? 2000 : 1000;
       if (v && v !== DEFAULTS[k]) out[k] = v.slice(0, max);
     }
     const { error } = await sb.from("workspaces").update({ message_templates: Object.keys(out).length ? out : null, version: q.data!.version + 1 }).eq("id", ws.id).select("id").single();
     setBusy(false);
     if (error) {
       const needs34 = error.code === "23514" && ("mail_asunto" in out || "mail_cuerpo" in out);
-      setMsg({ tone: "danger", text: needs34 ? "Para guardar el mensaje de correo hay que aplicar la actualización 0034 de la base de datos." : friendlyError(error) });
+      const needs64 = error.code === "23514" && "bienvenida" in out;
+      setMsg({ tone: "danger", text: needs64 ? "Para guardar la bienvenida hay que aplicar la actualización 0064 de la base de datos." : needs34 ? "Para guardar el mensaje de correo hay que aplicar la actualización 0034 de la base de datos." : friendlyError(error) });
       if (isVersionConflict(error)) q.reload();
       return;
     }
@@ -396,12 +397,19 @@ function MessagesCard({ editable, onSaved }: { editable: boolean; onSaved: () =>
     onSaved(); // la versión del balneario cambió: se recargan las dos tarjetas
   }
 
-  const info = isMail ? { label: "Correo", help: "El correo que se arma al tocar «Enviar correo» en una reserva (si el cliente tiene mail cargado)." } : DEBT_CASES.find((c) => c.key === tab)!;
+  const isWelcome = tab === "bienvenida";
+  const info = isMail ? { label: "Correo", help: "El correo que se arma al tocar «Enviar correo» en una reserva (si el cliente tiene mail cargado)." }
+    : isWelcome ? { label: "Bienvenida", help: "WhatsApp · bienvenida. Se ofrece apenas guardás una reserva nueva, y también desde la ficha de la reserva. Sumale las reglas del balneario: horarios, mascotas, música, lo que quieras." }
+    : DEBT_CASES.find((c) => c.key === tab)!;
   const changed = (k: Key) => draft[k] !== DEFAULTS[k];
   return (
     <section>
       <Card title="Mensajes a clientes (WhatsApp y correo)" tour="config-mensajes">
         <div className="mb-2 flex flex-wrap gap-1">
+          <button type="button" onClick={() => setTab("bienvenida")}
+            className={`rounded-lg border px-2.5 py-1 text-sm ${isWelcome ? "border-accent bg-accent-soft font-semibold text-accent" : "border-line hover:bg-surface-2"}`}>
+            Bienvenida{changed("bienvenida") ? " *" : ""}
+          </button>
           {DEBT_CASES.map((c) => (
             <button key={c.key} type="button" onClick={() => setTab(c.key)}
               className={`rounded-lg border px-2.5 py-1 text-sm ${tab === c.key ? "border-accent bg-accent-soft font-semibold text-accent" : "border-line hover:bg-surface-2"}`}>
@@ -413,7 +421,7 @@ function MessagesCard({ editable, onSaved }: { editable: boolean; onSaved: () =>
             Correo{changed("mail_asunto") || changed("mail_cuerpo") ? " *" : ""}
           </button>
         </div>
-        <p className="mb-2 text-xs text-muted">{isMail ? info.help : `WhatsApp · recordatorio de deuda. ${info.help}`}</p>
+        <p className="mb-2 text-xs text-muted">{isMail || isWelcome ? info.help : `WhatsApp · recordatorio de deuda. ${info.help}`}</p>
         {isMail && (
           <p className="mb-3 rounded-lg bg-surface-2 px-3 py-2 text-sm">
             Los correos salen desde la cuenta con la que entrás al sistema{email ? <>: <b>{email}</b></> : ""}. Al tocar «Enviar correo» se abre la ventana para escribir, con el mail del cliente, el asunto y el texto ya puestos.
@@ -427,7 +435,7 @@ function MessagesCard({ editable, onSaved }: { editable: boolean; onSaved: () =>
           </label>
         )}
         <textarea ref={area} value={draft[bodyKey]} onFocus={() => { lastField.current = "body"; }} onChange={(e) => setDraft({ ...draft, [bodyKey]: e.target.value })}
-          rows={isMail ? 9 : 6} maxLength={isMail ? 3000 : 1000} disabled={!editable}
+          rows={isMail || isWelcome ? 9 : 6} maxLength={isMail ? 3000 : isWelcome ? 2000 : 1000} disabled={!editable}
           className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg" aria-label={`Mensaje: ${info.label}`} />
         {editable && (
           <div className="mt-2 flex flex-wrap items-center gap-1 text-xs">
@@ -445,8 +453,8 @@ function MessagesCard({ editable, onSaved }: { editable: boolean; onSaved: () =>
         {msg && <Alert tone={msg.tone} className="mt-2">{msg.text}</Alert>}
         {editable ? (
           <div className="mt-3 flex flex-wrap justify-between gap-2">
-            <Button type="button" variant="ghost" disabled={isMail ? !changed("mail_asunto") && !changed("mail_cuerpo") : !changed(tab as DebtCase)}
-              onClick={() => setDraft(isMail ? { ...draft, mail_asunto: DEFAULT_MAIL.mail_asunto, mail_cuerpo: DEFAULT_MAIL.mail_cuerpo } : { ...draft, [tab]: DEFAULTS[tab as DebtCase] })}>
+            <Button type="button" variant="ghost" disabled={isMail ? !changed("mail_asunto") && !changed("mail_cuerpo") : !changed(tab as Key)}
+              onClick={() => setDraft(isMail ? { ...draft, mail_asunto: DEFAULT_MAIL.mail_asunto, mail_cuerpo: DEFAULT_MAIL.mail_cuerpo } : { ...draft, [tab]: DEFAULTS[tab as Key] })}>
               Volver al mensaje original
             </Button>
             <Button type="button" loading={busy} onClick={save}>Guardar mensajes</Button>

@@ -16,7 +16,8 @@ import { PageHeader } from "@/components/shell";
 import { Alert, Badge, Button, Card, Field, Input, Modal, Select, Spinner, Textarea, TextField, cx } from "@/components/ui";
 import { CustomerForm, searchCustomers, type Customer } from "@/components/customers";
 import { whatsappLink } from "@/lib/reservations";
-import { quoteMessage } from "@/lib/whatsapp-messages";
+import { quoteMessage, welcomeMessage } from "@/lib/whatsapp-messages";
+import { useMessageTemplates, WhatsAppSend } from "@/components/whatsapp";
 import { ExtrasPicker, useExtrasTotal, type ExtraPick } from "@/components/extras";
 import { kindName, KindName, type SpaceKind } from "@/lib/space-kinds";
 
@@ -450,6 +451,12 @@ export default function NuevaReservaPage() {
     : method === "dolares" ? Math.min(usd.ars ?? 0, total ?? 0)
     : payMode === "pagada" ? total ?? 0 : parseMoney(deposit) ?? 0;
   const debt = total === null ? null : Math.max(total - paidNow, 0);
+  const placesLabel = !segments ? "" : (isGroup
+      ? `${KindName(kind, 2)} ${[selected?.code ?? "", ...groupSpaces.map((g) => g.code)].join(", ")}`
+      : segments.length === 1
+      ? `${KindName(kind)} ${spaces.find((x) => x.space_id === segments[0].space_id)?.code ?? ""}`
+      : segments.map((sg) => `${KindName(kind)} ${spaces.find((x) => x.space_id === sg.space_id)?.code ?? ""} (${formatDate(sg.start_date).slice(0, 5)} al ${formatDate(sg.end_date).slice(0, 5)})`).join(", ")
+    ) + (parking ? ` + Cochera ${parking.code}` : "");
 
   // ---------- Guardar ----------
   const [requestId, setRequestId] = useState(newKey);
@@ -457,7 +464,20 @@ export default function NuevaReservaPage() {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [done, setDone] = useState<{ id: string; number: number; group?: { id: string; number: number }[] } | null>(null);
+  const [done, setDone] = useState<{ id: string; number: number; group?: { id: string; number: number }[]; welcome?: { phone: string | null; text: string } } | null>(null);
+  const templates = useMessageTemplates();
+  // Bienvenida por WhatsApp con los datos de la reserva recién guardada (el texto y las reglas se cambian en Configuración).
+  function welcomeFor(number: number): { phone: string | null; text: string } | undefined {
+    if (!customer || !segments) return undefined;
+    return {
+      phone: customer.phone ?? null,
+      text: welcomeMessage({
+        firstName: customer.first_name, lastName: customer.last_name, phone: customer.phone ?? null, email: null,
+        balneario: ws.name, number, places: placesLabel, start, end,
+        total: courtesy ? 0 : total, paid: paidNow, due: courtesy ? 0 : debt ?? 0, today: todayISO(),
+      }, templates),
+    };
+  }
 
   const problems: string[] = [];
   if (!customer) problems.push("Elegí o creá el cliente.");
@@ -514,7 +534,7 @@ export default function NuevaReservaPage() {
       }
       const res = data as { reservation_id: string; number: number; reservations?: { id: string; number: number }[] };
       setConfirmOpen(false);
-      setDone({ id: res.reservation_id, number: res.number, group: res.reservations && res.reservations.length > 1 ? res.reservations : undefined });
+      setDone({ id: res.reservation_id, number: res.number, group: res.reservations && res.reservations.length > 1 ? res.reservations : undefined, welcome: welcomeFor(res.number) });
       status.reload();
       return;
     }
@@ -539,7 +559,7 @@ export default function NuevaReservaPage() {
     }
     const res = data as { reservation_id: string; number: number };
     setConfirmOpen(false);
-    setDone({ id: res.reservation_id, number: res.number });
+    setDone({ id: res.reservation_id, number: res.number, welcome: welcomeFor(res.number) });
     status.reload();
   }
 
@@ -572,12 +592,7 @@ export default function NuevaReservaPage() {
   const quoteText = quote?.ok && segments && !courtesy ? quoteMessage({
     firstName: customer?.first_name ?? null,
     balneario: ws.name,
-    places: (isGroup
-      ? `${KindName(kind, 2)} ${[selected?.code ?? "", ...groupSpaces.map((g) => g.code)].join(", ")}`
-      : segments.length === 1
-      ? `${KindName(kind)} ${spaces.find((x) => x.space_id === segments[0].space_id)?.code ?? ""}`
-      : segments.map((sg) => `${KindName(kind)} ${spaces.find((x) => x.space_id === sg.space_id)?.code ?? ""} (${formatDate(sg.start_date).slice(0, 5)} al ${formatDate(sg.end_date).slice(0, 5)})`).join(", ")
-    ) + (parking ? ` + Cochera ${parking.code}` : ""),
+    places: placesLabel,
     start, end,
     total: Number(quote.total) + groupTotal + parkingTotal + extrasTotal,
     cashTotal: cashTotal !== null ? cashTotal + (isGroup && groupQuote ? (groupQuote.cash ?? groupQuote.total) * groupSpaces.length : 0) + parkingCash + extrasTotal : null,
@@ -592,6 +607,21 @@ export default function NuevaReservaPage() {
             ? <><strong>Grupo guardado: reservas {done.group.map((g) => `#${g.number}`).join(", ")}.</strong> {parking && !isGroup ? `La ${kindName(kind)} y la cochera quedaron unidas` : "Quedaron unidas"}; el cobro se repartió entre ellas.</>
             : <><strong>Reserva #{done.number} guardada.</strong> Ya figura en el mapa, en la caja (si hubo cobro) y en todas las computadoras.</>}
         </Alert>
+        {done.welcome && (
+          <div className="mb-4 rounded-xl border border-green-600/30 bg-green-50/60 p-4 dark:bg-green-900/20">
+            <div className="mb-1 font-semibold">Mandale la bienvenida</div>
+            <p className="mb-3 text-sm text-muted">Con su lugar, las fechas y las reglas del balneario. Se abre WhatsApp con el mensaje listo: solo tocás Enviar.</p>
+            {whatsappLink(done.welcome.phone, done.welcome.text) ? (
+              <WhatsAppSend phone={done.welcome.phone} text={done.welcome.text} label="Mandar bienvenida por WhatsApp" className="px-4 py-2" />
+            ) : (
+              <a href={`https://wa.me/?text=${encodeURIComponent(done.welcome.text)}`} target="_blank" rel="noopener noreferrer"
+                className="inline-block rounded-lg border border-green-600/40 bg-green-50 px-4 py-2 text-sm font-semibold text-green-800 hover:bg-green-100 dark:bg-green-900/30 dark:text-green-200">
+                Mandar bienvenida por WhatsApp (elegís a quién)
+              </a>
+            )}
+            {isAdmin && <p className="mt-2 text-xs text-muted"><Link href="/configuracion#mensajes" className="text-accent hover:underline">Cambiar el mensaje y las reglas</Link></p>}
+          </div>
+        )}
         <div className="flex flex-wrap gap-2">
           <Link href={`/reservas/${done.id}`}><Button>Ver la reserva</Button></Link>
           <Button variant="secondary" onClick={reset}>Cargar otra reserva</Button>

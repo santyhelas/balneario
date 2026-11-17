@@ -55,7 +55,16 @@ export const DEFAULT_TEMPLATES: Record<DebtCase, string> = {
   deuda_otros: "Hola {nombre}! Te escribimos de {balneario}.\nTe recordamos tu reserva del {desde} al {hasta} ({lugar}, reserva #{reserva}). Queda un saldo de {saldo} por abonar.\nPodés pagar en efectivo, transferencia o tarjeta. ¡Gracias!",
 };
 
-export type Templates = Partial<Record<DebtCase | MailKey, string>>;
+/** Bienvenida al confirmar la reserva: el dueño le agrega sus reglas en Configuración. */
+export const DEFAULT_WELCOME = "¡Hola {nombre}! Te damos la bienvenida a {balneario}.\nTu reserva #{reserva} quedó confirmada: {lugar}, del {desde} al {hasta} ({dias} días).\n\nCualquier consulta, escribinos por acá. ¡Te esperamos!";
+
+export type Templates = Partial<Record<DebtCase | MailKey | "bienvenida", string>>;
+
+/** Mensaje de bienvenida con los datos de la reserva (con el texto propio del balneario si hay). */
+export function welcomeMessage(d: DebtInfo, templates?: Templates | null): string {
+  const tpl = templates?.bienvenida?.trim() ? templates.bienvenida : DEFAULT_WELCOME;
+  return fillTemplate(tpl, debtVars(d));
+}
 
 export function debtCase(d: { end: string; today: string }): DebtCase {
   const left = daysBetween(d.today, d.end);

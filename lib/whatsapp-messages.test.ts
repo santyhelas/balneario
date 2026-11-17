@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { debtReminder, quoteMessage, receiptMessage, renewalMessage } from "./whatsapp-messages.ts";
+import { debtReminder, quoteMessage, receiptMessage, renewalMessage, welcomeMessage } from "./whatsapp-messages.ts";
 
 const base = { firstName: "Juan", balneario: "Parador Eólico", number: 12, places: "Carpa 17", start: "2027-01-01", end: "2027-01-07", due: 50000 };
 
@@ -79,4 +79,13 @@ test("correo: abre el correo que usa el balneario", async () => {
   assert.equal(providerForEmail("x@yahoo.com.ar"), "yahoo");
   assert.equal(providerForEmail("x@mibalneario.com.ar"), "app");
   assert.equal(providerForEmail(null), "gmail");
+});
+
+test("bienvenida: datos de la reserva y texto propio con las reglas", () => {
+  const d = { ...base, today: "2026-12-01" };
+  const def = welcomeMessage(d);
+  assert.match(def, /Hola Juan! Te damos la bienvenida a Parador Eólico/);
+  assert.match(def, /reserva #12 quedó confirmada: Carpa 17, del 01\/01 al 07\/01 \(7 días\)/);
+  const own = welcomeMessage(d, { bienvenida: "Bienvenido {nombre} a la {lugar}.\nReglas: sin mascotas." });
+  assert.equal(own, "Bienvenido Juan a la Carpa 17.\nReglas: sin mascotas.");
 });
