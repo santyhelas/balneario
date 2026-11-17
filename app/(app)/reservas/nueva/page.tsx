@@ -466,6 +466,9 @@ export default function NuevaReservaPage() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [done, setDone] = useState<{ id: string; number: number; group?: { id: string; number: number }[]; welcome?: { phone: string | null; text: string } } | null>(null);
   const templates = useMessageTemplates();
+  const status = useStatus();
+  const [openCash, setOpenCash] = useState(false);
+  const cajaCerrada = !!status.summary && status.summary.caja.estado !== "abierta";
   // Bienvenida por WhatsApp con los datos de la reserva recién guardada (el texto y las reglas se cambian en Configuración).
   function welcomeFor(number: number): { phone: string | null; text: string } | undefined {
     if (!customer || !segments) return undefined;
@@ -490,6 +493,7 @@ export default function NuevaReservaPage() {
   if (isGroup && split && split.busy.length > 0) problems.push(`Para un grupo, la ${selected?.code ?? "carpa"} principal tiene que estar libre toda la estadía. Elegí otra.`);
   if (people && !peopleN) problems.push("Revisá la cantidad de personas.");
   if (quote && !quote.ok) problems.push("Faltan tarifas para esas fechas.");
+  if (cajaCerrada && !courtesy && payMode !== "despues") problems.push("Para registrar el cobro abrí la caja del día, o elegí «Cobrar después».");
   if (parking && parkingQuote && !parkingQuote.ok) problems.push("Faltan las tarifas de cocheras para esas fechas: cargalas en el Tarifario o sacá la cochera.");
   if (parking && !courtesy && payMode !== "despues" && method === "dolares") problems.push("Con cochera cobrá en pesos; los dólares se registran después desde cada reserva.");
   if (courtesy && beneficiary.trim().length < 2) problems.push("Indicá el familiar beneficiario de la cortesía.");
@@ -1142,7 +1146,15 @@ export default function NuevaReservaPage() {
                   <span>Queda debiendo</span><strong className={cx("tabular", debt > 0 && "text-danger")}>{formatMoney(debt)}</strong>
                 </div>
               )}
-              <p className="mt-2 text-xs text-muted">Para cobrar se necesita la caja del día abierta. Más adelante se pueden agregar pagos con otros medios desde la reserva.</p>
+              {cajaCerrada && payMode !== "despues" ? (
+                <Alert tone="warn" className="mt-3 flex flex-wrap items-center justify-between gap-2">
+                  <span>La caja de hoy no está abierta: sin caja no se puede registrar el cobro. Abrila, o elegí «Cobrar después».</span>
+                  <Button onClick={() => setOpenCash(true)}>Abrir la caja</Button>
+                </Alert>
+              ) : (
+                <p className="mt-2 text-xs text-muted">Para cobrar se necesita la caja del día abierta. Más adelante se pueden agregar pagos con otros medios desde la reserva.</p>
+              )}
+              <OpenCashModal open={openCash} workspaceId={ws.id} onClose={() => setOpenCash(false)} onDone={() => { setOpenCash(false); status.reload(); }} />
             </Card>
           )}
 

@@ -14,6 +14,7 @@ import { useTourActive } from "@/components/demo-tour";
 import { ArrivalButtons, type ArrivalState } from "@/components/arrival";
 import { SupportAccessNotice } from "@/components/support-notice";
 import { Announcements } from "@/components/announcements";
+import { FirstSteps } from "@/components/first-steps";
 
 type Tone = "accent" | "ok" | "danger" | "warn" | "orange" | "neutral";
 const TONE: Record<Tone, { box: string; label: string; value: string }> = {
@@ -112,6 +113,7 @@ export default function DashboardPage() {
         <WeatherStrip onDark className="mt-3" />
       </section>
 
+      <FirstSteps onOpenCash={() => setOpenCash(true)} />
       {!isGuest && <Announcements />}
       {!isGuest && <SupportAccessNotice workspaceId={ws.id} />}
 
