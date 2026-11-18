@@ -17,6 +17,7 @@ export type ReservationDetail = {
   total_amount: number;
   /** Proporción del precio en efectivo acordado (null si no tiene). */
   cash_ratio?: number | null;
+  cash_discount?: number | null;
   notes: string | null;
   version: number;
   created_at: string;

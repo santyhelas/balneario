@@ -15,7 +15,7 @@ import { MailButton, WhatsAppSend, useMessageTemplates } from "@/components/what
 import { chargeLabel, loadReservation, spacesSummary, whatsappLink, type Full, type PaymentRow } from "@/lib/reservations";
 import { useWorkspace } from "@/components/workspace";
 import { useStatus } from "@/components/status";
-import { PaymentModal, useAction } from "@/components/payments";
+import { PaymentModal, useAction, useCashDue } from "@/components/payments";
 import { PageHeader, SyncNotice } from "@/components/shell";
 import { RelocateModal } from "@/components/relocate";
 import { Alert, Badge, Button, Card, ConfirmDialog, EmptyState, Field, Modal, Spinner, Textarea, TextField, cx } from "@/components/ui";
@@ -32,6 +32,7 @@ export default function ReservaPage() {
   const [voiding, setVoiding] = useState<PaymentRow | null>(null);
   const [reverting, setReverting] = useState<string | null>(null);
   const [msg, setMsg] = useState<{ tone: "ok" | "danger"; text: string } | null>(null);
+  const cashDue = useCashDue(id, true, q.data ? `${q.data.balance.due_amount}-${q.data.r.version}` : null);
 
   if (!q.data) {
     return q.error ? <SyncNotice error={q.error} stale={false} updatedAt={null} onRetry={q.reload} /> : <div className="flex items-center gap-2 text-muted"><Spinner small /> Cargando reserva…</div>;
@@ -167,8 +168,8 @@ export default function ReservaPage() {
             <div className="mt-1 flex justify-between border-t border-line pt-2 text-base font-semibold"><span>Total contratado</span><span className="tabular">{formatMoney(r.total_amount)}</span></div>
             <div className="flex justify-between"><span>Cobrado</span><span className="tabular">{formatMoney(balance.paid_amount)}</span></div>
             <div className={cx("flex justify-between text-base font-semibold", due > 0 && "text-danger")}><span>Saldo pendiente</span><span className="tabular">{formatMoney(due)}</span></div>
-            {r.cash_ratio != null && due > 0 && (
-              <div className="flex justify-between text-sm text-muted"><span>Saldo pagando en efectivo</span><span className="tabular">{formatMoney(Math.round(due * Number(r.cash_ratio)))}</span></div>
+            {cashDue !== null && due > 0 && (
+              <div className="flex justify-between text-sm text-muted"><span>Saldo pagando en efectivo</span><span className="tabular">{formatMoney(cashDue)}</span></div>
             )}
             {Number(balance.credit_amount) > 0 && (
               <div className="flex justify-between text-warn"><span>Saldo a favor del cliente</span><span className="tabular">{formatMoney(balance.credit_amount)}</span></div>

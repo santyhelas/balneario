@@ -1578,14 +1578,14 @@ select t.set('dp', (public.create_reservation_v3(t.uid('ws'), gen_random_uuid(),
   jsonb_build_array(jsonb_build_object('space_id', t.space('66'), 'start_date', '2027-10-01', 'end_date', '2027-10-15')),
   '{"manual_base": 980000, "manual_cash": 882000}'::jsonb, null, null, '[]'::jsonb) ->> 'reservation_id'));
 select public.register_payment(t.uid('ws'), t.uid('dp'), 200000, 'transferencia', gen_random_uuid(), null);
-select t.ok(private.due_for_method(t.uid('dp'), 'efectivo') = 702000 and private.due_for_method(t.uid('dp'), 'transferencia') = 780000,
-  'Dos precios: seña de 200.000 por transferencia → quedan 780.000, o 702.000 en efectivo');
-select t.throws(format($$select public.register_payment(%L, %L, 702001, 'efectivo', gen_random_uuid(), null)$$, t.get('ws'), t.get('dp')), 'supera el saldo en efectivo',
+select t.ok(private.due_for_method(t.uid('dp'), 'efectivo') = 682000 and private.due_for_method(t.uid('dp'), 'transferencia') = 780000,
+  'Dos precios: seña de 200.000 por transferencia → quedan 780.000, o 682.000 en efectivo (resta lo mismo en los dos)');
+select t.throws(format($$select public.register_payment(%L, %L, 682001, 'efectivo', gen_random_uuid(), null)$$, t.get('ws'), t.get('dp')), 'supera el saldo en efectivo',
   'Dos precios: no se puede cobrar en efectivo más que el saldo en efectivo');
-select t.set('dpc', public.register_payment(t.uid('ws'), t.uid('dp'), 702000, 'efectivo', gen_random_uuid(), null) ->> 'payment_id');
-select t.ok((select total_amount = 902000 and due_amount = 0 from public.reservation_balances where reservation_id = t.uid('dp'))
-        and exists (select 1 from public.reservation_discounts where reservation_id = t.uid('dp') and kind = 'efectivo' and amount = 78000 and payment_id = t.uid('dpc')),
-  'Dos precios: pagando el resto en efectivo queda saldada, con un descuento por efectivo de 78.000');
+select t.set('dpc', public.register_payment(t.uid('ws'), t.uid('dp'), 682000, 'efectivo', gen_random_uuid(), null) ->> 'payment_id');
+select t.ok((select total_amount = 882000 and due_amount = 0 from public.reservation_balances where reservation_id = t.uid('dp'))
+        and exists (select 1 from public.reservation_discounts where reservation_id = t.uid('dp') and kind = 'efectivo' and amount = 98000 and payment_id = t.uid('dpc')),
+  'Dos precios: pagando el resto en efectivo queda saldada, con un descuento por efectivo de 98.000');
 select public.void_payment(t.uid('ws'), t.uid('dpc'), gen_random_uuid(), 'Prueba');
 select t.ok((select total_amount = 980000 and due_amount = 780000 from public.reservation_balances where reservation_id = t.uid('dp')),
   'Dos precios: si se anula el cobro en efectivo, el precio vuelve al de lista');
@@ -1604,6 +1604,16 @@ select t.throws(format($$select public.create_reservation_v3(%L, gen_random_uuid
   jsonb_build_array(jsonb_build_object('space_id', %L, 'start_date', '2027-10-28', 'end_date', '2027-10-28')),
   '{"manual_base": 100000, "manual_cash": 120000}'::jsonb, null, null, '[]'::jsonb)$$, t.get('ws'), t.get('juan'), t.space('66')), 'no puede superar',
   'Dos precios: el de efectivo no puede ser mayor que el de lista');
+select t.set('dp3', (public.create_reservation_v3(t.uid('ws'), gen_random_uuid(), t.uid('juan'), '2027-11-01', '2027-11-05',
+  jsonb_build_array(jsonb_build_object('space_id', t.space('66'), 'start_date', '2027-11-01', 'end_date', '2027-11-05')),
+  '{"manual_base": 700000, "manual_cash": 540000}'::jsonb, null, null, '[]'::jsonb) ->> 'reservation_id'));
+select public.register_payment(t.uid('ws'), t.uid('dp3'), 100000, 'efectivo', gen_random_uuid(), null);
+select t.ok(private.due_for_method(t.uid('dp3'), 'efectivo') = 440000 and private.due_for_method(t.uid('dp3'), 'transferencia') = 600000
+        and public.cash_due(t.uid('dp3')) = 440000,
+  'Dos precios: un pago parcial en efectivo resta lo mismo en los dos (quedan 600.000 o 440.000 en efectivo)');
+select public.register_payment(t.uid('ws'), t.uid('dp3'), 440000, 'efectivo', gen_random_uuid(), null);
+select t.ok((select total_amount = 540000 and due_amount = 0 from public.reservation_balances where reservation_id = t.uid('dp3')) and public.cash_due(t.uid('dp3')) is null,
+  'Dos precios: completando en efectivo queda en el precio de efectivo');
 select public.close_cash_session(t.uid('session'), 0, (select version from public.cash_sessions where id = t.uid('session')), null);
 
 reset role;

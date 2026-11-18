@@ -24,6 +24,19 @@ export function useAction() {
   return { busy, error, setError, run };
 }
 
+/** Saldo pagando en efectivo cuando la reserva tiene precio en efectivo acordado (si no, null). */
+export function useCashDue(reservationId: string, enabled: boolean, dep: unknown): number | null {
+  const [v, setV] = useState<number | null>(null);
+  useEffect(() => {
+    if (!enabled) return;
+    let alive = true;
+    getSupabase().rpc("cash_due", { p_reservation_id: reservationId })
+      .then(({ data, error }) => { if (alive) setV(!error && data != null ? Number(data) : null); });
+    return () => { alive = false; };
+  }, [reservationId, enabled, dep]);
+  return v;
+}
+
 /** Lo mínimo que necesita la ventana de cobro: la reserva y su saldo. */
 export type PayTarget = { r: { id: string; number?: number }; balance: { due_amount: number } };
 
@@ -32,16 +45,8 @@ export function PaymentModal({ open, full, onClose, onDone }: { open: boolean; f
   const listDue = Number(full.balance.due_amount);
   const [amount, setAmount] = useState("");
   const [method, setMethod] = useState("efectivo");
-  // Precio en efectivo acordado: en efectivo el saldo se cobra con esa proporción.
-  const [cashRatio, setCashRatio] = useState<number | null>(null);
-  useEffect(() => {
-    if (!open) return;
-    let alive = true;
-    getSupabase().from("reservations").select("cash_ratio").eq("id", full.r.id).maybeSingle()
-      .then(({ data }) => { if (alive) setCashRatio(data?.cash_ratio != null ? Number(data.cash_ratio) : null); });
-    return () => { alive = false; };
-  }, [open, full.r.id]);
-  const cashDue = cashRatio !== null ? Math.round(listDue * cashRatio) : null;
+  // Precio en efectivo acordado: en efectivo el saldo es el de lista menos la diferencia (lo calcula la base).
+  const cashDue = useCashDue(full.r.id, open, listDue);
   const due = method === "efectivo" && cashDue !== null ? cashDue : listDue;
   const [received, setReceived] = useState("");
   const [note, setNote] = useState("");

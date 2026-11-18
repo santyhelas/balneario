@@ -456,16 +456,19 @@ export default function NuevaReservaPage() {
   const extrasTotal = useExtrasTotal(extrasForStay);
   const total = quote?.ok && (!isGroup || groupQuote) && (!parking || parkingQuote?.ok) ? Number(quote.total) + groupTotal + parkingTotal + extrasTotal : null;
   // Precio en efectivo acordado: la proporción se aplica a lo que se paga en efectivo (igual que en la base).
-  const cashRatio = quote?.ok && quote.precio_efectivo != null && Number(quote.total) > 0 ? Number(quote.precio_efectivo) / Number(quote.total) : null;
-  const cashAll = total === null || cashRatio === null ? null
-    : Math.round((Number(quote!.total) + extrasTotal) * cashRatio) + (isGroup && groupQuote ? Math.round(Number(quote!.total) * cashRatio) * groupSpaces.length : 0) + parkingTotal;
+  // Precio en efectivo acordado: se descuenta la diferencia con el de lista (por cada carpa), al pagar en efectivo.
+  const cashDiff = quote?.ok && quote.precio_efectivo != null && Number(quote.total) > Number(quote.precio_efectivo) ? Number(quote.total) - Number(quote.precio_efectivo) : null;
+  const cashAll = total === null || cashDiff === null ? null
+    : total - cashDiff * (1 + (isGroup && groupQuote ? groupSpaces.length : 0));
   const payCash = method === "efectivo" && cashAll !== null;
   const paidNow = courtesy || payMode === "despues" ? 0
     : method === "dolares" ? Math.min(usd.ars ?? 0, total ?? 0)
     : payMode === "pagada" ? (payCash ? cashAll! : total ?? 0) : parseMoney(deposit) ?? 0;
+  // Lo que se paga resta lo mismo en los dos precios; la diferencia se descuenta al terminar de pagar en efectivo.
   const debt = total === null ? null
-    : payCash && paidNow > 0 ? (paidNow >= cashAll! ? 0 : Math.max(total - Math.floor(paidNow / cashRatio!), 0))
+    : payCash && paidNow >= cashAll! ? 0
     : Math.max(total - paidNow, 0);
+  const cashDebt = cashAll === null || debt === null || debt === 0 ? null : Math.max(cashAll - paidNow, 0);
   const placesLabel = !segments ? "" : (isGroup
       ? `${KindName(kind, 2)} ${[selected?.code ?? "", ...groupSpaces.map((g) => g.code)].join(", ")}`
       : segments.length === 1
@@ -1175,7 +1178,7 @@ export default function NuevaReservaPage() {
               )}
               {debt !== null && (
                 <div className="mt-3 flex justify-between rounded-lg bg-surface-2 p-2 text-sm">
-                  <span>Queda debiendo</span><strong className={cx("tabular", debt > 0 && "text-danger")}>{formatMoney(debt)}{debt > 0 && cashRatio !== null ? ` (en efectivo ${formatMoney(Math.round(debt * cashRatio))})` : ""}</strong>
+                  <span>Queda debiendo</span><strong className={cx("tabular", debt > 0 && "text-danger")}>{formatMoney(debt)}{debt > 0 && cashDebt !== null ? ` (en efectivo ${formatMoney(cashDebt)})` : ""}</strong>
                 </div>
               )}
               {cajaCerrada && payMode !== "despues" ? (
