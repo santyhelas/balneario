@@ -57,6 +57,8 @@ set role authenticated;
 select set_config('request.jwt.claims', '{"sub":"11111111-1111-1111-1111-111111111111","email":"duenio@test.com"}', false);
 
 select t.set('ws', public.create_workspace('Balneario de Prueba', 79, 10)::text);
+-- Las pruebas de descuentos en % usan el modo %; los paquetes de precio fijo se prueban aparte (46c).
+update public.workspaces set features = features || '{"paquetes": false}', version = version + 1 where id = t.uid('ws');
 select public.apply_parador_layout(t.uid('ws'));
 insert into public.agreements (workspace_id, name, percent) values (t.uid('ws'), 'Parque Bonito', 30);
 select t.ok((select count(*) from public.spaces where kind = 'carpa') = 79, 'Alta: 79 carpas iniciales (01–79, como el plano)');
@@ -1297,6 +1299,7 @@ select t.ok((select people = 4 from public.reservations where id = t.uid('r1p'))
 select public.close_cash_session(t.uid('session'), 0, (select version from public.cash_sessions where id = t.uid('session')), null);
 
 -- 46. Paquetes con precio fijo (5 días = $90.000, día extra $20.000)
+update public.workspaces set features = features || '{"paquetes": true}', version = version + 1 where id = t.uid('ws');
 insert into public.package_prices (workspace_id, space_kind, days, price, extra_day_price) values (t.uid('ws'), 'carpa', 5, 90000, 20000);
 insert into public.package_prices (workspace_id, space_kind, days, price, extra_day_price, valid_from) values (t.uid('ws'), 'carpa', 7, 100000, 15000, '2030-01-01');
 select t.set('qf', public.quote_reservation(t.uid('ws'), '2027-05-10', '2027-05-15',
@@ -1333,6 +1336,47 @@ select t.ok((public.quote_reservation(t.uid('ws'), '2031-01-05', '2031-01-05',
 select t.ok(jsonb_array_length(public.quote_reservation(t.uid('ws'), '2031-01-28', '2031-02-02',
   jsonb_build_array(jsonb_build_object('space_id', t.space('66'), 'start_date', '2031-01-28', 'end_date', '2031-02-02')), '{}'::jsonb) -> 'faltan_tarifas') > 0,
   'Paquete fijo + tarifario: si el día extra no tiene tarifa, avisa que falta');
+
+-- 46c. Paquetes por quincena en el tarifario (modo precio fijo)
+select t.ok((select (features ->> 'paquetes')::boolean from public.workspaces where id = (select id from public.workspaces where id <> t.uid('ws') order by created_at desc limit 1)) is not false,
+  'Paquetes: los balnearios nuevos vienen con precio fijo');
+update public.workspaces set features = features || '{"paquetes": true}', version = version + 1 where id = t.uid('ws');
+select public.set_rate(t.uid('ws'), 'carpa', 2032, 1, 1::smallint, 80000);
+select public.set_rate(t.uid('ws'), 'carpa', 2032, 1, 2::smallint, 80000);
+select t.set('pk7', public.set_package_price(t.uid('ws'), 'carpa', 2032, 1, 1::smallint, 7, 510000) ->> 'id');
+select public.set_package_price(t.uid('ws'), 'carpa', 2032, 1, 1::smallint, 10, 700000);
+select public.set_package_price(t.uid('ws'), 'carpa', 2032, 1, 2::smallint, 7, 560000);
+select t.ok((select valid_from = '2032-01-01' and valid_to = '2032-01-15' and extra_day_price is null from public.package_prices where id = t.uid('pk7')),
+  'Paquetes por quincena: quedan con las fechas de la quincena y el día extra a precio normal');
+select t.ok((public.quote_reservation(t.uid('ws'), '2032-01-05', '2032-01-11',
+  jsonb_build_array(jsonb_build_object('space_id', t.space('66'), 'start_date', '2032-01-05', 'end_date', '2032-01-11')), '{}'::jsonb) ->> 'precio_base')::numeric = 510000,
+  'Paquetes por quincena: 7 días en la 1ª quincena = $510.000');
+select t.ok((public.quote_reservation(t.uid('ws'), '2032-01-05', '2032-01-12',
+  jsonb_build_array(jsonb_build_object('space_id', t.space('66'), 'start_date', '2032-01-05', 'end_date', '2032-01-12')), '{}'::jsonb) ->> 'precio_base')::numeric = 590000,
+  'Paquetes por quincena: 8 días = paquete de 7 + 1 día normal, no empieza de cero');
+select t.ok((public.quote_reservation(t.uid('ws'), '2032-01-20', '2032-01-26',
+  jsonb_build_array(jsonb_build_object('space_id', t.space('66'), 'start_date', '2032-01-20', 'end_date', '2032-01-26')), '{}'::jsonb) ->> 'precio_base')::numeric = 560000,
+  'Paquetes por quincena: en la 2ª quincena se usa su propio precio');
+select t.ok(not exists (select 1 from jsonb_array_elements(public.quote_reservation(t.uid('ws'), '2032-01-01', '2032-01-05',
+  jsonb_build_array(jsonb_build_object('space_id', t.space('66'), 'start_date', '2032-01-01', 'end_date', '2032-01-05')), '{}'::jsonb) -> 'discounts') d where d ->> 'kind' = 'paquete'),
+  'Paquetes por quincena: con precio fijo no se aplican los descuentos en %');
+select public.set_package_price(t.uid('ws'), 'carpa', 2032, 1, 1::smallint, 7, 500000, (select version from public.package_prices where id = t.uid('pk7')));
+select t.ok((select price = 500000 from public.package_prices where id = t.uid('pk7')), 'Paquetes por quincena: se cambia el precio');
+select t.throws(format($$select public.set_package_price(%L, 'carpa', 2032, 1, 1::smallint, 7, 1, 1)$$, t.get('ws')), 'otro dispositivo',
+  'Paquetes por quincena: no pisa un cambio hecho desde otra computadora');
+select t.throws(format($$select public.set_package_price(%L, 'carpa', 2032, 1, 1::smallint, 1, 1)$$, t.get('ws')), 'entre 2 y 366',
+  'Paquetes por quincena: 1 día es el precio por día, no un paquete');
+select public.copy_rates(t.uid('ws'), 2032, 1, null, 2032, 2, null, 10, false);
+select t.ok((select price = 550000 from public.package_prices where active and space_kind = 'carpa' and days = 7 and valid_from = '2032-02-01' and valid_to = '2032-02-15'),
+  'Paquetes por quincena: copiar tarifas copia los paquetes, con el ajuste');
+select t.ok((select price = 616000 from public.package_prices where active and days = 7 and valid_from = '2032-02-16' and valid_to = '2032-02-29'),
+  'Paquetes por quincena: la 2ª quincena de destino termina el último día del mes');
+select public.set_package_price(t.uid('ws'), 'carpa', 2032, 1, 1::smallint, 7, null, (select version from public.package_prices where id = t.uid('pk7')));
+select t.ok((select not active from public.package_prices where id = t.uid('pk7')), 'Paquetes por quincena: borrar el precio quita el paquete (queda en el historial)');
+update public.workspaces set features = features || '{"paquetes": false}', version = version + 1 where id = t.uid('ws');
+select t.ok(exists (select 1 from jsonb_array_elements(public.quote_reservation(t.uid('ws'), '2032-01-01', '2032-01-05',
+  jsonb_build_array(jsonb_build_object('space_id', t.space('66'), 'start_date', '2032-01-01', 'end_date', '2032-01-05')), '{}'::jsonb) -> 'discounts') d where d ->> 'kind' = 'paquete'),
+  'Paquetes: en modo % vuelven los descuentos por cantidad de días');
 
 -- 47. Grupo cobrado en dólares (seña y todo el saldo)
 select public.reopen_cash_session(t.uid('session'), (select version from public.cash_sessions where id = t.uid('session')), 'Prueba de dólares');

@@ -5,6 +5,16 @@ import { friendlyError } from "@/lib/errors";
 import { FEATURE_INFO, featuresOf, type Features } from "@/lib/features";
 import { useWorkspace } from "@/components/workspace";
 
+/** Prende o apaga una función opcional del balneario (con control de versión). Devuelve el error, si hubo. */
+export async function setFeature(wsId: string, k: keyof Features, value: boolean): Promise<string | null> {
+  const sb = getSupabase();
+  const cur = await sb.from("workspaces").select("features, version").eq("id", wsId).single();
+  if (cur.error) return friendlyError(cur.error);
+  const row = cur.data as { features: Record<string, boolean>; version: number };
+  const { error } = await sb.from("workspaces").update({ features: { ...row.features, [k]: value }, version: row.version + 1 }).eq("id", wsId);
+  return error ? friendlyError(error) : null;
+}
+
 /** Funciones opcionales: lo que no usa el balneario no aparece en pantalla. */
 export function FeaturesCard() {
   const { ws, isAdmin, reloadWorkspace } = useWorkspace();
@@ -15,12 +25,8 @@ export function FeaturesCard() {
   async function toggle(k: keyof Features) {
     setBusy(k);
     setErr(null);
-    const sb = getSupabase();
-    const cur = await sb.from("workspaces").select("features, version").eq("id", ws.id).single();
-    if (cur.error) { setBusy(null); return setErr(friendlyError(cur.error)); }
-    const row = cur.data as { features: Record<string, boolean>; version: number };
-    const { error } = await sb.from("workspaces").update({ features: { ...row.features, [k]: !f[k] }, version: row.version + 1 }).eq("id", ws.id);
-    if (error) { setBusy(null); return setErr(friendlyError(error)); }
+    const error = await setFeature(ws.id, k, !f[k]);
+    if (error) { setBusy(null); return setErr(error); }
     await reloadWorkspace();
     setBusy(null);
   }

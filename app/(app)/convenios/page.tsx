@@ -1,12 +1,11 @@
 "use client";
-import Link from "next/link";
 import { getSupabase } from "@/lib/supabase/client";
 import { unwrap, useLoader } from "@/lib/data";
 import { useWorkspace } from "@/components/workspace";
 import { PageHeader, SyncNotice } from "@/components/shell";
 import { featuresOf } from "@/lib/features";
 import { Alert, Spinner } from "@/components/ui";
-import { AgreementsCard, DiscountCapCard, DiscountModeCard, PackagePricesCard, PackagesCard, loadAgreements, loadPackagePrices, type DayRate, type DiscountMode, type Pkg } from "@/components/pricing";
+import { AgreementsCard, DiscountCapCard, DiscountModeCard, PackagePricesCard, PackagesCard, loadAgreements, loadPackagePrices, isHalfPackage, type DayRate, type DiscountMode, type Pkg } from "@/components/pricing";
 
 export default function ConveniosPage() {
   const { ws, isAdmin } = useWorkspace();
@@ -31,11 +30,8 @@ export default function ConveniosPage() {
       {!q.data ? (q.loading && <div className="flex items-center gap-2 text-muted"><Spinner small /> Cargando…</div>) : (
         <div className="grid gap-4 lg:grid-cols-2">
           <div className="flex flex-col gap-4">
-            {(featuresOf(ws).paquetes || (q.data.fixed?.length ?? 0) > 0) ? <PackagePricesCard rows={q.data.fixed} rates={q.data.rates} editable={isAdmin} onChanged={q.reload} /> : isAdmin && (
-              <Alert tone="info">
-                ¿Querés poner un precio cerrado por cantidad de días (ej. 7 días a $510.000) en vez de un %? Prendé «Paquetes de precio fijo» en{" "}
-                <Link href="/configuracion#reglas" className="font-semibold underline">Configuración → Caja, descuentos y reservas</Link> y te aparece acá.
-              </Alert>
+            {featuresOf(ws).paquetes && (q.data.fixed?.some((r) => !isHalfPackage(r)) ?? false) && (
+              <PackagePricesCard rows={(q.data.fixed ?? []).filter((r) => !isHalfPackage(r))} rates={q.data.rates} editable={isAdmin} onChanged={q.reload} />
             )}
             <PackagesCard pkgs={q.data.pkgs} cashPercent={q.data.wsRow.cash_discount_percent} wsVersion={q.data.wsRow.version} editable={isAdmin} onChanged={q.reload} />
           </div>

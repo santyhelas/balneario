@@ -619,8 +619,13 @@ for (const [view, opts] of Object.entries(VIEWS)) {
       await page.screenshot({ path: `${OUT}/capturas/cocheras-disponibilidad.png` });
       // Tarifario con columna de cocheras
       await page.goto(DEMO + "/tarifas", { waitUntil: "networkidle" });
-      const col = await page.getByText("Cochera ($/día)").count();
+      const col = await page.getByText("Cochera $/día").count();
       fc.pasos.push(col ? "tarifario: columna de cocheras" : "tarifario: falta la columna");
+      await page.getByRole("button", { name: /Quincenas y paquetes/ }).first().click();
+      await page.waitForTimeout(500);
+      const pk = await page.getByText("7 días", { exact: true }).count();
+      fc.pasos.push(pk ? "tarifario: paquetes por quincena (7 días)" : "tarifario: no aparecen los paquetes al abrir el mes");
+      await page.screenshot({ path: `${OUT}/capturas/tarifario-paquetes.png` });
       fc.resultado = nCoch >= 10 && rowsC >= 10 && col && !fc.mal ? "OK" : "Revisar";
     } catch (e) { fc.resultado = `Se cortó: ${String(e).slice(0, 200)}`; await page.screenshot({ path: `${OUT}/capturas/cocheras-error.png`, fullPage: true }).catch(() => {}); }
     report.flujos.push(fc);

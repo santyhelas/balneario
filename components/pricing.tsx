@@ -7,12 +7,27 @@ import { formatDate, formatMoney, todayISO } from "@/lib/format";
 import { useWorkspace } from "@/components/workspace";
 import { Alert, Badge, Button, Card, ConfirmDialog, EmptyState, Field, Input, Modal, Textarea, TextField, cx } from "@/components/ui";
 import { KindName, type SpaceKind } from "@/lib/space-kinds";
+import { featuresOf } from "@/lib/features";
+import { setFeature } from "@/components/features-card";
+import Link from "next/link";
 
 export type Pkg = { id: string; min_days: number; percent: number; active: boolean; version: number };
 export type Agreement = { id: string; name: string; percent: number; active: boolean; valid_from: string | null; valid_to: string | null; conditions: string | null; version: number };
 
 export function PackagesCard({ pkgs, cashPercent, wsVersion, editable, onChanged }: { pkgs: Pkg[]; cashPercent: number; wsVersion: number; editable: boolean; onChanged: () => void }) {
-  const { ws } = useWorkspace();
+  const { ws, reloadWorkspace } = useWorkspace();
+  const fixedMode = featuresOf(ws).paquetes;
+  const [modeBusy, setModeBusy] = useState(false);
+  async function changeMode(fixed: boolean) {
+    if (fixed === fixedMode) return;
+    setModeBusy(true);
+    setError(null);
+    const err = await setFeature(ws.id, "paquetes", fixed);
+    if (err) setError(err);
+    else await reloadWorkspace();
+    setModeBusy(false);
+    onChanged();
+  }
   const [days, setDays] = useState("");
   const [pct, setPct] = useState("");
   const [cash, setCash] = useState(String(cashPercent));
@@ -42,7 +57,20 @@ export function PackagesCard({ pkgs, cashPercent, wsVersion, editable, onChanged
   }
 
   return (
-    <Card title="Descuentos por paquete de días">
+    <Card title="Precios por cantidad de días">
+      <div className="mb-3 grid gap-2 sm:grid-cols-2" role="radiogroup" aria-label="Cómo se cobran las estadías largas">
+        {([[true, "Precio fijo", "7 días $510.000, 10 días $700.000… El día que pasa se suma al precio normal."], [false, "Descuento en %", "Ej.: desde 7 días, 8% menos sobre el precio por día."]] as const).map(([v, t, h]) => (
+          <label key={t} className={cx("flex cursor-pointer items-start gap-2 rounded-xl border p-3 text-sm", fixedMode === v ? "border-accent bg-accent-soft" : "border-line hover:bg-surface-2")}>
+            <input type="radio" className="mt-1" name="modo-paquetes" checked={fixedMode === v} disabled={!editable || modeBusy} onChange={() => changeMode(v)} />
+            <span><strong className="block">{t}</strong><span className="text-xs text-muted">{h}</span></span>
+          </label>
+        ))}
+      </div>
+      {fixedMode ? (
+        <p className="mb-4 text-sm text-muted">
+          Los precios por 7, 10, 15 o 30 días se cargan en el <Link href="/tarifas" className="font-semibold text-accent underline">Tarifario</Link>, adentro de cada mes y quincena.
+        </p>
+      ) : <>
       {active.length === 0 ? <EmptyState>Sin descuentos por paquete.</EmptyState> : (
         <ul className="mb-3 divide-y divide-line text-sm">
           {active.map((p) => (
@@ -74,6 +102,7 @@ export function PackagesCard({ pkgs, cashPercent, wsVersion, editable, onChanged
           <Button type="submit" variant="secondary" loading={busy}>Agregar</Button>
         </form>
       )}
+      </>}
       <div className="flex flex-wrap items-end gap-3 border-t border-line pt-3">
         <label className="flex items-center gap-2 pb-2 text-sm">
           <input type="checkbox" disabled={!editable} checked={Number(cash.replace(",", ".")) > 0}
@@ -360,6 +389,15 @@ export async function loadPackagePrices(sb: SupabaseClient, wsId: string): Promi
   return (r.data ?? []) as PackagePrice[];
 }
 
+/** El paquete es de una quincena del tarifario (1 al 15, o 16 a fin de mes): se edita en el Tarifario. */
+export function isHalfPackage(r: Pick<PackagePrice, "valid_from" | "valid_to">): boolean {
+  if (!r.valid_from || !r.valid_to || r.valid_from.slice(0, 7) !== r.valid_to.slice(0, 7)) return false;
+  const [y, m] = r.valid_from.split("-").map(Number);
+  const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  const d1 = r.valid_from.slice(8), d2 = Number(r.valid_to.slice(8));
+  return (d1 === "01" && d2 === 15) || (d1 === "16" && d2 === last);
+}
+
 export type DayRate = { space_kind: string; year: number; month: number; half: number; daily_price: number };
 
 const MONTHS = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
@@ -421,8 +459,8 @@ export function PackagePricesCard({ rows, rates, editable, onChanged }: { rows: 
   const pct = ref && Number.isInteger(d) && d >= 1 && p !== null ? packagePercent(p, d, ref.price) : null;
   const validity = (r: PackagePrice) => !r.valid_from && !r.valid_to ? "Siempre" : `${r.valid_from ? formatDate(r.valid_from) : "…"} al ${r.valid_to ? formatDate(r.valid_to) : "…"}`;
   return (
-    <Card title="Paquetes con precio fijo">
-      <p className="mb-3 text-xs text-muted">
+    <Card title="Otros paquetes con precio fijo">
+      <p className="mb-3 text-xs text-muted">Paquetes con fechas propias (no de una quincena). Los de cada quincena se cargan en el Tarifario.{" "}
         Ponés el precio total de un paquete y el sistema te muestra qué % de descuento es frente al tarifario.
         Los días que pasan del paquete se cobran al precio normal del tarifario (o a un precio fijo, si lo elegís), hasta llegar al próximo paquete.
         Ej.: 5 días $200.000 y la carpa vale $50.000 por día → 6 días $250.000. Si la estadía entra en un paquete fijo, se usa este precio en vez
