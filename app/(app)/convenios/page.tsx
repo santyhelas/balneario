@@ -24,23 +24,21 @@ export default function ConveniosPage() {
 
   return (
     <>
-      <PageHeader title="Descuentos y convenios" subtitle="Precios y descuentos por cantidad de días, por pago en efectivo, y convenios con hoteles y entidades." />
+      <PageHeader title="Descuentos y convenios" subtitle="Descuento por pago en efectivo, convenios con hoteles y entidades, y cómo se combinan." />
       <SyncNotice error={q.error} stale={q.stale} updatedAt={q.updatedAt} onRetry={q.reload} />
       {!isAdmin && <Alert tone="info" className="mb-4">Solo los administradores pueden modificar descuentos y convenios.</Alert>}
       {!q.data ? (q.loading && <div className="flex items-center gap-2 text-muted"><Spinner small /> Cargando…</div>) : (
-        <div className="grid gap-4 lg:grid-cols-2">
+        <div className="grid items-start gap-4 lg:grid-cols-2">
           <div className="flex flex-col gap-4">
+            <PackagesCard pkgs={q.data.pkgs} cashPercent={q.data.wsRow.cash_discount_percent} wsVersion={q.data.wsRow.version} editable={isAdmin} onChanged={q.reload} />
+            <DiscountCapCard key={`cap${q.data.wsRow.version}`} cap={q.data.wsRow.discount_cap_percent} wsVersion={q.data.wsRow.version} editable={isAdmin} onChanged={q.reload} />
+            <AgreementsCard agreements={q.data.agreements} editable={isAdmin} onChanged={q.reload} />
             {featuresOf(ws).paquetes && (q.data.fixed?.some((r) => !isHalfPackage(r)) ?? false) && (
               <PackagePricesCard rows={(q.data.fixed ?? []).filter((r) => !isHalfPackage(r))} rates={q.data.rates} editable={isAdmin} onChanged={q.reload} />
             )}
-            <PackagesCard pkgs={q.data.pkgs} cashPercent={q.data.wsRow.cash_discount_percent} wsVersion={q.data.wsRow.version} editable={isAdmin} onChanged={q.reload} />
           </div>
-          <div className="flex flex-col gap-4">
-            <div data-tour="convenios-modo" className="flex flex-col gap-4">
+          <div data-tour="convenios-modo" className="flex flex-col gap-4">
             <DiscountModeCard mode={q.data.wsRow.discount_mode ?? null} wsVersion={q.data.wsRow.version} editable={isAdmin} onChanged={q.reload} />
-            <DiscountCapCard key={`cap${q.data.wsRow.version}`} cap={q.data.wsRow.discount_cap_percent} wsVersion={q.data.wsRow.version} editable={isAdmin} onChanged={q.reload} />
-            </div>
-            <AgreementsCard agreements={q.data.agreements} editable={isAdmin} onChanged={q.reload} />
           </div>
         </div>
       )}

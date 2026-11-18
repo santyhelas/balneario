@@ -9,7 +9,6 @@ import { Alert, Badge, Button, Card, ConfirmDialog, EmptyState, Field, Input, Mo
 import { KindName, type SpaceKind } from "@/lib/space-kinds";
 import { featuresOf } from "@/lib/features";
 import { setFeature } from "@/components/features-card";
-import Link from "next/link";
 
 export type Pkg = { id: string; min_days: number; percent: number; active: boolean; version: number };
 export type Agreement = { id: string; name: string; percent: number; active: boolean; valid_from: string | null; valid_to: string | null; conditions: string | null; version: number };
@@ -57,55 +56,10 @@ export function PackagesCard({ pkgs, cashPercent, wsVersion, editable, onChanged
   }
 
   return (
-    <Card title="Precios por cantidad de días">
-      <div className="mb-3 grid gap-2 sm:grid-cols-2" role="radiogroup" aria-label="Cómo se cobran las estadías largas">
-        {([[true, "Precio fijo", "7 días $510.000, 10 días $700.000… El día que pasa se suma al precio normal."], [false, "Descuento en %", "Ej.: desde 7 días, 8% menos sobre el precio por día."]] as const).map(([v, t, h]) => (
-          <label key={t} className={cx("flex cursor-pointer items-start gap-2 rounded-xl border p-3 text-sm", fixedMode === v ? "border-accent bg-accent-soft" : "border-line hover:bg-surface-2")}>
-            <input type="radio" className="mt-1" name="modo-paquetes" checked={fixedMode === v} disabled={!editable || modeBusy} onChange={() => changeMode(v)} />
-            <span><strong className="block">{t}</strong><span className="text-xs text-muted">{h}</span></span>
-          </label>
-        ))}
-      </div>
-      {fixedMode ? (
-        <p className="mb-4 text-sm text-muted">
-          Los precios por 7, 10, 15 o 30 días se cargan en el <Link href="/tarifas" className="font-semibold text-accent underline">Tarifario</Link>, adentro de cada mes y quincena.
-        </p>
-      ) : <>
-      {active.length === 0 ? <EmptyState>Sin descuentos por paquete.</EmptyState> : (
-        <ul className="mb-3 divide-y divide-line text-sm">
-          {active.map((p) => (
-            <li key={p.id} className="flex items-center justify-between gap-2 py-1.5">
-              <span>Desde <strong>{p.min_days} días</strong>: {Number(p.percent)}%</span>
-              {editable && (
-                <div className="flex gap-2">
-                  <button className="text-xs text-accent hover:underline" disabled={busy} onClick={() => {
-                    const v = window.prompt(`Nuevo porcentaje para ${p.min_days} días`, String(Number(p.percent)));
-                    if (v === null) return;
-                    const n = Number(v.replace(",", "."));
-                    if (!(n > 0 && n <= 100)) return setError("El porcentaje debe estar entre 0 y 100.");
-                    run(() => sb.from("package_discounts").update({ percent: n, version: p.version + 1 }).eq("id", p.id).select("id"));
-                  }}>Cambiar %</button>
-                  <button className="text-xs text-danger hover:underline" disabled={busy} onClick={() =>
-                    run(() => sb.from("package_discounts").update({ active: false, version: p.version + 1 }).eq("id", p.id).select("id"))
-                  }>Quitar</button>
-                </div>
-              )}
-            </li>
-          ))}
-        </ul>
-      )}
-      <p className="mb-3 text-xs text-muted">Se aplica el escalón más alto que alcance la estadía. Ej.: 10 días toma el de 7.</p>
-      {editable && (
-        <form onSubmit={add} className="mb-4 flex flex-wrap items-end gap-2">
-          <Field label="Desde (días)"><Input inputMode="numeric" value={days} onChange={(e) => setDays(e.target.value)} className="w-24" /></Field>
-          <Field label="%"><Input inputMode="decimal" value={pct} onChange={(e) => setPct(e.target.value)} className="w-20" /></Field>
-          <Button type="submit" variant="secondary" loading={busy}>Agregar</Button>
-        </form>
-      )}
-      </>}
-      <div className="flex flex-wrap items-end gap-3 border-t border-line pt-3">
-        <label className="flex items-center gap-2 pb-2 text-sm">
-          <input type="checkbox" disabled={!editable} checked={Number(cash.replace(",", ".")) > 0}
+    <Card title="Descuentos">
+      <div className="flex flex-wrap items-end gap-3">
+        <label className="flex flex-1 items-start gap-2 pb-2 text-sm">
+          <input type="checkbox" className="mt-1" disabled={!editable} checked={Number(cash.replace(",", ".")) > 0}
             onChange={(e) => setCash(e.target.checked ? (Number(cashPercent) > 0 ? String(Number(cashPercent)) : "10") : "0")} />
           <span><strong>Descuento por pago en efectivo</strong><span className="block text-xs text-muted">Se aplica solo en Nueva reserva cuando el cobro es en efectivo.</span></span>
         </label>
@@ -120,6 +74,49 @@ export function PackagesCard({ pkgs, cashPercent, wsVersion, editable, onChanged
             if (!(n >= 0 && n <= 100)) return setError("El porcentaje debe estar entre 0 y 100.");
             run(() => sb.from("workspaces").update({ cash_discount_percent: n, version: wsVersion + 1 }).eq("id", ws.id).select("id"));
           }}>Guardar</Button>
+        )}
+      </div>
+
+      <div className="mt-3 border-t border-line pt-3">
+        <label className="flex items-start gap-2 text-sm">
+          <input type="checkbox" className="mt-1" checked={!fixedMode} disabled={!editable || modeBusy} onChange={(e) => changeMode(!e.target.checked)} />
+          <span><strong>Descuento en % por cantidad de días{modeBusy && " …"}</strong>
+            <span className="block text-xs text-muted">Ej.: desde 7 días, 8% menos. Si no lo tildás, se usan los precios por 7, 10, 15 días que cargás en el Tarifario.</span></span>
+        </label>
+        {!fixedMode && (
+          <div className="mt-3 pl-6">
+            {active.length === 0 ? <EmptyState>Sin descuentos por cantidad de días.</EmptyState> : (
+              <ul className="mb-2 divide-y divide-line text-sm">
+                {active.map((p) => (
+                  <li key={p.id} className="flex items-center justify-between gap-2 py-1.5">
+                    <span>Desde <strong>{p.min_days} días</strong>: {Number(p.percent)}%</span>
+                    {editable && (
+                      <div className="flex gap-2">
+                        <button className="text-xs text-accent hover:underline" disabled={busy} onClick={() => {
+                          const v = window.prompt(`Nuevo porcentaje para ${p.min_days} días`, String(Number(p.percent)));
+                          if (v === null) return;
+                          const n = Number(v.replace(",", "."));
+                          if (!(n > 0 && n <= 100)) return setError("El porcentaje debe estar entre 0 y 100.");
+                          run(() => sb.from("package_discounts").update({ percent: n, version: p.version + 1 }).eq("id", p.id).select("id"));
+                        }}>Cambiar %</button>
+                        <button className="text-xs text-danger hover:underline" disabled={busy} onClick={() =>
+                          run(() => sb.from("package_discounts").update({ active: false, version: p.version + 1 }).eq("id", p.id).select("id"))
+                        }>Quitar</button>
+                      </div>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+            <p className="mb-2 text-xs text-muted">Se aplica el escalón más alto que alcance la estadía. Ej.: 10 días toma el de 7.</p>
+            {editable && (
+              <form onSubmit={add} className="flex flex-wrap items-end gap-2">
+                <Field label="Desde (días)"><Input inputMode="numeric" value={days} onChange={(e) => setDays(e.target.value)} className="w-24" /></Field>
+                <Field label="%"><Input inputMode="decimal" value={pct} onChange={(e) => setPct(e.target.value)} className="w-20" /></Field>
+                <Button type="submit" variant="secondary" loading={busy}>Agregar</Button>
+              </form>
+            )}
+          </div>
         )}
       </div>
       {error && <Alert tone="danger" className="mt-3">{error}</Alert>}
