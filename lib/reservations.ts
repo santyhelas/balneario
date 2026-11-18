@@ -98,3 +98,12 @@ export function whatsappLink(phone: string | null, text: string): string | null 
 export function spacesSummary(segments: SegmentRow[]): string {
   return segments.map((s) => s.spaces.code).filter((c, i, a) => a.indexOf(c) === i).join(" → ");
 }
+
+/**
+ * Texto de un cargo para mostrar: el precio manual se ve como «Carpa 12 × 15 días»
+ * (las reservas viejas guardaron «Precio manual acordado»).
+ */
+export function chargeLabel(description: string, places: string, days: number): string {
+  if (description !== "Precio manual acordado") return description;
+  return `${places || "Estadía"} × ${days} ${days === 1 ? "día" : "días"}`;
+}

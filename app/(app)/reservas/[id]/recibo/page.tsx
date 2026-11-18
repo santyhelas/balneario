@@ -5,7 +5,7 @@ import { getSupabase } from "@/lib/supabase/client";
 import { unwrap, useLoader } from "@/lib/data";
 import { formatDate, formatDateTime, formatMoney, inclusiveDays } from "@/lib/format";
 import { METHOD_LABEL } from "@/lib/methods";
-import { loadReservation } from "@/lib/reservations";
+import { chargeLabel, loadReservation, spacesSummary } from "@/lib/reservations";
 import { useWorkspace } from "@/components/workspace";
 import { Button, Spinner } from "@/components/ui";
 import { KindName } from "@/lib/space-kinds";
@@ -28,6 +28,8 @@ export default function ReciboPage() {
   if (!q.data) return q.error ? <p className="text-danger">{q.error}</p> : <div className="flex items-center gap-2 text-muted"><Spinner small /> Preparando comprobante…</div>;
   const { full, info } = q.data;
   const { r, segments, charges, discounts, payments, balance } = full;
+  const places = spacesSummary(segments).split(" → ").filter(Boolean).map((c) => `${KindName(segments.find((s) => s.spaces.code === c)?.spaces.kind)} ${c}`).join(" → ");
+  const nDays = inclusiveDays(r.start_date, r.end_date);
   const voided = new Set(payments.filter((p) => p.voids_payment_id).map((p) => p.voids_payment_id));
 
   return (
@@ -72,7 +74,7 @@ export default function ReciboPage() {
         </section>
         <table className="mb-4 w-full text-sm">
           <tbody>
-            {charges.map((c) => <tr key={c.id}><td className="py-0.5">{c.description}</td><td className="text-right tabular">{formatMoney(c.amount)}</td></tr>)}
+            {charges.map((c) => <tr key={c.id}><td className="py-0.5">{chargeLabel(c.description, places, nDays)}</td><td className="text-right tabular">{formatMoney(c.amount)}</td></tr>)}
             {discounts.map((d) => <tr key={d.id}><td className="py-0.5">{d.label}</td><td className="text-right tabular">− {formatMoney(d.amount)}</td></tr>)}
             <tr className="border-t border-neutral-300 font-semibold"><td className="pt-1">Total</td><td className="pt-1 text-right tabular">{formatMoney(r.total_amount)}</td></tr>
           </tbody>

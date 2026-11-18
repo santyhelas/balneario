@@ -12,7 +12,7 @@ import { ReservationExtras } from "@/components/extras";
 import { ArrivalButtons, NoShowPanel } from "@/components/arrival";
 import { debtReminder, mailMessage, receiptMessage, welcomeMessage } from "@/lib/whatsapp-messages";
 import { MailButton, WhatsAppSend, useMessageTemplates } from "@/components/whatsapp";
-import { loadReservation, spacesSummary, whatsappLink, type Full, type PaymentRow } from "@/lib/reservations";
+import { chargeLabel, loadReservation, spacesSummary, whatsappLink, type Full, type PaymentRow } from "@/lib/reservations";
 import { useWorkspace } from "@/components/workspace";
 import { useStatus } from "@/components/status";
 import { PaymentModal, useAction } from "@/components/payments";
@@ -153,7 +153,7 @@ export default function ReservaPage() {
 
         <Card title="Precio">
           <div className="flex flex-col gap-1 text-sm">
-            {charges.map((c) => <div key={c.id} className="flex justify-between gap-3"><span className="text-muted">{c.description}</span><span className="tabular">{formatMoney(c.amount)}</span></div>)}
+            {charges.map((c) => <div key={c.id} className="flex justify-between gap-3"><span className="text-muted">{chargeLabel(c.description, placesText, inclusiveDays(r.start_date, r.end_date))}</span><span className="tabular">{formatMoney(c.amount)}</span></div>)}
             {(() => {
               const extras = Math.round((Number(r.list_amount) - charges.reduce((a, c) => a + Number(c.amount), 0)) * 100) / 100;
               return extras > 0 ? <div className="flex justify-between gap-3"><span className="text-muted">Extras</span><span className="tabular">{formatMoney(extras)}</span></div> : null;

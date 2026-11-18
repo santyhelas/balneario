@@ -1501,6 +1501,11 @@ select t.ok((public.quote_reservation(t.uid('ws'), '2027-09-10', '2027-09-12',
   '{"manual_base": 100000, "cash": true, "round": true, "manual": {"type": "porcentaje", "value": 10, "reason": "Prueba"}}'::jsonb) ->> 'total')::numeric = 100000,
   'Precio manual: es el precio final, no se le aplica efectivo, descuento manual ni redondeo');
 
+select t.ok((public.quote_reservation(t.uid('ws'), '2027-09-10', '2027-09-12',
+  jsonb_build_array(jsonb_build_object('space_id', t.space('66'), 'start_date', '2027-09-10', 'end_date', '2027-09-12')),
+  '{"manual_base": 100000}'::jsonb) -> 'charges' -> 0 ->> 'description') = 'Carpa 66 × 3 días',
+  'Precio manual: en el comprobante dice «Carpa 66 × 3 días»');
+
 reset role;
 \o
 -- Resultado ----------------------------------------------------------
