@@ -126,12 +126,11 @@ export default function TarifasPage() {
                 fixedMode={fixedMode} editable={isAdmin} onSaved={q.reload} />
             ))}
           </div>
-          </div>
         </Card>
 
         <div className="flex flex-col gap-4">
           <Card title="Descuentos y convenios">
-            <p className="text-sm text-muted">Los descuentos por paquete, el porcentaje por efectivo y los convenios se editan en <Link className="text-accent underline" href="/convenios">Descuentos y convenios</Link>.</p>
+            <p className="text-sm text-muted">Si se cobra con precio fijo o con % por cantidad de días, el porcentaje por efectivo y los convenios se eligen en <Link className="text-accent underline" href="/convenios">Descuentos y convenios</Link>.</p>
           </Card>
           <Card title="Cómo se calcula el precio">
             <ol className="list-decimal space-y-1 pl-5 text-sm text-muted">
