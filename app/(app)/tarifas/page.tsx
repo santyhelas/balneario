@@ -306,9 +306,9 @@ function MonthBlock({ year, month, kinds, rateMap, pkgMap, fixedMode, editable, 
           <span className={`inline-block text-muted transition-transform ${open ? "rotate-90" : ""}`}>▸</span>
           {MONTHS[month - 1]} {year}
         </button>
-        <div className="flex flex-1 flex-wrap items-center gap-3">
+        <div className="flex flex-1 flex-wrap items-end gap-3">
           {kinds.map((kind) => (
-            <label key={kind} className="flex items-center gap-1.5 text-xs text-muted">
+            <label key={kind} className="flex flex-col gap-0.5 text-xs text-muted">
               {KindName(kind)} $/día
               <MonthPriceCell
                 key={`${rateMap.get(`${kind}-${year}-${month}-1`)?.version ?? 0}-${rateMap.get(`${kind}-${year}-${month}-2`)?.version ?? 0}`}
@@ -404,7 +404,7 @@ function MonthPriceCell({ r1, r2, kind, year, month, editable, onSaved }: { r1: 
       <Input inputMode="decimal" value={value} placeholder={placeholder}
         onChange={(e) => { setValue(e.target.value); setState("idle"); }}
         onBlur={save} onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
-        className={`tabular w-28 py-1 ${state === "error" ? "border-danger" : ""}`}
+        className={`tabular w-28! py-1 ${state === "error" ? "border-danger" : ""}`}
         aria-label={`Precio por día ${kind} ${MONTHS[month - 1]} ${year}`} disabled={state === "saving"} />
       {state === "saved" && <span className="text-xs text-ok">Guardado</span>}
       {error && <span className="text-xs text-danger">{error}</span>}
@@ -444,10 +444,10 @@ function PackageCell({ pkg, days, kind, year, month, half, daily, editable, onSa
   if (!editable) return <span className="tabular">{pkg ? <>{formatMoney(pkg.price)} {hint}</> : <span className="text-muted">—</span>}</span>;
   return (
     <span className="inline-flex flex-col">
-      <Input inputMode="decimal" value={value} placeholder="Sin paquete" title={normal ? `${days} días al precio normal: ${formatMoney(normal)}` : undefined}
+      <Input inputMode="decimal" value={value} placeholder="—" title={normal ? `${days} días al precio normal: ${formatMoney(normal)}` : undefined}
         onChange={(e) => { setValue(e.target.value); setState("idle"); }}
         onBlur={save} onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
-        className={`tabular w-32 py-1 ${state === "error" ? "border-danger" : ""} ${!pkg && value === "" ? "opacity-70" : ""}`}
+        className={`tabular min-w-20 py-1 ${state === "error" ? "border-danger" : ""} ${!pkg && value === "" ? "opacity-70" : ""}`}
         aria-label={`Paquete ${days} días ${kind} ${MONTHS[month - 1]} ${year} quincena ${half}`} disabled={state === "saving"} />
       {hint}
       {state === "saved" && <span className="text-xs text-ok">Guardado</span>}
