@@ -2,7 +2,7 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { getSupabase } from "@/lib/supabase/client";
 import { unwrap, useLoader } from "@/lib/data";
-import { addDays, formatDate, formatMoney } from "@/lib/format";
+import { addDays, formatDate, formatMoney, inclusiveDays } from "@/lib/format";
 import { useWorkspace } from "@/components/workspace";
 import type { SpaceKind } from "@/lib/space-kinds";
 
@@ -25,7 +25,7 @@ export type Summary = {
   caja: { estado: "sin_abrir" | "abierta" | "cerrada"; session_id?: string };
   caja_anterior_sin_cerrar: { session_id: string; fecha: string } | null;
 };
-export type Debt = { reservation_id: string; number: number; customer: string; end_date: string; due: number };
+export type Debt = { reservation_id: string; number: number; customer: string; end_date: string; due: number; start_date?: string };
 export type Notice = { id: string; tone: "danger" | "warn" | "info"; title: string; detail: string; href: string };
 
 type StatusCtx = {
@@ -83,11 +83,11 @@ export function StatusProvider({ children }: { children: ReactNode }) {
     const bal = unwrap(await sb.from("reservation_balances").select("reservation_id, due_amount").eq("workspace_id", ws.id).gt("due_amount", 0).order("due_amount", { ascending: false }).limit(50)) as { reservation_id: string; due_amount: number }[];
     let debts: Debt[] = [];
     if (bal.length) {
-      const rows = unwrap(await sb.from("reservations").select("id, number, end_date, customers(first_name, last_name)").in("id", bal.map((b) => b.reservation_id))) as unknown as { id: string; number: number; end_date: string; customers: { first_name: string; last_name: string } }[];
+      const rows = unwrap(await sb.from("reservations").select("id, number, start_date, end_date, customers(first_name, last_name)").in("id", bal.map((b) => b.reservation_id))) as unknown as { id: string; number: number; start_date: string; end_date: string; customers: { first_name: string; last_name: string } }[];
       const byId = new Map(rows.map((r) => [r.id, r]));
       debts = bal.flatMap((b) => {
         const r = byId.get(b.reservation_id);
-        return r ? [{ reservation_id: r.id, number: r.number, customer: `${r.customers.first_name} ${r.customers.last_name}`.trim(), end_date: r.end_date, due: Number(b.due_amount) }] : [];
+        return r ? [{ reservation_id: r.id, number: r.number, customer: `${r.customers.first_name} ${r.customers.last_name}`.trim(), start_date: r.start_date, end_date: r.end_date, due: Number(b.due_amount) }] : [];
       });
     }
     // Deudores que terminan mañana o pasado mañana (aviso 2 días y 1 día antes).
@@ -159,9 +159,17 @@ export function StatusProvider({ children }: { children: ReactNode }) {
       });
     }
     const endingIds = new Set([...s.finalizan_hoy.map((r) => r.reservation_id), ...q.data!.endingSoon.map((d) => d.reservation_id)]);
+    // Saldos pendientes: solo de las reservas que ya están en curso o entran en los próximos 3 días
+    // (las que entran más adelante se ven en Cobros, sin llenar los avisos).
+    const soonLimit = addDays(s.fecha, 3);
+    const enteringIds = new Set(s.ingresan_hoy.map((r) => r.reservation_id));
     for (const d of q.data!.debts) {
-      if (endingIds.has(d.reservation_id)) continue;
-      list.push({ id: `deuda-${d.reservation_id}`, tone: "warn", title: `Saldo pendiente: ${d.customer}`, detail: `Reserva #${d.number} · Resta abonar ${formatMoney(d.due)}`, href: `/reservas/${d.reservation_id}` });
+      if (endingIds.has(d.reservation_id) || enteringIds.has(d.reservation_id)) continue;
+      if (d.start_date && d.start_date > soonLimit) continue;
+      const days = d.start_date && d.start_date > s.fecha ? inclusiveDays(s.fecha, d.start_date) - 1 : 0;
+      list.push({ id: `deuda-${d.reservation_id}`, tone: "warn",
+        title: days > 0 ? `${days === 1 ? "Entra mañana" : `Entra en ${days} días`} y debe: ${d.customer}` : `Saldo pendiente: ${d.customer}`,
+        detail: `Reserva #${d.number}${d.start_date && days > 0 ? ` · entra el ${formatDate(d.start_date)}` : ""} · Resta abonar ${formatMoney(d.due)}`, href: `/reservas/${d.reservation_id}` });
     }
     for (const r of s.ingresan_hoy) {
       list.push({ id: `in-${r.reservation_id}`, tone: "info", title: `Ingresa hoy: ${r.customer}`, detail: `${r.spaces ?? ""}${Number(r.due_amount) > 0 ? ` · Debe ${formatMoney(r.due_amount)}` : ""}`, href: `/reservas/${r.reservation_id}` });
