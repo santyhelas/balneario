@@ -970,7 +970,7 @@ export default function NuevaReservaPage() {
             )}
             {!showMore ? (
               <button type="button" onClick={() => setMoreOpts(true)} className="mt-3 text-sm font-medium text-accent hover:underline">
-                + Más opciones (cortesía familiar{isAdmin ? ", descuento manual, precio acordado" : ""})
+                + Más opciones (cortesía familiar{isAdmin ? ", precio acordado, descuento manual" : ""})
               </button>
             ) : (
               <div className="mt-3 flex flex-col gap-3 border-t border-line pt-3">
@@ -979,27 +979,25 @@ export default function NuevaReservaPage() {
                   <span><strong>Cortesía familiar</strong> ($0, ocupa el espacio sin generar deuda)</span>
                 </label>
                 {courtesy && <TextField label="Familiar beneficiario" value={beneficiary} onChange={(e) => setBeneficiary(e.target.value)} maxLength={120} required />}
+                {!courtesy && isAdmin && (
+                  <div>
+                    <TextField label="Precio acordado (opcional)" inputMode="decimal" value={manualBase} placeholder="$ 0" className="sm:w-60"
+                      onChange={(e) => { setManualBase(e.target.value); setUseManualBase(e.target.value.trim() !== ""); }} />
+                    <p className="mt-1 text-xs text-muted">Si lo completás, reemplaza el tarifario y es el precio final: no se le aplican descuentos.</p>
+                  </div>
+                )}
                 {!courtesy && isAdmin && !fixedPrice && (
                   <div className="grid gap-3 sm:grid-cols-2">
                     <Field label="Descuento manual (opcional)">
                       <div className="flex gap-2">
-                        <Select value={manualType} onChange={(e) => setManualType(e.target.value as "monto" | "porcentaje")} className="w-28">
+                        <Select value={manualType} onChange={(e) => setManualType(e.target.value as "monto" | "porcentaje")} className="w-20 shrink-0" aria-label="En pesos o en porcentaje">
                           <option value="monto">$</option>
                           <option value="porcentaje">%</option>
                         </Select>
-                        <Input inputMode="decimal" value={manualValue} onChange={(e) => setManualValue(e.target.value)} placeholder="0" />
+                        <Input inputMode="decimal" value={manualValue} onChange={(e) => setManualValue(e.target.value)} placeholder="0" className="min-w-0 flex-1" />
                       </div>
                     </Field>
                     <TextField label="Motivo del descuento manual" value={manualReason} onChange={(e) => setManualReason(e.target.value)} maxLength={300} />
-                  </div>
-                )}
-                {isAdmin && (
-                  <div>
-                    <label className="flex items-center gap-2 text-sm">
-                      <input type="checkbox" checked={useManualBase} onChange={(e) => setUseManualBase(e.target.checked)} />
-                      Usar un precio manual acordado (en lugar del tarifario)
-                    </label>
-                    {useManualBase && <TextField label="Precio acordado (precio final, sin descuentos)" inputMode="decimal" value={manualBase} onChange={(e) => setManualBase(e.target.value)} />}
                   </div>
                 )}
               </div>
