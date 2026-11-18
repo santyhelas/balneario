@@ -166,6 +166,9 @@ export default function ReservaPage() {
               </div>
             ))}
             <div className="mt-1 flex justify-between border-t border-line pt-2 text-base font-semibold"><span>Total contratado</span><span className="tabular">{formatMoney(r.total_amount)}</span></div>
+            {cashDue !== null && due > 0 && (
+              <div className="flex justify-between text-sm font-medium text-ok"><span>Pagando en efectivo</span><span className="tabular">{formatMoney(Number(balance.paid_amount) + cashDue)}</span></div>
+            )}
             <div className="flex justify-between"><span>Cobrado</span><span className="tabular">{formatMoney(balance.paid_amount)}</span></div>
             <div className={cx("flex justify-between text-base font-semibold", due > 0 && "text-danger")}><span>Saldo pendiente</span><span className="tabular">{formatMoney(due)}</span></div>
             {cashDue !== null && due > 0 && (
