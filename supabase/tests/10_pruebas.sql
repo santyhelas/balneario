@@ -1122,8 +1122,10 @@ select t.ok(exists (select 1 from public.reservation_discounts where kind = 'con
 
 -- 39. Tope de descuento, depósitos de caja y tamaño del plano
 update public.workspaces set discount_cap_percent = 20, version = version + 1 where id = t.uid('ws');
-select t.set('qcap', public.quote_reservation(t.uid('ws'), '2027-01-13', '2027-01-17', t.get('seg70')::jsonb,
-  jsonb_build_object('manual_base', 100000, 'cash', true, 'manual', jsonb_build_object('type','monto','value',15000,'reason','Prueba de tope')))::text);
+select public.set_rate(t.uid('ws'), 'carpa', 2027, 9, 1::smallint, 20000);
+select t.set('qcap', public.quote_reservation(t.uid('ws'), '2027-09-01', '2027-09-05',
+  jsonb_build_array(jsonb_build_object('space_id', t.space('70'), 'start_date', '2027-09-01', 'end_date', '2027-09-05')),
+  jsonb_build_object('cash', true, 'manual', jsonb_build_object('type','monto','value',15000,'reason','Prueba de tope')))::text);
 select t.ok((t.get('qcap')::jsonb ->> 'total')::numeric = 80000 and (t.get('qcap')::jsonb ->> 'tope_aplicado')::boolean
         and (select sum((d ->> 'amount')::numeric) from jsonb_array_elements(t.get('qcap')::jsonb -> 'discounts') d) = 20000
         and (select (d ->> 'amount')::numeric from jsonb_array_elements(t.get('qcap')::jsonb -> 'discounts') d where d ->> 'kind' = 'manual') = 5500,
@@ -1257,12 +1259,13 @@ select t.ok(private.can_create_workspace('99999999-9999-9999-9999-999999999999')
 set role authenticated;
 
 -- 45. Personas y reservas de grupo (varias carpas juntas, un solo cobro)
+select public.set_rate(t.uid('ws'), 'carpa', 2027, 4, 2::smallint, 10000);
 select public.reopen_cash_session(t.uid('session'), (select version from public.cash_sessions where id = t.uid('session')), 'Prueba de grupos');
 select t.set('rqg', gen_random_uuid()::text);
 select t.set('pkg', gen_random_uuid()::text);
 select t.set('g1', (public.create_reservation_group(t.uid('ws'), t.uid('rqg'), t.uid('juan'), '2027-04-20', '2027-04-22',
   jsonb_build_array(jsonb_build_object('space_id', t.space('63'), 'start_date', '2027-04-20', 'end_date', '2027-04-22')),
-  array[t.space('64'), t.space('65')], '{"manual_base": 30000, "manual": {"type": "monto", "value": 5000, "reason": "Grupo grande"}}'::jsonb, 'Familia grande',
+  array[t.space('64'), t.space('65')], '{"manual": {"type": "monto", "value": 5000, "reason": "Grupo grande"}}'::jsonb, 'Familia grande',
   jsonb_build_object('amount', 50000, 'method', 'efectivo', 'idempotency_key', t.get('pkg')), '[]'::jsonb, 7) ->> 'group_id'));
 select t.ok((select count(*) = 3 from public.reservations where group_id = t.uid('g1')), 'Grupo: se crean tres reservas unidas');
 select t.ok((select array_agg(people order by people desc) = array[3,2,2] from public.reservations where group_id = t.uid('g1')), 'Grupo: las 7 personas se reparten 3 + 2 + 2');
@@ -1331,12 +1334,14 @@ select t.ok((select sum(due_amount) = 0 from public.reservation_balances b join 
 select public.close_cash_session(t.uid('session'), 0, (select version from public.cash_sessions where id = t.uid('session')), null);
 
 -- 48. Redondeo del total a $500 para abajo
+select public.set_rate(t.uid('ws'), 'carpa', 2027, 7, 1::smallint, 23730);
+select public.set_rate(t.uid('ws'), 'carpa', 2027, 8, 1::smallint, 400040);
 select t.ok((public.quote_reservation(t.uid('ws'), '2027-07-01', '2027-07-01',
-  jsonb_build_array(jsonb_build_object('space_id', t.space('66'), 'start_date', '2027-07-01', 'end_date', '2027-07-01')), '{"manual_base": 23730, "round": true}'::jsonb) ->> 'total')::numeric = 23500,
+  jsonb_build_array(jsonb_build_object('space_id', t.space('66'), 'start_date', '2027-07-01', 'end_date', '2027-07-01')), '{"round": true}'::jsonb) ->> 'total')::numeric = 23500,
   'Redondeo: $23.730 queda en $23.500');
-select t.set('rr', (public.create_reservation_v3(t.uid('ws'), gen_random_uuid(), t.uid('juan'), '2027-07-02', '2027-07-02',
-  jsonb_build_array(jsonb_build_object('space_id', t.space('66'), 'start_date', '2027-07-02', 'end_date', '2027-07-02')),
-  '{"manual_base": 400040, "round": true}'::jsonb, null, null, '[]'::jsonb) ->> 'reservation_id'));
+select t.set('rr', (public.create_reservation_v3(t.uid('ws'), gen_random_uuid(), t.uid('juan'), '2027-08-02', '2027-08-02',
+  jsonb_build_array(jsonb_build_object('space_id', t.space('66'), 'start_date', '2027-08-02', 'end_date', '2027-08-02')),
+  '{"round": true}'::jsonb, null, null, '[]'::jsonb) ->> 'reservation_id'));
 select t.ok((select total_amount = 400000 from public.reservations where id = t.uid('rr'))
         and exists (select 1 from public.reservation_discounts where reservation_id = t.uid('rr') and kind = 'redondeo' and amount = 40 and label = 'Redondeo'),
   'Redondeo: $400.040 se guarda en $400.000 con el descuento «Redondeo» de $40');
@@ -1489,6 +1494,12 @@ select t.throws(format($$select public.create_reservation_v3(%L, gen_random_uuid
 -- 57. Mensaje de bienvenida
 select t.ok(private.valid_message_templates('{"bienvenida": "Hola {nombre}! Reglas: no se permiten mascotas."}'::jsonb), 'Bienvenida: se puede guardar el mensaje con las reglas');
 select t.ok(not private.valid_message_templates(jsonb_build_object('bienvenida', repeat('a', 2001))), 'Bienvenida: hasta 2000 letras');
+
+-- 58. Precio manual = precio final (sin descuentos)
+select t.ok((public.quote_reservation(t.uid('ws'), '2027-09-10', '2027-09-12',
+  jsonb_build_array(jsonb_build_object('space_id', t.space('66'), 'start_date', '2027-09-10', 'end_date', '2027-09-12')),
+  '{"manual_base": 100000, "cash": true, "round": true, "manual": {"type": "porcentaje", "value": 10, "reason": "Prueba"}}'::jsonb) ->> 'total')::numeric = 100000,
+  'Precio manual: es el precio final, no se le aplica efectivo, descuento manual ni redondeo');
 
 reset role;
 \o

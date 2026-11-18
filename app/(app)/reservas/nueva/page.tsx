@@ -289,6 +289,7 @@ export default function NuevaReservaPage() {
   // «Dólares» solo si el balneario prendió esa función.
   const methods = COLLECT_METHODS.filter((m) => m.value !== "dolares" || feats.dolares);
   const showMore = moreOpts || courtesy || manualValue.trim() !== "" || useManualBase;
+  const fixedPrice = isAdmin && useManualBase && parseMoney(manualBase) !== null;
 
   useEffect(() => {
     if (agreementId && !validAgreements.some((a) => a.id === agreementId)) setAgreementId("");
@@ -298,7 +299,8 @@ export default function NuevaReservaPage() {
     const o: Record<string, unknown> = { courtesy };
     if (courtesy) {
       o.courtesy_beneficiary = beneficiary;
-    } else {
+    } else if (!fixedPrice) {
+      // Con precio acordado a mano no van descuentos: ese es el precio final.
       if (agreementId) o.agreement_id = agreementId;
       if (cash) o.cash = true;
       const mv = manualType === "monto" ? parseMoney(manualValue) : Number(manualValue.replace(",", "."));
@@ -310,7 +312,7 @@ export default function NuevaReservaPage() {
       if (b !== null) o.manual_base = b;
     }
     return o;
-  }, [courtesy, beneficiary, agreementId, cash, manualType, manualValue, manualReason, isAdmin, useManualBase, manualBase, roundTotal]);
+  }, [courtesy, beneficiary, agreementId, cash, manualType, manualValue, manualReason, isAdmin, useManualBase, manualBase, roundTotal, fixedPrice]);
 
   const [quote, setQuote] = useState<Quote | null>(null);
   const [quoteError, setQuoteError] = useState<string | null>(null);
@@ -947,7 +949,10 @@ export default function NuevaReservaPage() {
 
           {/* 4. Precio y descuentos */}
           <Card title="4. Precio y descuentos">
-            {!courtesy && (
+            {!courtesy && fixedPrice && (
+              <p className="rounded-lg bg-surface-2 px-3 py-2 text-sm">Con precio acordado a mano no se aplican descuentos: ese es el precio final.</p>
+            )}
+            {!courtesy && !fixedPrice && (
               <div className="grid gap-3 sm:grid-cols-2">
                 <Field label="Convenio">
                   <Select value={agreementId} onChange={(e) => setAgreementId(e.target.value)}>
@@ -974,7 +979,7 @@ export default function NuevaReservaPage() {
                   <span><strong>Cortesía familiar</strong> ($0, ocupa el espacio sin generar deuda)</span>
                 </label>
                 {courtesy && <TextField label="Familiar beneficiario" value={beneficiary} onChange={(e) => setBeneficiary(e.target.value)} maxLength={120} required />}
-                {!courtesy && isAdmin && (
+                {!courtesy && isAdmin && !fixedPrice && (
                   <div className="grid gap-3 sm:grid-cols-2">
                     <Field label="Descuento manual (opcional)">
                       <div className="flex gap-2">
@@ -994,7 +999,7 @@ export default function NuevaReservaPage() {
                       <input type="checkbox" checked={useManualBase} onChange={(e) => setUseManualBase(e.target.checked)} />
                       Usar un precio manual acordado (en lugar del tarifario)
                     </label>
-                    {useManualBase && <TextField label="Precio acordado (antes de descuentos)" inputMode="decimal" value={manualBase} onChange={(e) => setManualBase(e.target.value)} />}
+                    {useManualBase && <TextField label="Precio acordado (precio final, sin descuentos)" inputMode="decimal" value={manualBase} onChange={(e) => setManualBase(e.target.value)} />}
                   </div>
                 )}
               </div>
@@ -1031,7 +1036,7 @@ export default function NuevaReservaPage() {
                   </form>
                 )}
                 {isAdmin && (
-                  <p className="mt-1 text-xs">Los descuentos marcados (efectivo, convenio) se aplican sobre ese precio: si ya los incluye, destildalos.</p>
+                  <p className="mt-1 text-xs">Es el precio final: no se le aplican descuentos.</p>
                 )}
               </Alert>
             ) : quote && (
@@ -1077,7 +1082,7 @@ export default function NuevaReservaPage() {
                 )}
                 {!courtesy && extrasTotal > 0 && <div className="flex justify-between gap-3"><span>Extras</span><span className="tabular">+ {formatMoney(extrasTotal)}</span></div>}
                 <div className="mt-1 flex justify-between gap-3 border-t border-line pt-2 text-base font-semibold"><span>Total</span><span className="tabular">{formatMoney(total)}</span></div>
-                {!courtesy && (feats.redondeo || roundTotal) && (
+                {!courtesy && !fixedPrice && (feats.redondeo || roundTotal) && (
                   <label className="flex items-center gap-2 text-xs text-muted">
                     <input type="checkbox" checked={roundTotal} onChange={(e) => setRoundTotal(e.target.checked)} />
                     Redondear para abajo a $500 (ej. $400.040 → $400.000 · $23.730 → $23.500)
