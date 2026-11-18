@@ -39,6 +39,8 @@ type Quote = {
   /** Tope de descuento del balneario y si recortó los descuentos. */
   tope?: number | null;
   tope_aplicado?: boolean;
+  /** Precio en efectivo acordado a mano (se aplica al cobrar en efectivo). */
+  precio_efectivo?: number | null;
 };
 type PayMode = "pagada" | "despues" | "sena";
 
@@ -280,6 +282,7 @@ export default function NuevaReservaPage() {
   const [manualReason, setManualReason] = useState("");
   const [useManualBase, setUseManualBase] = useState(false);
   const [manualBase, setManualBase] = useState("");
+  const [manualCash, setManualCash] = useState("");
   const [quickPrice, setQuickPrice] = useState("");
   const [notes, setNotes] = useState("");
   const [roundTotal, setRoundTotal] = useState(false);
@@ -310,9 +313,11 @@ export default function NuevaReservaPage() {
     if (isAdmin && useManualBase) {
       const b = parseMoney(manualBase);
       if (b !== null) o.manual_base = b;
+      const c = parseMoney(manualCash);
+      if (b !== null && c !== null && c > 0 && c < b && !courtesy) o.manual_cash = c;
     }
     return o;
-  }, [courtesy, beneficiary, agreementId, cash, manualType, manualValue, manualReason, isAdmin, useManualBase, manualBase, roundTotal, fixedPrice]);
+  }, [courtesy, beneficiary, agreementId, cash, manualType, manualValue, manualReason, isAdmin, useManualBase, manualBase, roundTotal, fixedPrice, manualCash]);
 
   const [quote, setQuote] = useState<Quote | null>(null);
   const [quoteError, setQuoteError] = useState<string | null>(null);
@@ -450,10 +455,17 @@ export default function NuevaReservaPage() {
   const extrasForStay = courtesy ? [] : extras.map((x) => ({ ...x, days: Math.min(x.days, Math.max(1, nDays)) }));
   const extrasTotal = useExtrasTotal(extrasForStay);
   const total = quote?.ok && (!isGroup || groupQuote) && (!parking || parkingQuote?.ok) ? Number(quote.total) + groupTotal + parkingTotal + extrasTotal : null;
+  // Precio en efectivo acordado: la proporción se aplica a lo que se paga en efectivo (igual que en la base).
+  const cashRatio = quote?.ok && quote.precio_efectivo != null && Number(quote.total) > 0 ? Number(quote.precio_efectivo) / Number(quote.total) : null;
+  const cashAll = total === null || cashRatio === null ? null
+    : Math.round((Number(quote!.total) + extrasTotal) * cashRatio) + (isGroup && groupQuote ? Math.round(Number(quote!.total) * cashRatio) * groupSpaces.length : 0) + parkingTotal;
+  const payCash = method === "efectivo" && cashAll !== null;
   const paidNow = courtesy || payMode === "despues" ? 0
     : method === "dolares" ? Math.min(usd.ars ?? 0, total ?? 0)
-    : payMode === "pagada" ? total ?? 0 : parseMoney(deposit) ?? 0;
-  const debt = total === null ? null : Math.max(total - paidNow, 0);
+    : payMode === "pagada" ? (payCash ? cashAll! : total ?? 0) : parseMoney(deposit) ?? 0;
+  const debt = total === null ? null
+    : payCash && paidNow > 0 ? (paidNow >= cashAll! ? 0 : Math.max(total - Math.floor(paidNow / cashRatio!), 0))
+    : Math.max(total - paidNow, 0);
   const placesLabel = !segments ? "" : (isGroup
       ? `${KindName(kind, 2)} ${[selected?.code ?? "", ...groupSpaces.map((g) => g.code)].join(", ")}`
       : segments.length === 1
@@ -495,6 +507,8 @@ export default function NuevaReservaPage() {
   if (isGroup && split && split.busy.length > 0) problems.push(`Para un grupo, la ${selected?.code ?? "carpa"} principal tiene que estar libre toda la estadía. Elegí otra.`);
   if (people && !peopleN) problems.push("Revisá la cantidad de personas.");
   if (quote && !quote.ok) problems.push("Faltan tarifas para esas fechas.");
+  if (fixedPrice && manualCash.trim() !== "" && (parseMoney(manualCash) === null || (parseMoney(manualCash) ?? 0) <= 0 || (parseMoney(manualCash) ?? 0) >= (parseMoney(manualBase) ?? 0)))
+    problems.push("El precio en efectivo tiene que ser menor que el de tarjeta o transferencia.");
   if (cajaCerrada && !courtesy && payMode !== "despues") problems.push("Para registrar el cobro abrí la caja del día, o elegí «Cobrar después».");
   if (parking && parkingQuote && !parkingQuote.ok) problems.push("Faltan las tarifas de cocheras para esas fechas: cargalas en el Tarifario o sacá la cochera.");
   if (parking && !courtesy && payMode !== "despues" && method === "dolares") problems.push("Con cochera cobrá en pesos; los dólares se registran después desde cada reserva.");
@@ -588,6 +602,7 @@ export default function NuevaReservaPage() {
     setManualReason("");
     setUseManualBase(false);
     setManualBase("");
+    setManualCash("");
     setPayMode("pagada");
     setDeposit("");
     setRequestId(newKey());
@@ -601,7 +616,7 @@ export default function NuevaReservaPage() {
     places: placesLabel,
     start, end,
     total: Number(quote.total) + groupTotal + parkingTotal + extrasTotal,
-    cashTotal: cashTotal !== null ? cashTotal + (isGroup && groupQuote ? (groupQuote.cash ?? groupQuote.total) * groupSpaces.length : 0) + parkingCash + extrasTotal : null,
+    cashTotal: cashAll !== null ? cashAll : cashTotal !== null ? cashTotal + (isGroup && groupQuote ? (groupQuote.cash ?? groupQuote.total) * groupSpaces.length : 0) + parkingCash + extrasTotal : null,
     discounts: quote.discounts.map((d) => clientDiscountLabel(d, agreements)),
   }) : null;
 
@@ -983,7 +998,15 @@ export default function NuevaReservaPage() {
                   <div>
                     <TextField label="Precio acordado (opcional)" inputMode="decimal" value={manualBase} placeholder="$ 0" className="sm:w-60"
                       onChange={(e) => { setManualBase(e.target.value); setUseManualBase(e.target.value.trim() !== ""); }} />
-                    <p className="mt-1 text-xs text-muted">Si lo completás, reemplaza el tarifario y es el precio final: no se le aplican descuentos.</p>
+                    {fixedPrice && (
+                      <TextField label="Precio en efectivo (opcional)" inputMode="decimal" value={manualCash} placeholder="$ 0" className="mt-2 sm:w-60"
+                        onChange={(e) => setManualCash(e.target.value)} />
+                    )}
+                    <p className="mt-1 text-xs text-muted">
+                      {fixedPrice
+                        ? "El primero es el precio con tarjeta o transferencia. Si ponés el de efectivo, se aplica al cobrar en efectivo, sobre lo que se pague así."
+                        : "Si lo completás, reemplaza el tarifario y es el precio final: no se le aplican descuentos."}
+                    </p>
                   </div>
                 )}
                 {!courtesy && isAdmin && !fixedPrice && (
@@ -1086,7 +1109,10 @@ export default function NuevaReservaPage() {
                     Redondear para abajo a $500 (ej. $400.040 → $400.000 · $23.730 → $23.500)
                   </label>
                 )}
-                {cashTotal !== null && cashTotal < Number(quote.total) && (
+                {cashAll !== null && (
+                  <div className="flex justify-between gap-3 text-sm font-medium"><span>En efectivo</span><span className="tabular">{formatMoney(cashAll)}</span></div>
+                )}
+                {cashAll === null && cashTotal !== null && cashTotal < Number(quote.total) && (
                   <div className="flex justify-between gap-3 text-xs text-muted"><span>Pagando en efectivo</span><span className="tabular">{formatMoney(cashTotal + (isGroup && groupQuote ? (groupQuote.cash ?? groupQuote.total) * groupSpaces.length : 0) + parkingCash + (courtesy ? 0 : extrasTotal))}</span></div>
                 )}
                 {!courtesy && quoteText && (
@@ -1132,7 +1158,7 @@ export default function NuevaReservaPage() {
                   {payMode === "sena" ? (
                     <TextField label="Importe recibido" inputMode="decimal" value={deposit} onChange={(e) => setDeposit(e.target.value)} />
                   ) : (
-                    <Field label="Importe recibido"><div className="tabular rounded-lg border border-line bg-surface-2 px-3 py-2 text-sm">{total === null ? "—" : formatMoney(total)}</div></Field>
+                    <Field label="Importe recibido"><div className="tabular rounded-lg border border-line bg-surface-2 px-3 py-2 text-sm">{total === null ? "—" : formatMoney(payCash ? cashAll : total)}</div></Field>
                   )}
                   <Field label="Medio de pago">
                     <Select value={method} onChange={(e) => setMethod(e.target.value)}>
@@ -1141,12 +1167,15 @@ export default function NuevaReservaPage() {
                   </Field>
                 </div>
               )}
-              {method === "efectivo" && payMode !== "despues" && !cash && !!cashPercent && (
+              {cashAll !== null && payMode !== "despues" && (
+                <p className="mt-2 text-xs text-muted">{payCash ? `En efectivo se cobra con el precio de efectivo (${formatMoney(cashAll)} el total).` : `Con ${METHOD_LABEL[method] ?? method} se cobra el precio de lista. En efectivo serían ${formatMoney(cashAll)}.`}</p>
+              )}
+              {cashAll === null && method === "efectivo" && payMode !== "despues" && !cash && !!cashPercent && (
                 <p className="mt-2 text-xs text-warn">Paga en efectivo pero el descuento está destildado en el paso 4.</p>
               )}
               {debt !== null && (
                 <div className="mt-3 flex justify-between rounded-lg bg-surface-2 p-2 text-sm">
-                  <span>Queda debiendo</span><strong className={cx("tabular", debt > 0 && "text-danger")}>{formatMoney(debt)}</strong>
+                  <span>Queda debiendo</span><strong className={cx("tabular", debt > 0 && "text-danger")}>{formatMoney(debt)}{debt > 0 && cashRatio !== null ? ` (en efectivo ${formatMoney(Math.round(debt * cashRatio))})` : ""}</strong>
                 </div>
               )}
               {cajaCerrada && payMode !== "despues" ? (

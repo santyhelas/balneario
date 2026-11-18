@@ -15,6 +15,8 @@ export type ReservationDetail = {
   list_amount: number;
   discount_amount: number;
   total_amount: number;
+  /** Proporción del precio en efectivo acordado (null si no tiene). */
+  cash_ratio?: number | null;
   notes: string | null;
   version: number;
   created_at: string;
@@ -30,7 +32,7 @@ export type ReservationDetail = {
 };
 export type SegmentRow = { id: string; space_id: string; start_date: string; end_date: string; spaces: { code: string; kind: SpaceKind } };
 export type ChargeRow = { id: string; position: number; description: string; amount: number };
-export type DiscountRow = { id: string; position: number; kind: string; label: string; percent: number | null; amount: number; reason: string | null };
+export type DiscountRow = { id: string; position: number; kind: string; label: string; percent: number | null; amount: number; reason: string | null; payment_id?: string | null };
 export type PaymentRow = {
   id: string; kind: "cobro" | "devolucion" | "anulacion"; amount: number; signed_amount: number; method: string;
   voids_payment_id: string | null; note: string | null; reason: string | null; created_at: string;
@@ -64,7 +66,7 @@ export async function loadReservation(id: string): Promise<Full> {
       .eq("id", id).single(),
     sb.from("reservation_segments").select("id, space_id, start_date, end_date, spaces(code, kind)").eq("reservation_id", id).eq("active", true).order("start_date"),
     sb.from("reservation_charges").select("id, position, description, amount").eq("reservation_id", id).order("position"),
-    sb.from("reservation_discounts").select("id, position, kind, label, percent, amount, reason").eq("reservation_id", id).order("position"),
+    sb.from("reservation_discounts").select("id, position, kind, label, percent, amount, reason, payment_id").eq("reservation_id", id).order("position"),
     sb.from("payments").select("*").eq("reservation_id", id).order("created_at"),
     sb.from("reservation_changes").select("id, kind, description, reason, at, actor_email, reverted_by_change_id, reverts_change_id, after_state").eq("reservation_id", id).order("at", { ascending: false }),
     sb.from("reservation_balances").select("paid_amount, due_amount, credit_amount").eq("reservation_id", id).single(),
@@ -73,7 +75,8 @@ export async function loadReservation(id: string): Promise<Full> {
     r: unwrap(r) as unknown as ReservationDetail,
     segments: unwrap(segments) as unknown as SegmentRow[],
     charges: unwrap(charges) as ChargeRow[],
-    discounts: unwrap(discounts) as DiscountRow[],
+    // Un descuento por efectivo cuyo cobro se anuló ya no corre.
+    discounts: (unwrap(discounts) as DiscountRow[]).filter((d) => !d.payment_id || !(unwrap(payments) as { voids_payment_id: string | null }[]).some((p) => p.voids_payment_id === d.payment_id)),
     payments: unwrap(payments) as PaymentRow[],
     changes: unwrap(changes) as ChangeRow[],
     balance: unwrap(balance) as Balance,

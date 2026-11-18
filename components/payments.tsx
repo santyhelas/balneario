@@ -1,5 +1,5 @@
 "use client";
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { getSupabase } from "@/lib/supabase/client";
 import { newKey } from "@/lib/data";
 import { friendlyError } from "@/lib/errors";
@@ -29,9 +29,20 @@ export type PayTarget = { r: { id: string; number?: number }; balance: { due_amo
 
 export function PaymentModal({ open, full, onClose, onDone }: { open: boolean; full: PayTarget; onClose: () => void; onDone: (t: string) => void }) {
   const { ws } = useWorkspace();
-  const due = Number(full.balance.due_amount);
+  const listDue = Number(full.balance.due_amount);
   const [amount, setAmount] = useState("");
   const [method, setMethod] = useState("efectivo");
+  // Precio en efectivo acordado: en efectivo el saldo se cobra con esa proporción.
+  const [cashRatio, setCashRatio] = useState<number | null>(null);
+  useEffect(() => {
+    if (!open) return;
+    let alive = true;
+    getSupabase().from("reservations").select("cash_ratio").eq("id", full.r.id).maybeSingle()
+      .then(({ data }) => { if (alive) setCashRatio(data?.cash_ratio != null ? Number(data.cash_ratio) : null); });
+    return () => { alive = false; };
+  }, [open, full.r.id]);
+  const cashDue = cashRatio !== null ? Math.round(listDue * cashRatio) : null;
+  const due = method === "efectivo" && cashDue !== null ? cashDue : listDue;
   const [received, setReceived] = useState("");
   const [note, setNote] = useState("");
   const [key, setKey] = useState(newKey);
@@ -60,8 +71,11 @@ export function PaymentModal({ open, full, onClose, onDone }: { open: boolean; f
   }
 
   return (
-    <Modal open={open} onClose={onClose} title={`Registrar pago · saldo ${formatMoney(due)}`} busy={a.busy}>
+    <Modal open={open} onClose={onClose} title={`Registrar pago · saldo ${formatMoney(listDue)}`} busy={a.busy}>
       <form onSubmit={submit} className="flex flex-col gap-3">
+        {cashDue !== null && (
+          <Alert tone="info">Tiene precio en efectivo: el saldo es {formatMoney(listDue)} con tarjeta o transferencia, o <strong>{formatMoney(cashDue)} en efectivo</strong>.</Alert>
+        )}
         <Field label="Medio de pago">
           <Select value={method} onChange={(e) => setMethod(e.target.value)}>{COLLECT_METHODS.filter((m) => m.value !== "dolares" || featuresOf(ws).dolares || method === "dolares").map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}</Select>
         </Field>

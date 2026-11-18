@@ -1506,6 +1506,45 @@ select t.ok((public.quote_reservation(t.uid('ws'), '2027-09-10', '2027-09-12',
   '{"manual_base": 100000}'::jsonb) -> 'charges' -> 0 ->> 'description') = 'Carpa 66 × 3 días',
   'Precio manual: en el comprobante dice «Carpa 66 × 3 días»');
 
+-- 59. Dos precios acordados (tarjeta/transferencia y efectivo): el descuento se aplica al cobrar en efectivo
+select public.reopen_cash_session(t.uid('session'), (select version from public.cash_sessions where id = t.uid('session')), 'Prueba de dos precios');
+select t.ok((select (q ->> 'total')::numeric = 980000 and (q ->> 'precio_efectivo')::numeric = 882000
+             from (select public.quote_reservation(t.uid('ws'), '2027-10-01', '2027-10-15',
+               jsonb_build_array(jsonb_build_object('space_id', t.space('66'), 'start_date', '2027-10-01', 'end_date', '2027-10-15')),
+               '{"manual_base": 980000, "manual_cash": 882000}'::jsonb) as q) x),
+  'Dos precios: la reserva queda con el precio de lista y muestra el de efectivo');
+select t.set('dp', (public.create_reservation_v3(t.uid('ws'), gen_random_uuid(), t.uid('juan'), '2027-10-01', '2027-10-15',
+  jsonb_build_array(jsonb_build_object('space_id', t.space('66'), 'start_date', '2027-10-01', 'end_date', '2027-10-15')),
+  '{"manual_base": 980000, "manual_cash": 882000}'::jsonb, null, null, '[]'::jsonb) ->> 'reservation_id'));
+select public.register_payment(t.uid('ws'), t.uid('dp'), 200000, 'transferencia', gen_random_uuid(), null);
+select t.ok(private.due_for_method(t.uid('dp'), 'efectivo') = 702000 and private.due_for_method(t.uid('dp'), 'transferencia') = 780000,
+  'Dos precios: seña de 200.000 por transferencia → quedan 780.000, o 702.000 en efectivo');
+select t.throws(format($$select public.register_payment(%L, %L, 702001, 'efectivo', gen_random_uuid(), null)$$, t.get('ws'), t.get('dp')), 'supera el saldo en efectivo',
+  'Dos precios: no se puede cobrar en efectivo más que el saldo en efectivo');
+select t.set('dpc', public.register_payment(t.uid('ws'), t.uid('dp'), 702000, 'efectivo', gen_random_uuid(), null) ->> 'payment_id');
+select t.ok((select total_amount = 902000 and due_amount = 0 from public.reservation_balances where reservation_id = t.uid('dp'))
+        and exists (select 1 from public.reservation_discounts where reservation_id = t.uid('dp') and kind = 'efectivo' and amount = 78000 and payment_id = t.uid('dpc')),
+  'Dos precios: pagando el resto en efectivo queda saldada, con un descuento por efectivo de 78.000');
+select public.void_payment(t.uid('ws'), t.uid('dpc'), gen_random_uuid(), 'Prueba');
+select t.ok((select total_amount = 980000 and due_amount = 780000 from public.reservation_balances where reservation_id = t.uid('dp')),
+  'Dos precios: si se anula el cobro en efectivo, el precio vuelve al de lista');
+select t.set('dp2', (public.create_reservation_v3(t.uid('ws'), gen_random_uuid(), t.uid('juan'), '2027-10-20', '2027-10-21',
+  jsonb_build_array(jsonb_build_object('space_id', t.space('66'), 'start_date', '2027-10-20', 'end_date', '2027-10-21')),
+  '{"manual_base": 100000, "manual_cash": 90000}'::jsonb, null, jsonb_build_object('amount', 90000, 'method', 'efectivo', 'idempotency_key', gen_random_uuid()), '[]'::jsonb) ->> 'reservation_id'));
+select t.ok((select total_amount = 90000 and due_amount = 0 from public.reservation_balances where reservation_id = t.uid('dp2')),
+  'Dos precios: pagada al reservar en efectivo con el precio de efectivo');
+select t.set('dpg', (public.create_reservation_group(t.uid('ws'), gen_random_uuid(), t.uid('juan'), '2027-10-25', '2027-10-26',
+  jsonb_build_array(jsonb_build_object('space_id', t.space('63'), 'start_date', '2027-10-25', 'end_date', '2027-10-26')),
+  array[t.space('64')], '{"manual_base": 100000, "manual_cash": 90000}'::jsonb, null,
+  jsonb_build_object('amount', 180000, 'method', 'efectivo', 'idempotency_key', gen_random_uuid()), '[]'::jsonb, null) ->> 'group_id'));
+select t.ok((select sum(b.due_amount) = 0 and sum(b.total_amount) = 180000 from public.reservation_balances b join public.reservations r on r.id = b.reservation_id where r.group_id = t.uid('dpg')),
+  'Dos precios: un grupo pagado en efectivo queda saldado con el precio de efectivo de cada carpa');
+select t.throws(format($$select public.create_reservation_v3(%L, gen_random_uuid(), %L, '2027-10-28', '2027-10-28',
+  jsonb_build_array(jsonb_build_object('space_id', %L, 'start_date', '2027-10-28', 'end_date', '2027-10-28')),
+  '{"manual_base": 100000, "manual_cash": 120000}'::jsonb, null, null, '[]'::jsonb)$$, t.get('ws'), t.get('juan'), t.space('66')), 'no puede superar',
+  'Dos precios: el de efectivo no puede ser mayor que el de lista');
+select public.close_cash_session(t.uid('session'), 0, (select version from public.cash_sessions where id = t.uid('session')), null);
+
 reset role;
 \o
 -- Resultado ----------------------------------------------------------
