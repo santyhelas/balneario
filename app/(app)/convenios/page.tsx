@@ -5,7 +5,7 @@ import { useWorkspace } from "@/components/workspace";
 import { PageHeader, SyncNotice } from "@/components/shell";
 import { featuresOf } from "@/lib/features";
 import { Alert, Spinner } from "@/components/ui";
-import { AgreementsCard, DiscountCapCard, DiscountModeCard, PackagePricesCard, PackagesCard, loadAgreements, loadPackagePrices, type DiscountMode, type Pkg } from "@/components/pricing";
+import { AgreementsCard, DiscountCapCard, DiscountModeCard, PackagePricesCard, PackagesCard, loadAgreements, loadPackagePrices, type DayRate, type DiscountMode, type Pkg } from "@/components/pricing";
 
 export default function ConveniosPage() {
   const { ws, isAdmin } = useWorkspace();
@@ -18,7 +18,8 @@ export default function ConveniosPage() {
     if (w.error?.code === "42703") w = (await sb.from("workspaces").select("cash_discount_percent, version").eq("id", ws.id).single()) as typeof w;
     const wsRow = unwrap(w) as { cash_discount_percent: number; discount_mode?: DiscountMode; discount_cap_percent?: number | null; version: number };
     const fixed = await loadPackagePrices(sb, ws.id);
-    return { pkgs, agreements, wsRow, fixed };
+    const rates = fixed === null ? [] : (unwrap(await sb.from("rates").select("space_kind, year, month, half, daily_price").eq("workspace_id", ws.id)) as DayRate[]);
+    return { pkgs, agreements, wsRow, fixed, rates };
   }, [ws.id], 0);
 
   return (
@@ -29,7 +30,7 @@ export default function ConveniosPage() {
       {!q.data ? (q.loading && <div className="flex items-center gap-2 text-muted"><Spinner small /> Cargando…</div>) : (
         <div className="grid gap-4 lg:grid-cols-2">
           <div className="flex flex-col gap-4">
-            {(featuresOf(ws).paquetes || (q.data.fixed?.length ?? 0) > 0) && <PackagePricesCard rows={q.data.fixed} editable={isAdmin} onChanged={q.reload} />}
+            {(featuresOf(ws).paquetes || (q.data.fixed?.length ?? 0) > 0) && <PackagePricesCard rows={q.data.fixed} rates={q.data.rates} editable={isAdmin} onChanged={q.reload} />}
             <PackagesCard pkgs={q.data.pkgs} cashPercent={q.data.wsRow.cash_discount_percent} wsVersion={q.data.wsRow.version} editable={isAdmin} onChanged={q.reload} />
           </div>
           <div className="flex flex-col gap-4">

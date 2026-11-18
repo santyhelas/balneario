@@ -1317,6 +1317,23 @@ select t.ok(not (public.quote_reservation(t.uid('ws'), '2027-05-10', '2027-05-13
   'Paquete fijo: 4 días (menos que el paquete) usa el tarifario de siempre');
 select t.ok(private.snapshot(t.uid('ws')) ? 'package_prices', 'Paquete fijo: entra en las copias de seguridad');
 
+-- 46b. Paquete fijo con días extra al precio del tarifario (5 días $200.000; la carpa vale $50.000 / $60.000 por día)
+select public.set_rate(t.uid('ws'), 'carpa', 2031, 1, 1::smallint, 50000);
+select public.set_rate(t.uid('ws'), 'carpa', 2031, 1, 2::smallint, 60000);
+insert into public.package_prices (workspace_id, space_kind, days, price, extra_day_price, valid_from) values (t.uid('ws'), 'carpa', 5, 200000, null, '2031-01-01');
+select t.ok((public.quote_reservation(t.uid('ws'), '2031-01-01', '2031-01-06',
+  jsonb_build_array(jsonb_build_object('space_id', t.space('66'), 'start_date', '2031-01-01', 'end_date', '2031-01-06')), '{}'::jsonb) ->> 'precio_base')::numeric = 250000,
+  'Paquete fijo + tarifario: 6 días = 200.000 + 1 día normal (50.000)');
+select t.ok((public.quote_reservation(t.uid('ws'), '2031-01-13', '2031-01-18',
+  jsonb_build_array(jsonb_build_object('space_id', t.space('66'), 'start_date', '2031-01-13', 'end_date', '2031-01-18')), '{}'::jsonb) ->> 'precio_base')::numeric = 260000,
+  'Paquete fijo + tarifario: el día extra (18/01, 2ª quincena) se cobra a 60.000');
+select t.ok((public.quote_reservation(t.uid('ws'), '2031-01-05', '2031-01-05',
+  jsonb_build_array(jsonb_build_object('space_id', t.space('66'), 'start_date', '2031-01-05', 'end_date', '2031-01-05')), '{}'::jsonb) ->> 'precio_base')::numeric = 50000,
+  'Paquete fijo + tarifario: 1 día (menos que el paquete) sale del tarifario');
+select t.ok(jsonb_array_length(public.quote_reservation(t.uid('ws'), '2031-01-28', '2031-02-02',
+  jsonb_build_array(jsonb_build_object('space_id', t.space('66'), 'start_date', '2031-01-28', 'end_date', '2031-02-02')), '{}'::jsonb) -> 'faltan_tarifas') > 0,
+  'Paquete fijo + tarifario: si el día extra no tiene tarifa, avisa que falta');
+
 -- 47. Grupo cobrado en dólares (seña y todo el saldo)
 select public.reopen_cash_session(t.uid('session'), (select version from public.cash_sessions where id = t.uid('session')), 'Prueba de dólares');
 select t.set('gu', (public.create_reservation_group(t.uid('ws'), gen_random_uuid(), t.uid('juan'), '2027-06-01', '2027-06-02',

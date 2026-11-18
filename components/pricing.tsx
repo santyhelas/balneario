@@ -3,7 +3,7 @@ import { useState, type FormEvent } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getSupabase } from "@/lib/supabase/client";
 import { friendlyError } from "@/lib/errors";
-import { formatDate, formatMoney } from "@/lib/format";
+import { formatDate, formatMoney, todayISO } from "@/lib/format";
 import { useWorkspace } from "@/components/workspace";
 import { Alert, Badge, Button, Card, ConfirmDialog, EmptyState, Field, Input, Modal, Textarea, TextField, cx } from "@/components/ui";
 import { KindName, type SpaceKind } from "@/lib/space-kinds";
@@ -347,7 +347,7 @@ export function DiscountCapCard({ cap, wsVersion, editable, onChanged }: { cap: 
 }
 
 export type PackagePrice = {
-  id: string; space_kind: SpaceKind; days: number; price: number; extra_day_price: number;
+  id: string; space_kind: SpaceKind; days: number; price: number; extra_day_price: number | null;
   valid_from: string | null; valid_to: string | null; active: boolean; version: number;
 };
 
@@ -360,13 +360,36 @@ export async function loadPackagePrices(sb: SupabaseClient, wsId: string): Promi
   return (r.data ?? []) as PackagePrice[];
 }
 
-export function PackagePricesCard({ rows, editable, onChanged }: { rows: PackagePrice[] | null; editable: boolean; onChanged: () => void }) {
+export type DayRate = { space_kind: string; year: number; month: number; half: number; daily_price: number };
+
+const MONTHS = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+/** Precio por día del tarifario para comparar un paquete: la quincena de «desde» (o la de hoy);
+ *  si esa quincena no tiene tarifa, la primera que haya después. */
+export function referenceRate(rates: DayRate[], kind: string, fromISO: string | null): { price: number; label: string } | null {
+  const ref = fromISO || todayISO();
+  const [y, m, d] = ref.split("-").map(Number);
+  const key = (r: { year: number; month: number; half: number }) => r.year * 100 + r.month * 2 + r.half;
+  const want = key({ year: y, month: m, half: d <= 15 ? 1 : 2 });
+  const r = rates.filter((x) => x.space_kind === kind && key(x) >= want && Number(x.daily_price) > 0).sort((a, b) => key(a) - key(b))[0];
+  if (!r) return null;
+  return { price: Number(r.daily_price), label: `${r.half === 1 ? "1ª" : "2ª"} quincena de ${MONTHS[r.month - 1]} ${r.year}` };
+}
+
+/** «20% de descuento» del paquete frente a días × precio por día. */
+function packagePercent(price: number, days: number, daily: number): number | null {
+  const normal = days * daily;
+  if (!(normal > 0)) return null;
+  return Math.round((1 - price / normal) * 1000) / 10;
+}
+
+export function PackagePricesCard({ rows, rates, editable, onChanged }: { rows: PackagePrice[] | null; rates: DayRate[]; editable: boolean; onChanged: () => void }) {
   const { ws } = useWorkspace();
   const sb = getSupabase();
   const [kind, setKind] = useState<SpaceKind>("carpa");
   const [days, setDays] = useState("");
   const [price, setPrice] = useState("");
   const [extra, setExtra] = useState("");
+  const [extraMode, setExtraMode] = useState<"tarifa" | "fijo">("tarifa");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [busy, setBusy] = useState(false);
@@ -379,40 +402,45 @@ export function PackagePricesCard({ rows, editable, onChanged }: { rows: Package
     const d = Number(days), p = money(price), x = money(extra);
     if (!Number.isInteger(d) || d < 1 || d > 366) return setError("Los días deben ser un número entero entre 1 y 366.");
     if (p === null || p < 0) return setError("Ingresá el precio del paquete.");
-    if (x === null || x < 0) return setError("Ingresá el precio de cada día extra.");
+    if (extraMode === "fijo" && (x === null || x < 0)) return setError("Ingresá el precio de cada día extra.");
     if (from && to && to < from) return setError("La fecha «hasta» no puede ser anterior a «desde».");
     setBusy(true);
     setError(null);
-    const { error } = await sb.from("package_prices").insert({ workspace_id: ws.id, space_kind: kind, days: d, price: p, extra_day_price: x, valid_from: from || null, valid_to: to || null }).select("id");
+    const { error } = await sb.from("package_prices").insert({ workspace_id: ws.id, space_kind: kind, days: d, price: p, extra_day_price: extraMode === "fijo" ? x : null, valid_from: from || null, valid_to: to || null }).select("id");
     setBusy(false);
     if (error) return setError(friendlyError(error));
-    setDays(""); setPrice(""); setExtra(""); setFrom(""); setTo("");
+    setDays(""); setPrice(""); setExtra(""); setExtraMode("tarifa"); setFrom(""); setTo("");
     onChanged();
   }
 
   if (rows === null) {
     return <Card title="Paquetes con precio fijo"><p className="text-sm text-muted">Para usar paquetes con precio fijo hay que aplicar la actualización 0047 de la base de datos.</p></Card>;
   }
+  const d = Number(days), p = money(price);
+  const ref = referenceRate(rates, kind, from || null);
+  const pct = ref && Number.isInteger(d) && d >= 1 && p !== null ? packagePercent(p, d, ref.price) : null;
   const validity = (r: PackagePrice) => !r.valid_from && !r.valid_to ? "Siempre" : `${r.valid_from ? formatDate(r.valid_from) : "…"} al ${r.valid_to ? formatDate(r.valid_to) : "…"}`;
   return (
     <Card title="Paquetes con precio fijo">
       <p className="mb-3 text-xs text-muted">
-        Ponés el precio total de un paquete y cuánto vale cada día que se pasa, hasta llegar al próximo paquete.
-        Ej.: 5 días $90.000 y día extra $20.000 → 6 días $110.000. Si la estadía entra en un paquete fijo, se usa este precio en vez del tarifario
-        y del paquete en %; el efectivo y los convenios se suman igual.
+        Ponés el precio total de un paquete y el sistema te muestra qué % de descuento es frente al tarifario.
+        Los días que pasan del paquete se cobran al precio normal del tarifario (o a un precio fijo, si lo elegís), hasta llegar al próximo paquete.
+        Ej.: 5 días $200.000 y la carpa vale $50.000 por día → 6 días $250.000. Si la estadía entra en un paquete fijo, se usa este precio en vez
+        del paquete en %; el efectivo y los convenios se suman igual.
       </p>
       {rows.length === 0 ? <EmptyState>Sin paquetes con precio fijo: mientras no cargues ninguno, el precio sale del tarifario.</EmptyState> : (
         <ul className="mb-3 divide-y divide-line text-sm">
-          {rows.map((r) => (
+          {rows.map((r) => { const rr = referenceRate(rates, r.space_kind, r.valid_from); const rp = rr ? packagePercent(Number(r.price), r.days, rr.price) : null; return (
             <li key={r.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
               <span>
                 <Badge tone="info">{KindName(r.space_kind)}</Badge>{" "}
                 <strong>{r.days} {r.days === 1 ? "día" : "días"} · {formatMoney(r.price)}</strong>
-                <span className="text-muted"> · día extra {formatMoney(r.extra_day_price)} · {validity(r)}</span>
+                {rp !== null && rp > 0 && <span className="text-ok"> ({rp.toLocaleString("es-AR")}% menos)</span>}
+                <span className="text-muted"> · día extra {r.extra_day_price === null ? "a precio de tarifario" : formatMoney(r.extra_day_price)} · {validity(r)}</span>
               </span>
               {editable && <button type="button" className="text-xs text-danger hover:underline" onClick={() => setRemoving(r)}>Quitar</button>}
             </li>
-          ))}
+          ); })}
         </ul>
       )}
       {editable && (
@@ -420,7 +448,28 @@ export function PackagePricesCard({ rows, editable, onChanged }: { rows: Package
           <Field label="Para"><select value={kind} onChange={(e) => setKind(e.target.value as SpaceKind)} className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm"><option value="carpa">Carpas</option><option value="sombrilla">Sombrillas</option><option value="cochera">Cocheras</option></select></Field>
           <Field label="Días del paquete"><Input inputMode="numeric" value={days} onChange={(e) => setDays(e.target.value.replace(/\D/g, ""))} placeholder="5" /></Field>
           <Field label="Precio del paquete"><Input inputMode="decimal" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="90.000" /></Field>
-          <Field label="Cada día extra"><Input inputMode="decimal" value={extra} onChange={(e) => setExtra(e.target.value)} placeholder="20.000" /></Field>
+          <Field label="Cada día extra">
+            <div className="flex gap-2">
+              <select value={extraMode} onChange={(e) => setExtraMode(e.target.value as "tarifa" | "fijo")} className={cx("rounded-lg border border-line bg-surface px-3 py-2 text-sm", extraMode === "fijo" ? "w-28" : "w-full")}>
+                <option value="tarifa">Precio normal</option>
+                <option value="fijo">Precio fijo</option>
+              </select>
+              {extraMode === "fijo" && <Input inputMode="decimal" value={extra} onChange={(e) => setExtra(e.target.value)} placeholder="20.000" />}
+            </div>
+          </Field>
+          <div className="sm:col-span-3 text-sm">
+            {p === null || !(d >= 1) ? <span className="text-xs text-muted">Poné los días y el precio para ver el descuento.</span>
+              : !ref ? <span className="text-xs text-muted">Cargá el tarifario de {KindName(kind).toLowerCase()} para ver qué % de descuento es.</span>
+              : <span>
+                  {d} × {formatMoney(ref.price)} = {formatMoney(d * ref.price)} →{" "}
+                  <strong className={pct !== null && pct < 0 ? "text-danger" : "text-ok"}>
+                    {pct !== null && pct >= 0 ? `${pct.toLocaleString("es-AR")}% de descuento` : `${Math.abs(pct ?? 0).toLocaleString("es-AR")}% más caro que el tarifario`}
+                  </strong>
+                  {extraMode === "tarifa" && <> · día {d + 1}: {formatMoney(p + ref.price)}</>}
+                  {extraMode === "fijo" && money(extra) !== null && <> · día {d + 1}: {formatMoney(p + (money(extra) ?? 0))}</>}
+                  <span className="text-xs text-muted"> (tarifa de la {ref.label})</span>
+                </span>}
+          </div>
           <Field label="Vale desde (opcional)"><Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></Field>
           <Field label="Hasta (opcional)"><Input type="date" value={to} min={from || undefined} onChange={(e) => setTo(e.target.value)} /></Field>
           <div className="sm:col-span-3"><Button type="submit" variant="secondary" loading={busy}>Agregar paquete</Button>
