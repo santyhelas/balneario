@@ -30,7 +30,7 @@ export default function DisponibilidadPage() {
   const sb = getSupabase();
   const today = todayISO(ws.timezone);
   const [from, setFrom] = useState(today);
-  const [toInput, setToInput] = useState(addDays(today, 20));
+  const [toInput, setToInput] = useState(addDays(today, 29));
   const [kind, setKind] = useState<"todas" | SpaceKind>("todas");
   const [search, setSearch] = useState("");
   // "Hasta" lo elige el usuario; si queda antes de "Desde", se muestra solo ese día. Máximo un año para que la grilla no se vuelva inmanejable.
