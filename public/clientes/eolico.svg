@@ -1,4 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 120" role="img" aria-label="Eólico Playa · Villa Gesell">
-  <text x="280" y="66" text-anchor="middle" font-family="Inter, Helvetica, Arial, sans-serif" font-size="64" letter-spacing="1" fill="#1d2b33"><tspan font-weight="800">EOLICO</tspan><tspan font-weight="400">PLAYA</tspan></text>
-  <text x="280" y="104" text-anchor="middle" font-family="Inter, Helvetica, Arial, sans-serif" font-size="20" font-weight="500" letter-spacing="17" fill="#1d2b33">VILLA GESELL</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 160" role="img" aria-label="Eólico">
+  <rect width="480" height="160" rx="22" fill="#32c6b0"/>
+  <g fill="none" stroke="#fff" stroke-width="3.2" stroke-linecap="round">
+    <path d="M40 92 H118 Q126 92 128 84"/>
+    <path d="M440 92 H362 Q354 92 352 84"/>
+  </g>
+  <text x="240" y="96" text-anchor="middle" font-family="Inter, Helvetica, Arial, sans-serif" font-size="56" font-weight="400" fill="#fff">Eolico</text>
 </svg>
