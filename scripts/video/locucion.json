@@ -1,0 +1,13 @@
+{
+  "voz": "es-AR-TomasNeural",
+  "velocidad": "+12%",
+  "tono": "+0Hz",
+  "frases": {
+    "1-gancho": "¿Tenés un balneario? Pará un segundo.",
+    "2-titulo": "Estas tres cosas te ahorran plata esta temporada.",
+    "3-efectivo": "Uno: efectivo o transferencia, cada uno con su precio. Te pagan mitad y mitad, y el saldo te da justo. Sin calculadora.",
+    "4-avisos": "Dos: te avisa quién te debe antes de que llegue. Cobrás antes, no persiguiendo a nadie en la arena.",
+    "5-caja": "Tres: la caja cierra sola. Si falta un peso, lo sabés ese mismo día.",
+    "6-cierre": "Probá la demo gratis en mibalneario punto com punto ar. O escribinos por WhatsApp."
+  }
+}
