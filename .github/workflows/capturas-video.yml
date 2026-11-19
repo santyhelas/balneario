@@ -1,0 +1,48 @@
+name: Capturas para video
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  capturas:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Base Supabase de prueba
+        run: |
+          mkdir -p /tmp/sb && cd /tmp/sb
+          npx -y supabase@2 init --force >/dev/null
+          npx -y supabase@2 start -x studio,imgproxy,edge-runtime,logflare,vector,supavisor,realtime,storage-api,postgres-meta
+          npx -y supabase@2 status -o env > /tmp/sb/env.txt
+          API=$(grep '^API_URL=' env.txt | cut -d'"' -f2); KEY=$(grep -E '^(PUBLISHABLE_KEY|ANON_KEY)=' env.txt | head -1 | cut -d'"' -f2)
+          echo "NEXT_PUBLIC_SUPABASE_URL=$API" >> $GITHUB_ENV
+          echo "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=$KEY" >> $GITHUB_ENV
+          PGPASSWORD=postgres psql -h 127.0.0.1 -p 54322 -U postgres -d postgres -q -v ON_ERROR_STOP=1 -f $GITHUB_WORKSPACE/supabase/instalar.sql
+          PGPASSWORD=postgres psql -h 127.0.0.1 -p 54322 -U postgres -d postgres -qc "select private.permitir_alta('e2e@prueba.com', 'Video')"
+          TOKEN=$(curl -s "$API/auth/v1/signup" -H "apikey: $KEY" -H "Content-Type: application/json" -d '{"email":"e2e@prueba.com","password":"Prueba-e2e-123456"}' | python3 -c "import sys,json; print(json.load(sys.stdin).get('access_token',''))")
+          curl -s -f "$API/rest/v1/rpc/create_workspace" -H "apikey: $KEY" -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{"p_name":"Balneario Las Gaviotas","p_tents":30,"p_umbrellas":6}'
+          PGPASSWORD=postgres psql -h 127.0.0.1 -p 54322 -U postgres -d postgres -qc "insert into public.user_preferences (user_id, guide_done) select id, true from auth.users where email = 'e2e@prueba.com' on conflict (user_id) do update set guide_done = true"
+          PGPASSWORD=postgres psql -h 127.0.0.1 -p 54322 -U postgres -d postgres -q -v ON_ERROR_STOP=1 -f $GITHUB_WORKSPACE/scripts/video/datos.sql
+      - run: npm install --no-audit --no-fund && npm install --no-save playwright@1.49.1
+      - run: npx playwright install --with-deps chromium
+      - run: npm run build
+      - name: Capturas
+        run: |
+          NEXT_PUBLIC_SITE_URL=http://localhost:3000 npm start &
+          npx -y wait-on@8 http://localhost:3000/inicio --timeout 60000
+          DEMO_URL=http://localhost:3000 node scripts/video/capturas.mjs
+      - name: Guardar en la rama "capturas-video"
+        if: always()
+        run: |
+          cd capturas-video
+          echo '{ "git": { "deploymentEnabled": false } }' > vercel.json
+          git init -q -b capturas-video
+          git config user.name "capturas" && git config user.email "capturas@users.noreply.github.com"
+          git add -A && git commit -qm "Capturas de ${GITHUB_SHA::7}"
+          git push -qf "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git" capturas-video
