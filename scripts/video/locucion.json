@@ -1,13 +1,8 @@
 {
-  "voz": "es-AR-TomasNeural",
-  "velocidad": "+12%",
-  "tono": "+0Hz",
-  "frases": {
-    "1-gancho": "¿Tenés un balneario? Pará un segundo.",
-    "2-titulo": "Estas tres cosas te ahorran plata esta temporada.",
-    "3-efectivo": "Uno: efectivo o transferencia, cada uno con su precio. Te pagan mitad y mitad, y el saldo te da justo. Sin calculadora.",
-    "4-avisos": "Dos: te avisa quién te debe antes de que llegue. Cobrás antes, no persiguiendo a nadie en la arena.",
-    "5-caja": "Tres: la caja cierra sola. Si falta un peso, lo sabés ese mismo día.",
-    "6-cierre": "Probá la demo gratis en mibalneario punto com punto ar. O escribinos por WhatsApp."
-  }
+  "texto": "¿Tenés un balneario? Mirá esto: tres cosas que te ahorran plata esta temporada. Primero: efectivo o transferencia, cada uno con su precio; te pagan mitad y mitad y el saldo te da justo, sin calculadora. Segundo: te avisa quién te debe antes de que llegue, así cobrás antes y no andás persiguiendo a nadie en la arena. Tercero: la caja cierra sola; si falta un peso, lo sabés ese mismo día. Probá la demo gratis en mibalneario punto com punto ar, o escribinos por WhatsApp.",
+  "voces": [
+    { "nombre": "elena", "voz": "es-AR-ElenaNeural", "velocidad": "+22%", "tono": "+4Hz" },
+    { "nombre": "elena-rapida", "voz": "es-AR-ElenaNeural", "velocidad": "+30%", "tono": "+8Hz" },
+    { "nombre": "tomas-fino", "voz": "es-AR-TomasNeural", "velocidad": "+22%", "tono": "+18Hz" }
+  ]
 }
