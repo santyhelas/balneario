@@ -329,6 +329,19 @@ export default function InicioPage() {
           </div>
         </section>
 
+        {/* Clientes: el logo aparece apagado y toma color al pasar el mouse (en el celular, que no tiene mouse, se ve en color) */}
+        <section aria-label="Clientes" className="pb-14">
+          <div className="mx-auto max-w-6xl px-4">
+            <div data-reveal className="group flex flex-col items-center justify-center gap-4 rounded-3xl border border-black/5 bg-white/70 px-6 py-7 text-center sm:flex-row sm:gap-8 sm:text-left">
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-[var(--gris)]">Nuestro primer cliente</p>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/clientes/eolico.svg" alt="Eólico Playa, Villa Gesell" width={280} height={60}
+                className="h-14 w-auto transition duration-500 ease-out group-hover:scale-105 [@media(hover:hover)]:opacity-45 [@media(hover:hover)]:grayscale [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-hover:grayscale-0" />
+              <p className="max-w-xs text-sm leading-relaxed text-[var(--gris)]">Eólico Playa, de Villa Gesell, ya maneja su temporada con Mi Balneario.</p>
+            </div>
+          </div>
+        </section>
+
         {/* Fotos del balneario (solo cuando haya fotos reales cargadas en PHOTOS) */}
         {PHOTOS.length > 0 && (
           <section className="pb-16" aria-label="Fotos">
