@@ -150,7 +150,7 @@ export default function CajaPage() {
       )}
 
       {summary && (
-        <div data-tour="caja" className="grid gap-4 lg:grid-cols-3">
+        <div data-tour="caja" className="grid grid-cols-1 gap-4 lg:grid-cols-3">
           <Card title="Efectivo" className="lg:col-span-1">
             <dl className="flex flex-col gap-1.5 text-sm">
               <Row label="Apertura" value={formatMoney(summary.opening_cash)} />
@@ -182,7 +182,7 @@ export default function CajaPage() {
             </Card>
           )}
           <Card title="Otros medios (no son efectivo en caja)" className="lg:col-span-2">
-            <div className="grid grid-cols-2 gap-3 text-sm md:grid-cols-4">
+            <div className="grid grid-cols-1 gap-3 text-sm min-[360px]:grid-cols-2 md:grid-cols-4">
               {Object.keys(summary.por_medio).filter((m) => m !== "efectivo" && m !== "dolares" && (m !== "tarjeta" || summary.por_medio[m].entradas > 0 || summary.por_medio[m].salidas > 0)).map((m) => (
                 <div key={m} className="rounded-lg bg-surface-2 p-3">
                   <div className="font-medium">{METHOD[m]}</div>
