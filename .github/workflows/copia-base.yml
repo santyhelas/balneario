@@ -1,0 +1,80 @@
+name: Copia diaria de la base
+
+# Copia completa de la base de Supabase (el plan gratis no hace copias).
+# Se guarda CIFRADA como archivo de esta ejecución durante 30 días.
+# El repositorio es público: sin la clave BACKUP_PASSPHRASE el archivo no se puede abrir.
+#
+# Necesita dos secretos en GitHub (Settings → Secrets and variables → Actions):
+#   SUPABASE_DB_URL     → Supabase → Connect → "Session pooler" (puerto 5432), con la contraseña de la base.
+#   BACKUP_PASSPHRASE   → una frase larga que solo sepa el dueño. Sin ella la copia no sirve.
+#
+# Restaurar (en una base nueva y vacía):
+#   gpg -d copia-AAAA-MM-DD.tar.gz.gpg | tar xz
+#   psql "$URL" -f roles.sql && psql "$URL" -f schema.sql && psql "$URL" -f data.sql
+
+on:
+  schedule:
+    - cron: "17 9 * * *" # 06:17 hora de Argentina
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: copia-base
+  cancel-in-progress: false
+
+jobs:
+  copia:
+    name: Copiar y cifrar
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      PASS: ${{ secrets.BACKUP_PASSPHRASE }}
+    steps:
+      - name: Revisar secretos
+        run: |
+          if [ -z "$DB_URL" ] || [ -z "$PASS" ]; then
+            echo "::error::Faltan los secretos SUPABASE_DB_URL o BACKUP_PASSPHRASE. No se hizo la copia."
+            exit 1
+          fi
+          if [ ${#PASS} -lt 16 ]; then
+            echo "::error::BACKUP_PASSPHRASE es demasiado corta (mínimo 16 caracteres)."
+            exit 1
+          fi
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Exportar roles, estructura y datos
+        run: |
+          set -euo pipefail
+          mkdir copia
+          supabase db dump --db-url "$DB_URL" -f copia/roles.sql --role-only
+          supabase db dump --db-url "$DB_URL" -f copia/schema.sql
+          supabase db dump --db-url "$DB_URL" -f copia/data.sql --use-copy --data-only
+          # Una copia vacía o cortada es peor que ninguna: se frena acá.
+          for f in roles schema data; do test -s "copia/$f.sql" || { echo "::error::$f.sql salió vacío"; exit 1; }; done
+          grep -q "reservations" copia/schema.sql || { echo "::error::schema.sql no tiene las tablas del sistema"; exit 1; }
+          grep -qE 'COPY "?public"?\."?reservations"?' copia/data.sql || { echo "::error::data.sql no tiene las reservas"; exit 1; }
+          ls -la copia
+
+      - name: Cifrar
+        run: |
+          set -euo pipefail
+          name="copia-$(TZ=America/Argentina/San_Juan date +%F).tar.gz.gpg"
+          tar czf - copia | gpg --batch --yes --pinentry-mode loopback --passphrase-fd 3 \
+            --symmetric --cipher-algo AES256 -o "$name" 3<<<"$PASS"
+          rm -rf copia
+          # Comprobar que se puede abrir antes de darla por buena.
+          gpg --batch --pinentry-mode loopback --passphrase-fd 3 -d "$name" 3<<<"$PASS" | tar tzf - >/dev/null
+          echo "NAME=$name" >> "$GITHUB_ENV"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.NAME }}
+          path: ${{ env.NAME }}
+          retention-days: 30
+          if-no-files-found: error
