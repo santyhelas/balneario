@@ -1,5 +1,6 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { REMEMBER_COOKIE, applyRemember } from "@/lib/remember";
+import { INDEXNOW_KEY } from "@/lib/site";
 import { isAppPath } from "@/lib/app-paths";
 
 type CookieToSet = { name: string; value: string; options: CookieOptions };
@@ -7,7 +8,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 // Rutas que se pueden ver sin haber iniciado sesión.
 // /api/cron: tareas automáticas de Vercel (no tienen sesión; cada una se protege sola).
-const PUBLIC_PATHS = ["/inicio", "/terminos", "/privacidad", "/robots.txt", "/sitemap.xml", "/login", "/auth/callback", "/auth/restablecer", "/auth/bienvenida", "/auth/ingresar", "/auth/registrar", "/api/cron", "/api/mp/webhook", "/api/demo", "/presupuesto", "/sistema-para-balnearios", "/og.png", "/landing"];
+const PUBLIC_PATHS = ["/inicio", "/terminos", "/privacidad", "/robots.txt", "/sitemap.xml", "/login", "/auth/callback", "/auth/restablecer", "/auth/bienvenida", "/auth/ingresar", "/auth/registrar", "/api/cron", "/api/mp/webhook", "/api/demo", "/presupuesto", "/sistema-para-balnearios", "/og.png", "/landing", "/guias", "/quienes-somos", "/llms.txt", `/${INDEXNOW_KEY}.txt`];
 
 // Dirección vieja del sitio: quien entra por ahí pasa a la nueva (cuando NEXT_PUBLIC_SITE_URL ya es la nueva).
 const OLD_HOSTS = ["balneario-beta.vercel.app"];

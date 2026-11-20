@@ -507,6 +507,8 @@ export default function InicioPage() {
               <li><a href="#funciones" className="hover:text-white">Funciones</a></li>
               <li><a href="#planes" className="hover:text-white">Planes y presupuesto</a></li>
               <li><a href="#preguntas" className="hover:text-white">Preguntas frecuentes</a></li>
+              <li><a href="/guias" className="hover:text-white">Guías para balnearios</a></li>
+              <li><a href="/quienes-somos" className="hover:text-white">Quiénes somos</a></li>
             </ul>
           </nav>
           <nav aria-label="Zonas">
@@ -533,7 +535,7 @@ export default function InicioPage() {
         </div>
         <div className="mx-auto flex max-w-6xl flex-col gap-2 border-t border-white/10 px-4 py-6 text-sm sm:flex-row sm:items-center sm:justify-between">
           <span>© {new Date().getFullYear()} Mi Balneario. Todos los derechos reservados.</span>
-          <span className="italic">Hecho con cuidado en Argentina.</span>
+          <span className="italic">Hecho por <a href="/quienes-somos" className="underline-offset-2 hover:underline">Santiago Helas</a>, en San Juan, Argentina.</span>
         </div>
       </footer>
 

@@ -1,0 +1,46 @@
+name: Avisar a los buscadores (IndexNow)
+
+# Cuando cambian las páginas públicas, avisa a Bing (y a los otros buscadores de IndexNow)
+# para que las vuelvan a leer. ChatGPT y Copilot buscan en el índice de Bing.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "app/inicio/**"
+      - "app/guias/**"
+      - "app/quienes-somos/**"
+      - "app/sistema-para-balnearios/**"
+      - "app/terminos/**"
+      - "app/privacidad/**"
+      - "app/sitemap.ts"
+      - "app/llms.txt/**"
+      - "lib/guias.ts"
+      - "lib/zonas.ts"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  avisar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Esperar a que Vercel publique y avisar
+        run: |
+          set -euo pipefail
+          SITE=https://mibalneario.com.ar
+          KEY=$(grep -oE 'INDEXNOW_KEY = "[0-9a-f]+"' lib/site.ts | grep -oE '[0-9a-f]{32}')
+          # La clave tiene que estar publicada antes de avisar (si no, IndexNow rechaza el aviso).
+          for i in $(seq 1 40); do
+            if [ "$(curl -fsS "$SITE/$KEY.txt" || true)" = "$KEY" ]; then break; fi
+            sleep 15
+          done
+          sleep 60 # margen para que termine de publicarse el resto del sitio
+          URLS=$(curl -fsS "$SITE/sitemap.xml" | grep -oE '<loc>[^<]+</loc>' | sed -E 's#</?loc>##g' | jq -R . | jq -s .)
+          echo "Páginas: $(echo "$URLS" | jq length)"
+          BODY=$(jq -n --arg key "$KEY" --argjson urls "$URLS" '{host:"mibalneario.com.ar", key:$key, keyLocation:("https://mibalneario.com.ar/" + $key + ".txt"), urlList:$urls}')
+          code=$(curl -sS -o resp.txt -w "%{http_code}" -X POST "https://api.indexnow.org/indexnow" -H "Content-Type: application/json; charset=utf-8" -d "$BODY")
+          echo "Respuesta IndexNow: $code"; cat resp.txt || true
+          case "$code" in 200|202) ;; *) exit 1 ;; esac
