@@ -1,8 +1,11 @@
 {
-  "texto": "¿Tenés un balneario? Mirá esto: tres cosas que te ahorran plata esta temporada. Primero: efectivo o transferencia, cada uno con su precio; te pagan mitad y mitad y el saldo te da justo, sin calculadora. Segundo: te avisa quién te debe antes de que llegue, así cobrás antes y no andás persiguiendo a nadie en la arena. Tercero: la caja cierra sola; si falta un peso, lo sabés ese mismo día. Probá la demo gratis en mibalneario punto com punto ar, o escribinos por WhatsApp.",
+  "texto": "POV: es dos de enero, tenés noventa carpas y un cuaderno lleno de tachones. Suena el teléfono: ¿tenés carpa del cuatro al diez? Y vos, buscando página por página. Con Mi Balneario elegís las fechas y en el mapa ves qué está libre. Cobrás la seña y el sistema te avisa quién debe, antes de que llegue. Y a la noche, la caja cierra sola. Mi Balneario. Probá la demo gratis en mibalneario punto com punto ar.",
   "voces": [
-    { "nombre": "elena", "voz": "es-AR-ElenaNeural", "velocidad": "+22%", "tono": "+4Hz" },
-    { "nombre": "elena-rapida", "voz": "es-AR-ElenaNeural", "velocidad": "+30%", "tono": "+8Hz" },
-    { "nombre": "tomas-fino", "voz": "es-AR-TomasNeural", "velocidad": "+22%", "tono": "+18Hz" }
+    {
+      "nombre": "pov-elena",
+      "voz": "es-AR-ElenaNeural",
+      "velocidad": "+30%",
+      "tono": "+8Hz"
+    }
   ]
 }
