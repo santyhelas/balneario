@@ -1,4 +1,6 @@
 /* Página de presentación: paleta propia de la costa atlántica (no cambia con el tema del sistema). */
+/* Curvas de animación: ease-out para lo que entra, ease-in-out para lo que se mueve en pantalla. */
+:root { --ease-out: cubic-bezier(.165,.84,.44,1); --ease-in-out: cubic-bezier(.645,.045,.355,1); }
 .tb {
   /* Tipografías incluidas en la web (no se descargan de Google al compilar). */
   --tb-display: "Bricolage Grotesque Variable";
@@ -43,8 +45,8 @@
 .tb-marquee:hover, .tb-marquee:focus-within { animation-play-state: paused; }
 
 /* Carpa que se alquila en la portada */
-@keyframes tb-pop { 0% { transform: scale(0.8); } 60% { transform: scale(1.08); } 100% { transform: scale(1); } }
-.tb-pop { animation: tb-pop 0.35s ease-out; transform-box: fill-box; transform-origin: center; }
+@keyframes tb-pop { 0% { transform: scale(0.9); } 60% { transform: scale(1.04); } 100% { transform: scale(1); } }
+.tb-pop { animation: tb-pop 0.32s var(--ease-out); transform-box: fill-box; transform-origin: center; }
 
 /* Carrusel con deslizamiento */
 .tb-track { scroll-snap-type: x mandatory; scrollbar-width: none; overscroll-behavior-x: contain; }
@@ -91,14 +93,14 @@ html[data-tb="oscuro"] .tb svg { --tinta: #13252e; --sand-2: #e3c98f; }
 
 /* ── Animaciones de la portada ── */
 /* Entrada de la portada (sin JavaScript) */
-@keyframes tb-up { from { opacity: 0; transform: translateY(22px); } to { opacity: 1; transform: none; } }
-.tb-in { animation: tb-up 0.8s cubic-bezier(.2,.7,.2,1) both; animation-delay: var(--d, 0ms); }
+@keyframes tb-up { from { opacity: 0; transform: translateY(14px); filter: blur(6px); } to { opacity: 1; transform: none; filter: none; } }
+.tb-in { animation: tb-up 0.8s var(--ease-out) both; animation-delay: var(--d, 0ms); }
 /* Aparecer al bajar */
-html.tb-anim [data-reveal] { opacity: 0; transform: translateY(28px); transition: opacity .7s ease, transform .7s cubic-bezier(.2,.7,.2,1); transition-delay: var(--d, 0ms); }
-html.tb-anim [data-reveal="left"] { transform: translateX(-36px); }
-html.tb-anim [data-reveal="right"] { transform: translateX(36px); }
-html.tb-anim [data-reveal="zoom"] { transform: scale(.92); }
-html.tb-anim [data-reveal].is-in { opacity: 1; transform: none; }
+html.tb-anim [data-reveal] { opacity: 0; transform: translateY(18px); filter: blur(4px); transition: opacity .65s var(--ease-out), transform .65s var(--ease-out), filter .65s var(--ease-out); transition-delay: var(--d, 0ms); }
+html.tb-anim [data-reveal="left"] { transform: translateX(-24px); }
+html.tb-anim [data-reveal="right"] { transform: translateX(24px); }
+html.tb-anim [data-reveal="zoom"] { transform: scale(.96); }
+html.tb-anim [data-reveal].is-in { opacity: 1; transform: none; filter: none; }
 /* La tarjeta del plano flota apenas */
 @keyframes tb-float { 0%, 100% { transform: translateY(0) rotate(0); } 50% { transform: translateY(-10px) rotate(-.4deg); } }
 .tb-float { animation: tb-float 7s ease-in-out infinite; }
@@ -109,21 +111,25 @@ html.tb-anim [data-reveal].is-in { opacity: 1; transform: none; }
 .tb-sun-core { animation: tb-pulse-sun 3.2s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
 /* Botón principal: brillo que pasa */
 .tb-shine { position: relative; overflow: hidden; }
-.tb-shine::after { content: ""; position: absolute; inset: 0; background: linear-gradient(110deg, transparent 35%, rgba(255,255,255,.45) 50%, transparent 65%); transform: translateX(-120%); animation: tb-shine 4.5s ease-in-out 1.5s infinite; pointer-events: none; }
-@keyframes tb-shine { 0%, 60% { transform: translateX(-120%); } 85%, 100% { transform: translateX(120%); } }
+.tb-shine::after { content: ""; position: absolute; inset: 0; background: linear-gradient(110deg, transparent 35%, rgba(255,255,255,.3) 50%, transparent 65%); transform: translateX(-120%); animation: tb-shine 8s var(--ease-in-out) 2s infinite; pointer-events: none; }
+@keyframes tb-shine { 0%, 78% { transform: translateX(-120%); } 92%, 100% { transform: translateX(120%); } }
 /* WhatsApp flotante: onda */
 /* .tb-ping va sobre un elemento ya posicionado (el botón flotante es fixed) */
-.tb-ping::before { content: ""; position: absolute; inset: 0; border-radius: 999px; background: #25d366; animation: tb-ping 2.4s cubic-bezier(0,0,.2,1) infinite; z-index: -1; }
-@keyframes tb-ping { 0% { transform: scale(1); opacity: .55; } 80%, 100% { transform: scale(1.9); opacity: 0; } }
+.tb-ping::before { content: ""; position: absolute; inset: 0; border-radius: 999px; background: #25d366; animation: tb-ping 3.2s var(--ease-out) infinite; z-index: -1; }
+@keyframes tb-ping { 0% { transform: scale(1); opacity: .4; } 70%, 100% { transform: scale(1.7); opacity: 0; } }
 /* Tarjetas y botones que se levantan al pasar el mouse */
-.tb-lift { transition: transform .25s ease, box-shadow .25s ease; }
-.tb-lift:hover { transform: translateY(-4px); box-shadow: 0 18px 40px -22px rgba(11,79,108,.55); }
-.tb-press { transition: transform .15s ease; }
-.tb-press:hover { transform: translateY(-2px) scale(1.02); }
-.tb-press:active { transform: scale(.97); }
-/* Íconos de las funciones: rebote suave al pasar */
-.tb-lift:hover .tb-bob { animation: tb-bob .6s ease; }
-@keyframes tb-bob { 0%, 100% { transform: none; } 40% { transform: translateY(-5px) rotate(-6deg); } }
+/* Solo en compus con mouse: en el celular el «hover» se dispara al tocar y queda pegado. */
+.tb-lift { transition: transform .3s var(--ease-out), box-shadow .3s var(--ease-out); }
+.tb-press { transition: transform .16s var(--ease-out); }
+.tb-press:active { transform: scale(.97); transition-duration: .1s; }
+@media (hover: hover) and (pointer: fine) {
+  .tb-lift:hover { transform: translateY(-3px); box-shadow: 0 18px 40px -22px rgba(11,79,108,.55); }
+  .tb-press:hover { transform: translateY(-1px); }
+  .tb-press:hover:active { transform: scale(.97); }
+  /* Íconos de las funciones: rebote suave al pasar */
+  .tb-lift:hover .tb-bob { animation: tb-bob .5s var(--ease-out); }
+}
+@keyframes tb-bob { 0%, 100% { transform: none; } 40% { transform: translateY(-4px) rotate(-4deg); } }
 /* Gaviotas que cruzan el cierre */
 @keyframes tb-fly { from { transform: translateX(-12vw); } to { transform: translateX(112vw); } }
 @keyframes tb-flap { 0%, 100% { transform: scaleY(1); } 50% { transform: scaleY(.55); } }
@@ -137,6 +143,7 @@ html.tb-anim [data-reveal].is-in { opacity: 1; transform: none; }
   .tb-in, .tb-float, .tb-sun-rays, .tb-sun-core, .tb-shine::after, .tb-ping::before, .tb-bird, .tb-bird svg, .tb-cloud { animation: none !important; }
   .tb-bird { display: none; }
   .tb-lift, .tb-press { transition: none; }
+  .tb-lift:hover .tb-bob { animation: none; }
 }
 
 /* Logo del encabezado: el de color de día, el blanco de noche */
