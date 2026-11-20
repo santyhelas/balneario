@@ -35,6 +35,13 @@ export const metadata: Metadata = {
 
 /** Datos estructurados para Google: qué es la página. */
 const JSON_LD = [{
+  // Nombre del sitio que Google muestra arriba de cada resultado (ayuda a que «Mi Balneario» se lea como marca).
+  "@context": "https://schema.org",
+  "@type": "WebSite",
+  name: "Mi Balneario",
+  alternateName: ["MiBalneario", "mibalneario.com.ar"],
+  url: `${SITE_URL}/`,
+}, {
   "@context": "https://schema.org",
   "@type": "Organization",
   name: "Mi Balneario",
@@ -309,6 +316,7 @@ export default function InicioPage() {
           <div className="mx-auto grid max-w-6xl items-center gap-10 px-4 pb-14 pt-8 lg:grid-cols-[0.9fr_1.1fr] lg:pt-14">
             <div>
               <h1 className="tb-in text-[2.5rem] font-extrabold leading-[1.03] sm:text-6xl">
+                <span className="mb-4 block text-sm font-bold uppercase tracking-[0.12em] text-[var(--atl)] sm:text-base">Sistema de gestión para balnearios</span>
                 Tu balneario entero, en un mapa que sabe quién está en cada carpa.
               </h1>
               <p className="tb-in mt-5 max-w-lg text-lg leading-relaxed text-[var(--gris)]" style={dl(150)}>
