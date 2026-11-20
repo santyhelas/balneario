@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { SITE_EMAIL, SITE_URL, SITE_WHATSAPP_URL, SITE_FOUNDER_LINKEDIN } from "@/lib/site";
 import { PublicPage } from "@/components/public-page";
 
-const DESCRIPCION = "Mi Balneario es un sistema de gestión para balnearios hecho por Santiago Helas, desde San Juan, Argentina. Quién lo hace, para quién es y cómo contactarnos.";
+const DESCRIPCION = "Mi Balneario es un sistema de gestión para balnearios creado por Santiago Helas, que trabaja en el balneario Eólico de Villa Gesell. Quién lo hace, por qué y cómo contactarnos.";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
@@ -34,12 +34,13 @@ export default function QuienesSomosPage() {
           mapa del balneario, señas y deudas, tarifas por quincena y caja diaria, desde la compu o el celular.
         </p>
         <p>
-          Lo hace <strong>Santiago Helas</strong>, desde San Juan, Argentina. El sistema nació para reemplazar el cuaderno y la planilla
-          en los balnearios: que no se reserve dos veces la misma carpa, que se sepa al instante quién debe plata y que la caja cierre.
+          Lo hace <strong>Santiago Helas</strong>, de San Juan, Argentina. Mi Balneario nació en el balneario Eólico, de Villa Gesell,
+          donde trabajo, para resolver lo que vivíamos cada temporada: reservas anotadas en un cuaderno, señas que nadie recordaba
+          y una caja que no cerraba.
         </p>
         <p>
-          Desde la temporada 2026/2027 lo usa el balneario Eólico, de Villa Gesell. La atención es directa, por WhatsApp o por mail,
-          con la misma persona que hace el sistema.
+          Por eso está pensado desde adentro de la playa: que no se reserve dos veces la misma carpa, que se sepa al instante quién
+          debe plata y que la caja cierre. La atención es directa, por WhatsApp o por mail, con la misma persona que hace el sistema.
         </p>
       </div>
       <section className="mt-10 rounded-2xl bg-white p-6 ring-1 ring-black/5">
