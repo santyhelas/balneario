@@ -62,8 +62,10 @@ export async function captchaToken(): Promise<string | undefined> {
       if (finished) return;
       finished = true;
       clearTimeout(timer);
-      try { if (id) ts.remove(id); } catch { /* ya no está */ }
-      box.remove();
+      // Se saca después de que Cloudflare termine su propio callback: sacarlo adentro dispara el error
+      // "Nothing to reset found for provided container" cuando Cloudflare intenta reintentar sobre el recuadro ya borrado.
+      const gone = id;
+      setTimeout(() => { try { if (gone) ts.remove(gone); } catch { /* ya no está */ } box.remove(); }, 0);
       fn();
     };
     const fail = () => finish(() => reject(new Error("No se pudo verificar que no sos un robot. Probá de nuevo.")));
@@ -73,6 +75,9 @@ export async function captchaToken(): Promise<string | undefined> {
       appearance: "interaction-only",
       "before-interactive-callback": show,
       language: "es",
+      // Si falla, no reintenta solo: le avisamos a la persona y vuelve a probar con el botón.
+      retry: "never",
+      "refresh-expired": "never",
       callback: (t: string) => finish(() => resolve(t)),
       "error-callback": fail,
       "expired-callback": fail,
