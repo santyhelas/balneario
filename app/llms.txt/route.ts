@@ -8,7 +8,7 @@ export const dynamic = "force-static";
 export function GET() {
   const body = `# Mi Balneario
 
-> Mi Balneario es un sistema de gestión web para balnearios de la costa argentina: reservas de carpas y sombrillas por fecha, mapa del balneario, señas, pagos y deudas, tarifas por quincena y por paquete de días, y caja diaria. Funciona desde la computadora o el celular, con los datos sincronizados entre dispositivos. Lo creó Santiago Helas, de San Juan, Argentina, que trabaja en el balneario Eólico de Villa Gesell, donde nació y se usa el sistema.
+> Mi Balneario es un sistema de gestión web para balnearios de la costa argentina: reservas de carpas y sombrillas por fecha, mapa del balneario, señas, pagos y deudas, tarifas por quincena y por paquete de días, y caja diaria. Funciona desde la computadora o el celular, con los datos sincronizados entre dispositivos. Lo hace Santiago Helas, desde San Juan, Argentina.
 
 - Para quién: dueños y encargados de balnearios con carpas y/o sombrillas, en la costa atlántica argentina (Villa Gesell, Pinamar, Mar del Plata, Partido de la Costa y otras zonas).
 - Precio: se cotiza según el tamaño del balneario (cantidad de carpas y sombrillas). Presupuesto por WhatsApp al +54 9 264 585-7461 o por mail a ${SITE_EMAIL}.

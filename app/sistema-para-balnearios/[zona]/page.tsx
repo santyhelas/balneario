@@ -76,10 +76,10 @@ export default async function ZonaPage({ params }: { params: Promise<{ zona: str
         {z.cliente && (
           <section aria-labelledby="cliente-zona" className="mb-12 grid items-center gap-6 rounded-3xl bg-white p-6 shadow-sm ring-1 ring-black/5 md:grid-cols-[1fr_1.1fr] md:p-8">
             <div>
-              <p className="text-sm font-semibold uppercase tracking-widest text-[#0b6a87]">{z.cliente.origen ? `Nació en un balneario ${z.donde}` : `Ya lo usa un balneario ${z.donde}`}</p>
+              <p className="text-sm font-semibold uppercase tracking-widest text-[#0b6a87]">Ya lo usa un balneario {z.donde}</p>
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={z.cliente.logo} alt={`${z.cliente.nombre}, ${z.nombre}`} width={240} height={80} className="mt-3 h-16 w-auto rounded-xl" />
-              <h2 id="cliente-zona" className="mt-4 text-2xl font-extrabold">{z.cliente.origen ? `Mi Balneario nació en el ${z.cliente.nombre}` : `${z.cliente.nombre} maneja su temporada con Mi Balneario`}</h2>
+              <h2 id="cliente-zona" className="mt-4 text-2xl font-extrabold">{z.cliente.nombre} maneja su temporada con Mi Balneario</h2>
               {z.cliente.texto.map((t) => <p key={t.slice(0, 20)} className="mt-3 leading-relaxed text-[#4a565c]">{t}</p>)}
             </div>
             {z.cliente.plano && (
