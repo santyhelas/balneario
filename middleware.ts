@@ -1,6 +1,5 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { REMEMBER_COOKIE, applyRemember } from "@/lib/remember";
-import { isAppPath } from "@/lib/app-paths";
 
 type CookieToSet = { name: string; value: string; options: CookieOptions };
 import { NextResponse, type NextRequest } from "next/server";
@@ -61,14 +60,7 @@ export async function middleware(request: NextRequest) {
   if (!user && !isPublic && path.startsWith("/api/")) {
     return NextResponse.json({ error: "Tenés que iniciar sesión." }, { status: 401 });
   }
-  // Sin sesión, una dirección que no es del sistema da 404 (sin mostrar nada privado).
-  if (!user && !isPublic && !isAppPath(path)) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/no-encontrada";
-    url.search = "";
-    return NextResponse.rewrite(url, { request });
-  }
-  // Sin sesión, las pantallas del sistema llevan a la presentación (desde ahí se ingresa).
+  // Sin sesión, cualquier pantalla del sistema lleva a la presentación (desde ahí se ingresa).
   if (!user && !isPublic) {
     const url = request.nextUrl.clone();
     url.pathname = "/";

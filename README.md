@@ -54,20 +54,10 @@ supabase/
 5. **Cliente frecuente:** criterio provisorio en pantalla (3+ alquileres o 2+ temporadas).
 6. **Caja anterior sin cerrar:** por ahora hay que cerrarla antes de abrir la del día.
 
-## Respaldo
+## Respaldo (pendiente de implementar en la aplicación)
 
-Hay tres capas:
-
-1. **Copia diaria de toda la base** (`.github/workflows/copia-base.yml`): todos los días a las 06:17 exporta
-   roles, estructura y datos con la CLI de Supabase, los cifra con AES-256 y los guarda 30 días como archivo
-   de la ejecución en GitHub Actions. Necesita los secretos `SUPABASE_DB_URL` (Supabase → Connect →
-   "Session pooler") y `BACKUP_PASSPHRASE` (frase larga, guardarla fuera de GitHub: sin ella la copia no se abre).
-   Restaurar en una base nueva: `gpg -d copia-AAAA-MM-DD.tar.gz.gpg | tar xz` y luego
-   `psql "$URL" -f copia/roles.sql -f copia/schema.sql -f copia/data.sql`.
-2. **Copia en el Drive de cada dueño** (`/api/cron/drive`), si el balneario conectó Google Drive.
-3. **Copia manual** desde la pantalla Copias de la app.
-
-Nunca guardar la contraseña de la base en el repositorio.
+Mientras tanto: Supabase → Database → Backups (plan pago) o exportar con `pg_dump` usando la cadena de
+conexión del proyecto. Nunca guardar la contraseña de la base en el repositorio.
 
 ## Pruebas locales
 
