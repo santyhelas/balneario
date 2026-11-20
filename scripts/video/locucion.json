@@ -1,11 +1,17 @@
 {
-  "texto": "POV: es dos de enero, tenés noventa carpas y un cuaderno lleno de tachones. Suena el teléfono: ¿tenés carpa del cuatro al diez? Y vos, buscando página por página. Con Mi Balneario elegís las fechas y en el mapa ves qué está libre. Cobrás la seña y el sistema te avisa quién debe, antes de que llegue. Y a la noche, la caja cierra sola. Mi Balneario. Probá la demo gratis en mibalneario punto com punto ar.",
+  "texto": "Tu temporada, en orden. Reservas por fecha, sin superponer carpas. Señas, cobros y deudas, al peso. Y la caja, que cierra sola cada noche. Mi Balneario. Probá la demo gratis en mibalneario punto com punto ar.",
   "voces": [
     {
-      "nombre": "pov-elena",
+      "nombre": "premium-elena",
       "voz": "es-AR-ElenaNeural",
-      "velocidad": "+30%",
-      "tono": "+8Hz"
+      "velocidad": "+8%",
+      "tono": "+0Hz"
+    },
+    {
+      "nombre": "premium-tomas",
+      "voz": "es-AR-TomasNeural",
+      "velocidad": "+6%",
+      "tono": "+0Hz"
     }
   ]
 }
