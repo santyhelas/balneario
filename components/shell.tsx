@@ -66,7 +66,9 @@ const sec = (h: string) => SECTIONS.find((n) => n.href === h)!;
  */
 export const NAV_GROUPS: { href: string; label: string; tabs: { href: string; label: string }[] }[] = [
   { href: "/", label: "Panel", tabs: [] },
-  { href: "/mapa", label: "Mapa", tabs: [{ href: "/mapa", label: "Mapa" }, { href: "/disponibilidad", label: "Disponibilidad" }] },
+  // Disponibilidad va primero: es lo que se mira cuando alguien pregunta por teléfono si hay lugar.
+  { href: "/disponibilidad", label: "Disponibilidad", tabs: [] },
+  { href: "/mapa", label: "Mapa", tabs: [] },
   { href: "/reservas", label: "Reservas", tabs: [] },
   { href: "/clientes", label: "Clientes", tabs: [{ href: "/clientes", label: "Clientes" }, { href: "/renovacion", label: "Renovación de temporada" }] },
   { href: "/cobros", label: "Cobros y señas", tabs: [] },
@@ -82,8 +84,8 @@ export function groupOf(pathname: string) {
   return NAV_GROUPS.find((g) => g.href !== "/" && (inPath(pathname, g.href) || g.tabs.some((t) => inPath(pathname, t.href)))) ?? (pathname === "/" ? NAV_GROUPS[0] : null);
 }
 const byHref = (h: string) => NAV.find((n) => n.href === h)!;
-const TABS = ["/", "/mapa", "+", "/reservas", "#mas"];
-const MORE = NAV.filter((n) => !["/", "/mapa", "/reservas"].includes(n.href));
+const TABS = ["/", "/disponibilidad", "+", "/reservas", "#mas"];
+const MORE = NAV.filter((n) => !["/", "/disponibilidad", "/reservas"].includes(n.href));
 
 const ICON_SUN = "M12 3v1M12 20v1M4.2 4.2l.7.7M19.1 19.1l.7.7M3 12h1M20 12h1M4.2 19.8l.7-.7M19.1 4.9l.7-.7M12 7a5 5 0 1 0 0 10 5 5 0 0 0 0-10z";
 const ICON_MOON = "M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z";
@@ -435,7 +437,7 @@ export function Shell({ children }: { children: ReactNode }) {
             }
             const item = byHref(t);
             const active = isActive(t);
-            const short = t === "/" ? "Panel" : t === "/mapa" ? "Mapa" : "Reservas";
+            const short = t === "/" ? "Panel" : t === "/disponibilidad" ? "Disponible" : "Reservas";
             return (
               <Link key={t} href={t} className={cx("relative flex flex-col items-center gap-0.5 py-1.5 text-[11px] font-medium", active ? "text-accent" : "text-muted")} aria-current={active ? "page" : undefined}>
                 <Icon d={item.icon} className="h-6 w-6" />
