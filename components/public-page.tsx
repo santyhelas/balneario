@@ -13,7 +13,7 @@ export function PublicPage({ children }: { children: ReactNode }) {
           Pedí tu presupuesto
         </a>
       </header>
-      <main className="mx-auto max-w-3xl px-4 pb-16">{children}</main>
+      <main className="mx-auto max-w-3xl px-4 pb-16 [&_h1]:text-balance [&_h2]:text-balance [&_p]:text-pretty">{children}</main>
       <footer className="border-t border-black/10">
         <nav aria-label="Más de Mi Balneario" className="mx-auto flex max-w-5xl flex-wrap gap-x-6 gap-y-2 px-4 py-6 text-sm text-[#4a565c]">
           <a href="/" className="hover:text-[#0b6a87]">Inicio</a>

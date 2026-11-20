@@ -291,12 +291,13 @@ export default function InicioPage() {
       }) }} />
       {/* Tema de la página (claro u oscuro): se aplica antes de pintar para que no parpadee. */}
       <script dangerouslySetInnerHTML={{ __html: TB_THEME_SCRIPT }} />
+      <a href="#contenido" className="tb-skip">Saltar al contenido</a>
       <header className="tb-header sticky top-0 z-40 bg-[#fbf7ee]/90 backdrop-blur">
         <div className="relative mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3">
           <a href="#arriba" className="flex items-center" aria-label="Mi Balneario">
             {/* Logo de día y de noche (se cambia con el botón luna/sol) */}
-            <img src="/brand/mi-balneario-logo.svg" alt="Mi Balneario" className="tb-logo-dia h-10 w-auto sm:h-12" />
-            <img src="/brand/mi-balneario-logo-blanco.svg" alt="Mi Balneario" className="tb-logo-noche h-10 w-auto sm:h-12" />
+            <img src="/brand/mi-balneario-logo.svg" alt="Mi Balneario" width={693} height={170} className="tb-logo-dia h-10 w-auto sm:h-12" />
+            <img src="/brand/mi-balneario-logo-blanco.svg" alt="Mi Balneario" width={693} height={170} className="tb-logo-noche h-10 w-auto sm:h-12" />
           </a>
           <nav className="hidden items-center gap-7 text-[15px] font-semibold md:flex">
             {NAV.map((l) => <a key={l.href} href={l.href} className="text-[var(--gris)] hover:text-[var(--atl)]">{l.label}</a>)}
@@ -310,7 +311,7 @@ export default function InicioPage() {
       </header>
       <DemoEndedNotice />
 
-      <main>
+      <main id="contenido">
         {/* Portada: el plano del balneario, que se puede tocar */}
         <section className="relative overflow-hidden">
           <div className="mx-auto grid max-w-6xl items-center gap-10 px-4 pb-14 pt-8 lg:grid-cols-[0.9fr_1.1fr] lg:pt-14">
@@ -491,7 +492,7 @@ export default function InicioPage() {
       <footer className="bg-[var(--tinta)] text-white/85">
         <div className="mx-auto grid max-w-6xl gap-10 px-4 pb-8 pt-14 sm:grid-cols-2 lg:grid-cols-[1.4fr_1fr_1fr_1fr_1fr]">
           <div>
-            <img src="/brand/mi-balneario-logo-blanco.svg" alt="Mi Balneario" className="h-10 w-auto" />
+            <img src="/brand/mi-balneario-logo-blanco.svg" alt="Mi Balneario" width={693} height={170} className="h-10 w-auto" />
             <p className="mt-4 max-w-xs text-sm leading-relaxed">
               El sistema de gestión para balnearios: carpas y sombrillas, reservas, cobros y caja diaria, en un solo lugar.
             </p>

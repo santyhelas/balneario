@@ -150,3 +150,13 @@ html.tb-anim [data-reveal].is-in { opacity: 1; transform: none; filter: none; }
 .tb .tb-logo-noche { display: none; }
 html[data-tb="oscuro"] .tb .tb-logo-dia { display: none; }
 html[data-tb="oscuro"] .tb .tb-logo-noche { display: block; }
+
+/* Títulos sin palabras sueltas en la última línea; párrafos con cortes más parejos. */
+.tb h1, .tb h2, .tb h3 { text-wrap: balance; }
+.tb p, .tb li, .tb dd { text-wrap: pretty; }
+/* Precios y cantidades alineados (mismo ancho para cada número). */
+.tb .tabular-nums, .tb table { font-variant-numeric: tabular-nums; }
+/* Link para saltar al contenido: invisible hasta que se llega con Tab. */
+.tb-skip { position: absolute; left: 1rem; top: -4rem; z-index: 60; padding: .6rem 1rem; border-radius: 999px; background: var(--atl); color: #fff; font-weight: 700; transition: top .2s var(--ease-out); }
+.tb-skip:focus-visible { top: 1rem; }
+@media (prefers-reduced-motion: reduce) { .tb-skip { transition: none; } }
