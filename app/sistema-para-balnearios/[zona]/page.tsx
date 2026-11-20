@@ -17,6 +17,8 @@ export async function generateMetadata({ params }: { params: Promise<{ zona: str
   return {
     metadataBase: new URL(SITE_URL), title, description,
     alternates: { canonical: `/sistema-para-balnearios/${z.slug}` },
+    // Sin un cliente de la zona la página es igual a las otras: se puede visitar, pero no se ofrece a Google.
+    ...(z.cliente ? {} : { robots: { index: false, follow: true } }),
     openGraph: { type: "website", locale: "es_AR", url: `/sistema-para-balnearios/${z.slug}`, siteName: "Mi Balneario", title, description, images: [{ url: "/og.png", width: 1200, height: 630 }] },
     twitter: { card: "summary_large_image", title, description, images: ["/og.png"] },
   };
@@ -71,6 +73,24 @@ export default async function ZonaPage({ params }: { params: Promise<{ zona: str
           </div>
           <p className="mt-3 text-sm text-[#5b666c]">La demo abre un balneario de prueba con datos inventados. No hace falta registrarse.</p>
         </section>
+        {z.cliente && (
+          <section aria-labelledby="cliente-zona" className="mb-12 grid items-center gap-6 rounded-3xl bg-white p-6 shadow-sm ring-1 ring-black/5 md:grid-cols-[1fr_1.1fr] md:p-8">
+            <div>
+              <p className="text-sm font-semibold uppercase tracking-widest text-[#0b6a87]">Ya lo usa un balneario {z.donde}</p>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={z.cliente.logo} alt={`${z.cliente.nombre}, ${z.nombre}`} width={240} height={80} className="mt-3 h-16 w-auto rounded-xl" />
+              <h2 id="cliente-zona" className="mt-4 text-2xl font-extrabold">{z.cliente.nombre} maneja su temporada con Mi Balneario</h2>
+              {z.cliente.texto.map((t) => <p key={t.slice(0, 20)} className="mt-3 leading-relaxed text-[#4a565c]">{t}</p>)}
+            </div>
+            {z.cliente.plano && (
+              <figure>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={z.cliente.plano} alt={`Plano de ${z.cliente.nombre} en Mi Balneario: parador, pasillos, carpas y sombrillas hasta el mar`} width={1200} height={905} loading="lazy" className="w-full rounded-2xl ring-1 ring-black/5" />
+                <figcaption className="mt-2 text-sm text-[#5b666c]">El plano de {z.cliente.nombre}, así se ve en el sistema.</figcaption>
+              </figure>
+            )}
+          </section>
+        )}
         <section aria-label="Funciones" className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {FEATURES.map((f) => (
             <div key={f.t} className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-black/5">

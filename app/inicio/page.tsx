@@ -5,7 +5,7 @@ import type { CSSProperties, ReactNode } from "react";
 const dl = (ms: number) => ({ "--d": `${ms}ms` }) as CSSProperties;
 import "@fontsource-variable/bricolage-grotesque";
 import "@fontsource-variable/figtree";
-import { SITE_EMAIL, SITE_INSTAGRAM, SITE_INSTAGRAM_URL, SITE_URL, SITE_WHATSAPP_URL } from "@/lib/site";
+import { SITE_EMAIL, SITE_INSTAGRAM, SITE_INSTAGRAM_URL, SITE_SAME_AS, SITE_URL, SITE_WHATSAPP_URL } from "@/lib/site";
 import { Analytics } from "@vercel/analytics/next";
 import { CopyEmailButton, DemoButton, DemoEndedNotice, LandingThemeToggle, LoginLink, MobileMenu, ScrollReveal, TB_THEME_SCRIPT } from "@/components/landing";
 import { ZONAS } from "@/lib/zonas";
@@ -42,7 +42,7 @@ const JSON_LD = [{
   url: SITE_URL,
   logo: `${SITE_URL}/icon-512.png`,
   email: SITE_EMAIL,
-  sameAs: [SITE_INSTAGRAM_URL],
+  sameAs: SITE_SAME_AS,
 }, {
   "@context": "https://schema.org",
   "@type": "SoftwareApplication",
@@ -53,7 +53,7 @@ const JSON_LD = [{
   description: DESCRIPTION,
   url: SITE_URL,
   email: SITE_EMAIL,
-  sameAs: [SITE_INSTAGRAM_URL],
+  sameAs: SITE_SAME_AS,
 }];
 
 const NAV = [

@@ -2,6 +2,9 @@
 export const SITE_EMAIL = "mibalnearioarg@gmail.com";
 export const SITE_INSTAGRAM = "mibalneario";
 export const SITE_INSTAGRAM_URL = `https://www.instagram.com/${SITE_INSTAGRAM}/`;
+/** Perfiles oficiales de Mi Balneario en otros sitios: Google los usa para confirmar que la marca es una sola.
+ *  Cuando abras Facebook, LinkedIn o el perfil de empresa de Google, agregá acá su dirección. */
+export const SITE_SAME_AS: string[] = [SITE_INSTAGRAM_URL];
 /** Dirección pública de la web (para Google, el mapa del sitio y los links al compartir). */
 export const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL ?? "https://mibalneario.com.ar").replace(/\/$/, "");
 /** WhatsApp de contacto, con código de país y sin espacios (ej: 5492255123456). Se carga en Vercel como NEXT_PUBLIC_WHATSAPP. */
