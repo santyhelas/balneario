@@ -1616,6 +1616,10 @@ select t.ok((select total_amount = 540000 and due_amount = 0 from public.reserva
   'Dos precios: completando en efectivo queda en el precio de efectivo');
 select public.close_cash_session(t.uid('session'), 0, (select version from public.cash_sessions where id = t.uid('session')), null);
 
+select t.ok(not exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname in ('public', 'private') and not exists (select 1 from unnest(coalesce(p.proconfig, '{}')) c where c like 'search_path=%')),
+  'Seguridad: todas las funciones del sistema tienen la ruta de búsqueda fija');
+
 reset role;
 \o
 -- Resultado ----------------------------------------------------------
