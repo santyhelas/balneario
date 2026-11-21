@@ -1,16 +1,10 @@
 {
-  "texto": "Tu temporada, en orden. Reservas por fecha, sin superponer carpas. Señas, cobros y deudas, al peso. Y la caja, que cierra sola cada noche. Mi Balneario. Probá la demo gratis en mibalneario punto com punto ar.",
+  "texto": "En plena temporada, cada uno hace su parte. Tu encargado reserva desde el celular, y vos lo ves al instante en la compu. ¿Un cliente quiere cambiar de carpa solo por mañana? Lo cambiás, y al otro día vuelve solo a la suya. Y el comprobante se lo mandás por WhatsApp, con el mensaje ya escrito. Mi Balneario. Probá la demo gratis en mibalneario punto com punto ar.",
   "voces": [
     {
-      "nombre": "premium-elena",
+      "nombre": "equipo-elena",
       "voz": "es-AR-ElenaNeural",
       "velocidad": "+8%",
-      "tono": "+0Hz"
-    },
-    {
-      "nombre": "premium-tomas",
-      "voz": "es-AR-TomasNeural",
-      "velocidad": "+6%",
       "tono": "+0Hz"
     }
   ]

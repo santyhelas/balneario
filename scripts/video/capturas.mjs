@@ -76,6 +76,34 @@ async function run(theme) {
   await page.goto(`${DEMO}/mapa`, { waitUntil: "networkidle" });
   await page.waitForTimeout(2500);
   await shot("4-mapa");
+
+  // Extra (reel de equipo): cambio de carpa y WhatsApp desde la ficha, y la compu
+  if (theme === "dark") {
+    try {
+      await page.goto(`${DEMO}/reservas/${paula.id}`, { waitUntil: "networkidle" });
+      await page.waitForTimeout(1500);
+      await page.getByRole("button", { name: "Cambiar de carpa" }).first().click();
+      await page.waitForTimeout(1200);
+      await shot("5-cambio");
+      await page.keyboard.press("Escape");
+      await page.waitForTimeout(500);
+    } catch (e) { console.log("sin cambio de carpa", e.message); }
+    try {
+      await page.goto(`${DEMO}/reservas/${paula.id}`, { waitUntil: "networkidle" });
+      await page.waitForTimeout(1500);
+      await page.getByRole("button", { name: "Comprobante por WhatsApp" }).first().click();
+      await page.waitForTimeout(1200);
+      await shot("6-whatsapp");
+    } catch (e) { console.log("sin whatsapp", e.message); }
+    const desk = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 2, locale: "es-AR", colorScheme: theme });
+    await desk.addCookies(chunks.map(([n, v]) => ({ name: n, value: v, domain: new URL(DEMO).hostname, path: "/" })));
+    const dp = await desk.newPage();
+    for (const [ruta, f] of [["/", "7-compu-panel"], ["/mapa", "7-compu-mapa"], ["/reservas", "7-compu-reservas"]]) {
+      try { await dp.goto(`${DEMO}${ruta}`, { waitUntil: "networkidle" }); await dp.waitForTimeout(2500); await dp.screenshot({ path: `${OUT}/${theme}-${f}.png` }); console.log(theme, f); }
+      catch (e) { console.log("sin", f, e.message); }
+    }
+    await desk.close();
+  }
   await ctx.close();
 }
 await run("light");
