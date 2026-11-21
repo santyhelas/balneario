@@ -135,7 +135,7 @@ export default function GastosPage() {
         <Kpi label="Cantidad" value={String(valid.length)} />
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
         <Card title="Detalle">
           {q.loading && !q.data ? <div className="flex items-center gap-2 text-sm text-muted"><Spinner small /> Cargando…</div>
             : rows.length === 0 ? <EmptyState>No hay gastos en el período.</EmptyState> : (

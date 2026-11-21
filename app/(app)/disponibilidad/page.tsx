@@ -22,7 +22,7 @@ type Block = { start: number; len: number; item: Item };
 const WEEKDAY = ["D", "L", "M", "X", "J", "V", "S"];
 const COL = 48; // ancho de cada día en píxeles
 const LABEL_W = 96; // ancho de la columna del número de espacio
-const FREE = "bg-green-500 hover:bg-green-600"; // libre: verde intenso
+const FREE = "border border-green-600/35 bg-green-500/20 hover:bg-green-500/45 dark:border-green-400/30 dark:bg-green-400/15 dark:hover:bg-green-400/35"; // libre: verde suave (lo ocupado es lo que tiene que resaltar)
 const TAKEN = "bg-red-600 text-white"; // reservada / ocupada: rojo intenso
 
 export default function DisponibilidadPage() {
@@ -98,7 +98,7 @@ export default function DisponibilidadPage() {
       </div>
       {toClamped > to && <p className="mb-2 text-sm text-muted">Se muestra hasta un año por vez: del {formatDate(from)} al {formatDate(to)}.</p>}
       <div className="mb-3 flex flex-wrap gap-x-5 gap-y-1 text-sm">
-        <Legend cls="bg-green-500 border-green-600" label="Libre" />
+        <Legend cls="bg-green-500/20 border-green-600/50" label="Libre" />
         <Legend cls="bg-red-600 border-red-700" label="Reservada / ocupada" />
         <Legend cls="bg-violet-500/80 border-violet-500" label="Cortesía" />
         <Legend cls="bg-zinc-500/80 border-zinc-500" label="Mantenimiento" />

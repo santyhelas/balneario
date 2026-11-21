@@ -100,7 +100,7 @@ export default function ReportesPage() {
   return (
     <>
       <PageHeader
-        title="Reportes"
+        title="Informes"
         subtitle="Todo sale de los registros reales. «Contratado» es el precio de las reservas; «Cobrado» es el dinero que entró a la caja."
         actions={
           <>

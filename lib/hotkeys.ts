@@ -9,7 +9,7 @@ export const HOTKEYS: HotkeyAction[] = [
   { id: "reservas", key: "F7", href: "/reservas", label: "Reservas (cambiar de carpa)" },
   { id: "gasto", key: "F8", href: "/gastos?nuevo=1", label: "Nuevo gasto" },
   { id: "caja", key: "F9", href: "/caja", label: "Caja diaria" },
-  { id: "reportes", key: "F10", href: "/reportes", label: "Reportes" },
+  { id: "reportes", key: "F10", href: "/reportes", label: "Informes" },
   { id: "cobros", key: "", href: "/cobros", label: "Cobros y deudas" },
   { id: "tarifas", key: "", href: "/tarifas", label: "Tarifario" },
 ];

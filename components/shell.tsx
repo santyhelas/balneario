@@ -31,7 +31,7 @@ export const SECTIONS: NavItem[] = [
   { href: "/cobros", label: "Cobros y señas", icon: "M12 3v18M16.5 7.5c0-1.7-2-3-4.5-3s-4.5 1.3-4.5 3S9.5 10.5 12 11s4.5 1.3 4.5 3-2 3-4.5 3-4.5-1.3-4.5-3" },
   { href: "/caja", label: "Caja diaria", icon: "M3 7h18v12H3zM3 11h18M7 15h3" },
   { href: "/gastos", label: "Gastos", icon: "M3 7l6 6 4-4 8 8M15 17h6v-6" },
-  { href: "/reportes", label: "Reportes", icon: "M4 20V10M10 20V4M16 20v-7M22 20H2" },
+  { href: "/reportes", label: "Informes", icon: "M4 20V10M10 20V4M16 20v-7M22 20H2" },
   { href: "/historial", label: "Historial", icon: "M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5M12 7v5l3 2" },
   { href: "/copias", label: "Copias de seguridad", icon: "M4 6c0-1.7 3.6-3 8-3s8 1.3 8 3-3.6 3-8 3-8-1.3-8-3zM4 6v6c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6" },
   { href: "/configuracion", label: "Configuración", icon: "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" },
@@ -74,7 +74,7 @@ export const NAV_GROUPS: { href: string; label: string; tabs: { href: string; la
   { href: "/cobros", label: "Cobros y señas", tabs: [] },
   { href: "/caja", label: "Caja", tabs: [{ href: "/caja", label: "Caja del día" }, { href: "/gastos", label: "Gastos" }] },
   { href: "/tarifas", label: "Precios", tabs: [{ href: "/tarifas", label: "Tarifario" }, { href: "/convenios", label: "Descuentos y convenios" }] },
-  { href: "/reportes", label: "Reportes", tabs: [] },
+  { href: "/reportes", label: "Informes", tabs: [] },
   { href: "/configuracion", label: "Configuración", tabs: [{ href: "/configuracion", label: "Configuración" }, { href: "/copias", label: "Copias de seguridad" }, { href: "/historial", label: "Historial" }] },
 ];
 export const NAV: NavItem[] = NAV_GROUPS.map((g) => ({ href: g.href, label: g.label, icon: sec(g.href).icon }));
@@ -374,8 +374,9 @@ export function Shell({ children }: { children: ReactNode }) {
           <Link href="/" className="flex min-w-0 flex-1 items-center gap-2">
             <BrandLogo ws={ws} className="h-8 w-8 rounded-lg" />
             <div className="min-w-0 leading-tight">
-              <div className="truncate text-sm font-bold uppercase">{ws.name}</div>
-              <div className="truncate text-[11px] text-muted">{status.summary ? longDate(status.summary.fecha, ws.timezone) : ""}</div>
+              {/* En el celular: nombre más compacto y fecha corta («vie 20/11») para que entre el nombre entero. */}
+              <div className="truncate text-[13px] font-bold uppercase tracking-tight">{ws.name}</div>
+              <div className="truncate text-[11px] capitalize text-muted">{status.summary ? new Date(`${status.summary.fecha}T12:00:00`).toLocaleDateString("es-AR", { weekday: "short", day: "numeric", month: "numeric" }) : ""}</div>
             </div>
           </Link>
           <div className="flex items-center">

@@ -83,11 +83,20 @@ export default function ReservaPage() {
             {confirmed && !r.is_courtesy && due > 0 && <Button onClick={() => setModal("pago")}>Registrar pago</Button>}
             {confirmed && r.end_date >= today && <Button variant="secondary" onClick={() => setModal("reubicar")}>Cambiar de carpa</Button>}
             <Link href={`/reservas/${r.id}/recibo`}><Button variant="secondary">Comprobante</Button></Link>
-            {whatsappLink(r.customers.phone, waText) && <WhatsAppSend phone={r.customers.phone} text={waText} label={due > 0 && confirmed && !r.is_courtesy ? "Recordar deuda por WhatsApp" : "WhatsApp"} className="py-2" />}
+            {whatsappLink(r.customers.phone, waText) && (
+              // Los mensajes de WhatsApp juntos en un solo botón que despliega las opciones.
+              <details className="group relative">
+                <summary className="flex cursor-pointer list-none items-center gap-1.5 rounded-lg border border-green-600/40 bg-green-50 px-3 py-2 text-sm font-semibold text-green-800 hover:bg-green-100 dark:bg-green-900/30 dark:text-green-200 [&::-webkit-details-marker]:hidden">
+                  WhatsApp <span aria-hidden className="transition-transform group-open:rotate-180">▾</span>
+                </summary>
+                <div className="absolute right-0 z-20 mt-1 flex min-w-[15rem] flex-col gap-1 rounded-xl border border-line bg-surface p-2 shadow-lg max-sm:left-0 max-sm:right-auto">
+                  <WhatsAppSend phone={r.customers.phone} text={waText} label={due > 0 && confirmed && !r.is_courtesy ? "Recordar deuda" : "Mensaje"} className="w-full py-2 text-left" />
+                  {confirmed && whatsappLink(r.customers.phone, welcomeText) && <WhatsAppSend phone={r.customers.phone} text={welcomeText} label="Bienvenida" title="Mandar la bienvenida con las reglas del balneario" className="w-full py-2 text-left" />}
+                  {whatsappLink(r.customers.phone, receiptText) && <WhatsAppSend phone={r.customers.phone} text={receiptText} label="Comprobante" title="Mandar el comprobante con el detalle de pagos" className="w-full py-2 text-left" />}
+                </div>
+              </details>
+            )}
             {mail && r.customers.email && <MailButton email={r.customers.email} subject={mail.subject} body={mail.body} className="py-2" />}
-            {confirmed && whatsappLink(r.customers.phone, welcomeText) && <WhatsAppSend phone={r.customers.phone} text={welcomeText} label="Bienvenida por WhatsApp" title="Mandar la bienvenida con las reglas del balneario" className="py-2" />}
-            {whatsappLink(r.customers.phone, receiptText) && <WhatsAppSend phone={r.customers.phone} text={receiptText} label="Comprobante por WhatsApp" title="Mandar el comprobante con el detalle de pagos" className="py-2" />}
-            {confirmed && <Button variant="danger" onClick={() => setModal("cancelar")}>Cancelar reserva</Button>}
           </>
         }
       />
@@ -236,6 +245,13 @@ export default function ReservaPage() {
           )}
         </Card>
       </div>
+
+      {/* Cancelar va abajo y discreto, para que no se toque sin querer (pide confirmación igual). */}
+      {confirmed && (
+        <div className="mt-6 flex justify-end">
+          <Button variant="ghost" className="text-danger hover:bg-danger-soft" onClick={() => setModal("cancelar")}>Cancelar reserva</Button>
+        </div>
+      )}
 
       <PaymentModal open={modal === "pago"} full={q.data} onClose={() => setModal(null)} onDone={done} />
       <RefundModal open={modal === "devolucion"} full={q.data} onClose={() => setModal(null)} onDone={done} />

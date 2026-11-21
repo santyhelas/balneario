@@ -81,7 +81,7 @@ export default function ReservasPage() {
 
       <Card>
         <div className="mb-3 flex flex-wrap items-center gap-2">
-          <div className="-mx-1 flex w-full gap-1 overflow-x-auto px-1 pb-1 md:w-auto md:flex-wrap md:overflow-visible">
+          <div className="flex w-full flex-wrap gap-1 pb-1 md:w-auto">
             {FILTERS.map(([f, l]) => (
               <button key={f} onClick={() => setFilter(f)} className={cx("shrink-0 rounded-lg px-3 py-2 text-sm md:py-1.5", filter === f ? "bg-accent text-accent-fg" : "bg-surface-2 hover:opacity-80")}>{l}</button>
             ))}

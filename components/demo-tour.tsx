@@ -35,7 +35,7 @@ const DEMO_STEPS: Step[] = [
   { path: "/cobros", sel: "cobros", title: "Cobros y deudas", text: "Quién debe y cuánto, primero los que se van antes. Cobrás y le mandás el recordatorio por WhatsApp." },
   { path: "/cobros", sel: "nav-/caja", menu: "/caja", title: "20:00 · Cierre del día", text: "Termina el día: vamos a la caja." },
   { path: "/caja", sel: "caja", title: "Cerrar la caja", text: "Contás la plata y el sistema te dice si sobra o falta. Tarjeta y transferencia van aparte." },
-  { path: "/", sel: "demo", title: "¡Listo! Ahora probalo vos", text: "Hacé reservas, cobrá, mové carpas, cerrá la caja. En el menú también tenés Disponibilidad, Clientes y Reportes, donde comparás esta temporada con la anterior. Todo se borra al salir de la demo." },
+  { path: "/", sel: "demo", title: "¡Listo! Ahora probalo vos", text: "Hacé reservas, cobrá, mové carpas, cerrá la caja. En el menú también tenés Disponibilidad, Clientes y Informes, donde comparás esta temporada con la anterior. Todo se borra al salir de la demo." },
 ];
 
 /** Guía de bienvenida: lo que hay que dejar listo antes de la primera reserva. */
@@ -65,7 +65,7 @@ export const NEWS_STEPS: Step[] = [
   { path: "/cobros", sel: "cobros", title: "Recordatorio por mail", text: "A los que deben y tienen mail cargado les podés mandar el recordatorio por correo con «Enviar mail», además de WhatsApp. Se abre tu correo con el mensaje ya escrito." },
   { path: "/clientes", sel: "clientes", title: "Contactar clientes", text: "Cada cliente tiene botones para WhatsApp, llamar o mandarle un correo, si tiene el mail cargado." },
   { path: "/gastos", sel: "gastos-excel", title: "Gastos en Excel", text: "Los gastos se ven como una planilla con el total abajo, y con «Descargar Excel» bajás el detalle y el total por categoría." },
-  { path: "/reportes", sel: "temporadas", title: "Comparar temporadas", text: "Al final de Reportes elegís dos temporadas y ves mes por mes ocupación, lo contratado, lo cobrado, los gastos y las reservas. Al imprimir, los reportes salen en blanco y negro, sin recuadros y con tu logo, nombre, fecha y hora arriba." },
+  { path: "/reportes", sel: "temporadas", title: "Comparar temporadas", text: "Al final de Informes elegís dos temporadas y ves mes por mes ocupación, lo contratado, lo cobrado, los gastos y las reservas. Al imprimir, los reportes salen en blanco y negro, sin recuadros y con tu logo, nombre, fecha y hora arriba." },
   { path: "/", sel: "nueva-reserva", title: "Números de reserva propios", text: "Las reservas de tu balneario se numeran desde el 1, sin saltos. Las que ya tenías se renumeraron en el orden en que se cargaron." },
   { path: "/", sel: null, title: "¡Eso es todo!", text: "Si algo no te queda claro o se te ocurre una mejora, escribinos. Para verlas otra vez, tocá «Novedades» en la barra de arriba." },
 ];

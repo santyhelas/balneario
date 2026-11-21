@@ -120,16 +120,19 @@ export function FirstSteps({ onOpenCash }: { onOpenCash: () => void }) {
                 s.done ? "bg-ok text-white" : isNext ? "bg-accent text-accent-fg" : "bg-surface-2 text-muted")}>
                 {s.done ? "✓" : i + 1}
               </span>
-              <div className="min-w-0 flex-1">
+              <div className="min-w-[12rem] flex-1">
                 <div className={cx("font-semibold", s.done && "line-through decoration-1")}>
                   {s.title}{s.optional && <span className="ml-1 text-xs font-normal text-muted">(opcional)</span>}
                 </div>
                 {!s.done && <p className="text-sm text-muted">{s.text}</p>}
               </div>
+              {/* En el celular el botón baja debajo del texto en vez de apretarlo en una columna finita. */}
               {!s.done && (
-                s.key === "caja"
-                  ? <Button variant={isNext ? "primary" : "secondary"} onClick={onOpenCash}>{s.action}</Button>
-                  : <Link href={s.href}><Button variant={isNext ? "primary" : "secondary"}>{s.action}</Button></Link>
+                <div className="max-sm:pl-11">
+                  {s.key === "caja"
+                    ? <Button variant={isNext ? "primary" : "secondary"} onClick={onOpenCash}>{s.action}</Button>
+                    : <Link href={s.href}><Button variant={isNext ? "primary" : "secondary"}>{s.action}</Button></Link>}
+                </div>
               )}
             </li>
           );

@@ -672,7 +672,7 @@ export default function NuevaReservaPage() {
               </div>
             ) : (
               <div className="relative">
-                <div className="flex gap-2">
+                <div className="flex flex-col gap-2 sm:flex-row">
                   <Input
                     placeholder="Buscar por nombre, apellido o teléfono"
                     value={custQuery}
