@@ -22,7 +22,7 @@ const TONE: Record<Tone, { box: string; label: string; value: string }> = {
   ok: { box: "border-ok/40", label: "text-ok", value: "text-ok" },
   danger: { box: "border-danger/40", label: "text-danger", value: "text-danger" },
   warn: { box: "border-warn/40", label: "text-warn", value: "text-warn" },
-  orange: { box: "border-orange-500/40", label: "text-orange-500", value: "text-orange-500" },
+  orange: { box: "border-orange-500/40", label: "text-orange-700 dark:text-orange-400", value: "text-orange-700 dark:text-orange-400" },
   neutral: { box: "border-line", label: "text-muted", value: "text-fg" },
 };
 const icon = (href: string) => SECTIONS.find((n) => n.href === href)!.icon;

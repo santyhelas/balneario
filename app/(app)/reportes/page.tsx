@@ -204,7 +204,7 @@ export default function ReportesPage() {
 
           <Card title="Cierres de caja" actions={<CsvBtn onClick={() => downloadCsv(`cierres_${from}_${to}.csv`, ["Fecha", "Apertura", "Esperado", "Contado", "Diferencia", "Notas"], r.cierres.map((c) => [formatDate(c.fecha), n(c.apertura), n(c.esperado), n(c.contado), n(c.diferencia), c.notas ?? ""]))} />}>
             {r.cierres.length === 0 ? <EmptyState>Sin cierres en el período.</EmptyState> : (
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Tabla de cierres de caja (se desplaza hacia los costados)">
                 <table className="w-full text-sm">
                   <thead className="text-left text-xs text-muted"><tr><th className="py-1 pr-3">Fecha</th><th className="pr-3 text-right">Apertura</th><th className="pr-3 text-right">Esperado</th><th className="pr-3 text-right">Contado</th><th className="text-right">Diferencia</th></tr></thead>
                   <tbody className="divide-y divide-line tabular">

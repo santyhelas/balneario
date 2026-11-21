@@ -127,7 +127,7 @@ export function WeekAhead() {
   );
 }
 
-const TONE = { accent: "text-accent", orange: "text-orange-600 dark:text-orange-300", violet: "text-violet-600 dark:text-violet-300" } as const;
+const TONE = { accent: "text-accent", orange: "text-orange-700 dark:text-orange-300", violet: "text-violet-600 dark:text-violet-300" } as const;
 
 function TomorrowList({ title, tone, items, empty, today, showDebtWa = false }: { title: string; tone: keyof typeof TONE; items: Item[]; empty: string; today: string; showDebtWa?: boolean }) {
   const { ws } = useWorkspace();

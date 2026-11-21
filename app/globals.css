@@ -19,7 +19,7 @@
   --danger-soft: #fde8e6;
   --warn: #a15c07;
   --warn-soft: #fdf1dc;
-  --ok: #157f3c;
+  --ok: #126c33; /* contraste ≥ 4,5 sobre fondos claros (WCAG AA) */
   --ok-soft: #e1f4e7;
 
   /* Mapa */

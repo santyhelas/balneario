@@ -803,7 +803,7 @@ export default function NuevaReservaPage() {
                           "rounded-md border py-1.5 text-sm font-semibold tabular",
                           tone === "free" && "border-ok/50 bg-ok-soft text-ok",
                           tone === "partial" && "border-warn/50 bg-warn-soft text-warn",
-                          tone === "none" && "border-line bg-surface-2 text-muted opacity-60",
+                          tone === "none" && "border-line bg-surface-2 text-muted",
                           spaceId === s.space_id && "ring-2 ring-accent",
                           groupIds.includes(s.space_id) && "ring-2 ring-accent ring-offset-1 ring-offset-surface",
                         )}

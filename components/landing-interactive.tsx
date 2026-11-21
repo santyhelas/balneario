@@ -86,7 +86,7 @@ export function HeroBeach() {
         <span className="text-xs text-[var(--gris)]">{counts.libre ?? 0} libres · {(counts.ocupada ?? 0) + (counts.cortesia ?? 0)} ocupadas</span>
       </div>
 
-      <svg viewBox="0 0 490 310" className="block h-auto w-full select-none" role="img" aria-label="Plano de ejemplo de un balneario con carpas libres y ocupadas">
+      <svg viewBox="0 0 490 310" className="block h-auto w-full select-none" role="group" aria-label="Plano de ejemplo de un balneario con carpas libres y ocupadas">
         <defs>
           <pattern id="tb-arena" width="12" height="12" patternUnits="userSpaceOnUse">
             <rect width="12" height="12" fill="var(--sand)" />

@@ -123,7 +123,7 @@ export function SeasonCompare() {
       ) : (
         <>
           {/* Resumen */}
-          <div className="mb-4 overflow-x-auto">
+          <div className="mb-4 overflow-x-auto" tabIndex={0} role="region" aria-label="Comparación de temporadas (se desplaza hacia los costados)">
             <table className="w-full min-w-[420px] text-sm">
               <thead>
                 <tr className="text-left text-xs text-muted">

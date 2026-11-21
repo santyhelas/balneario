@@ -541,7 +541,7 @@ export function BeachMap({
         onPointerUp={onPointerUp}
         onPointerCancel={(e) => { pointers.current.delete(e.pointerId); if (pointers.current.size === 0) drag.current = null; }}
         onContextMenu={(e) => { if (editMode || zoomed) e.preventDefault(); }}
-        role="img"
+        role="group"
         aria-label="Plano del balneario"
       >
         <defs>
