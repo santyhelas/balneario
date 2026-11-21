@@ -197,7 +197,7 @@ export default function CajaPage() {
             {data!.movements.length === 0 ? (
               <EmptyState>Todavía no hay movimientos en esta caja.</EmptyState>
             ) : (
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Movimientos de la caja (se desplaza hacia los costados)">
                 <table className="w-full text-sm">
                   <thead className="text-left text-xs text-muted">
                     <tr><th className="py-2 pr-3">Hora</th><th className="pr-3">Tipo</th><th className="pr-3">Concepto</th><th className="pr-3">Medio</th><th className="pr-3 text-right">Importe</th><th /></tr>
@@ -236,7 +236,7 @@ export default function CajaPage() {
 
       {data && data.sessions.filter((s) => s.closed_at).length > 0 && (
         <Card title="Cierres anteriores" className="mt-4">
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Movimientos de la caja (se desplaza hacia los costados)">
             <table className="w-full text-sm">
               <thead className="text-left text-xs text-muted">
                 <tr><th className="py-2 pr-3">Fecha</th><th className="pr-3 text-right">Apertura</th><th className="pr-3 text-right">Esperado</th><th className="pr-3 text-right">Contado</th><th className="pr-3 text-right">Diferencia</th><th /></tr>

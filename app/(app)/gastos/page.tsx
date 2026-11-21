@@ -139,7 +139,7 @@ export default function GastosPage() {
         <Card title="Detalle">
           {q.loading && !q.data ? <div className="flex items-center gap-2 text-sm text-muted"><Spinner small /> Cargando…</div>
             : rows.length === 0 ? <EmptyState>No hay gastos en el período.</EmptyState> : (
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Detalle de gastos (se desplaza hacia los costados)">
               <table className="w-full min-w-[640px] border-collapse text-sm">
                 <thead>
                   <tr className="border-b border-line bg-surface-2 text-left text-xs text-muted">
