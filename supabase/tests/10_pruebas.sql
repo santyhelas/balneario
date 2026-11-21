@@ -1614,6 +1614,43 @@ select t.ok(private.due_for_method(t.uid('dp3'), 'efectivo') = 440000 and privat
 select public.register_payment(t.uid('ws'), t.uid('dp3'), 440000, 'efectivo', gen_random_uuid(), null);
 select t.ok((select total_amount = 540000 and due_amount = 0 from public.reservation_balances where reservation_id = t.uid('dp3')) and public.cash_due(t.uid('dp3')) is null,
   'Dos precios: completando en efectivo queda en el precio de efectivo');
+-- 50. Arreglos de la prueba a fondo (0071) ------------------------------
+-- Grupo g1: se cancela la carpa con más plata pagada; lo pagado tiene que pasar a las otras.
+select t.set('g1a', (select r.id::text from public.reservations r where r.group_id = t.uid('g1') and r.status = 'confirmada'
+                     order by (select coalesce(sum(signed_amount), 0) from public.payments p where p.reservation_id = r.id) desc limit 1));
+select t.set('g1pagado', (select coalesce(sum(signed_amount), 0)::text from public.payments where reservation_id = t.uid('g1a')));
+select t.set('g1resto', (select sum(b.due_amount)::text from public.reservation_balances b join public.reservations r on r.id = b.reservation_id
+                         where r.group_id = t.uid('g1') and r.status = 'confirmada' and r.id <> t.uid('g1a')));
+select public.cancel_reservation(t.uid('g1a'), (select version from public.reservations where id = t.uid('g1a')), 'Se va uno del grupo');
+select t.ok((select coalesce(sum(signed_amount), 0) = greatest(t.get('g1pagado')::numeric - t.get('g1resto')::numeric, 0) from public.payments where reservation_id = t.uid('g1a')),
+  'Grupo: al cancelar una carpa con pagos, su plata pasa a las otras del grupo');
+select t.ok((select sum(b.due_amount) = greatest(t.get('g1resto')::numeric - t.get('g1pagado')::numeric, 0) from public.reservation_balances b join public.reservations r on r.id = b.reservation_id
+             where r.group_id = t.uid('g1') and r.status = 'confirmada'),
+  'Grupo: las carpas que quedan deben solo lo que falta');
+select t.ok((select count(*) >= 2 and sum(signed_amount) = 0 from public.payments p join public.reservations r on r.id = p.reservation_id
+             where r.group_id = t.uid('g1') and p.method = 'traslado'),
+  'Grupo: el pase queda registrado como traslado (sale de una y entra en la otra, suma cero)');
+-- Grupo nuevo para el cobro de todo el grupo.
+select t.set('g2', (public.create_reservation_group(t.uid('ws'), gen_random_uuid(), t.uid('juan'), '2027-12-01', '2027-12-02',
+  jsonb_build_array(jsonb_build_object('space_id', t.space('63'), 'start_date', '2027-12-01', 'end_date', '2027-12-02')),
+  array[t.space('64'), t.space('65')], '{"manual_base": 20000}'::jsonb, null, null, '[]'::jsonb, null) ->> 'group_id'));
+select t.ok((public.group_due(t.uid('g2'), 'transferencia') ->> 'due')::numeric = 60000, 'Grupo: saldo de todo el grupo (3 × 20.000)');
+select t.throws(format($$select public.register_group_payment(%L, %L, 60001, 'transferencia', gen_random_uuid())$$, t.get('ws'), t.get('g2')),
+  'supera el saldo del grupo', 'Grupo: no se cobra más que el saldo del grupo');
+select t.set('kgp', gen_random_uuid()::text);
+select public.register_group_payment(t.uid('ws'), t.uid('g2'), 60000, 'transferencia', t.uid('kgp'));
+select t.ok((public.register_group_payment(t.uid('ws'), t.uid('g2'), 60000, 'transferencia', t.uid('kgp')) ->> 'repetido')::boolean
+        and (public.group_due(t.uid('g2'), 'transferencia') ->> 'due')::numeric = 0
+        and (select count(*) = 3 from public.payments p join public.reservations r on r.id = p.reservation_id where r.group_id = t.uid('g2')),
+  'Grupo: un solo cobro salda las 3 carpas y reintentarlo no lo duplica');
+select t.set('cz', (public.create_reservation_v3(t.uid('ws'), gen_random_uuid(), t.uid('juan'), '2031-03-10', '2031-03-11',
+  jsonb_build_array(jsonb_build_object('space_id', t.space('66'), 'start_date', '2031-03-10', 'end_date', '2031-03-11')),
+  '{"courtesy": true, "courtesy_beneficiary": "Tía Marta"}'::jsonb, null, null, '[]'::jsonb) ->> 'reservation_id'));
+select t.ok((select is_courtesy and total_amount = 0 from public.reservations where id = t.uid('cz')), 'Cortesía: se carga aunque no haya tarifas para esas fechas');
+select t.throws(format($$select public.create_reservation_v3(%L, gen_random_uuid(), %L, '2031-03-20', '2031-03-20',
+  jsonb_build_array(jsonb_build_object('space_id', %L, 'start_date', '2031-03-20', 'end_date', '2031-03-20')),
+  '{"manual_base": 0}'::jsonb, null, null, '[]'::jsonb)$$, t.get('ws'), t.get('juan'), t.space('66')), 'marcala como cortesía',
+  'Reserva de $0: si no es cortesía no se guarda');
 select public.close_cash_session(t.uid('session'), 0, (select version from public.cash_sessions where id = t.uid('session')), null);
 
 reset role;

@@ -8,7 +8,7 @@ import { type Full } from "@/lib/reservations";
 import { daysOf, indexGrid, isFreeFor, type GridRow } from "@/lib/stay";
 import { useWorkspace } from "@/components/workspace";
 import { useAction } from "@/components/payments";
-import { Alert, Button, Field, Input, Modal, Select, Spinner, TextField, cx } from "@/components/ui";
+import { Alert, Button, Field, Input, Modal, Select, Spinner, TextField, cx, DateInput } from "@/components/ui";
 import { kindName, type SpaceKind } from "@/lib/space-kinds";
 
 /** Cambiar de carpa a una reserva: por un solo día o por el resto de la estadía. La usa la reserva y el mapa. */
@@ -91,7 +91,7 @@ export function RelocateModal({ open, full, today, onClose, onDone, initialDay, 
         </div>
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label={mode === "dia" ? "Día del cambio" : "Desde"}>
-            <Input type="date" value={day} min={r.start_date} max={r.end_date} onChange={(e) => e.target.value && setDay(e.target.value)} />
+            <DateInput value={day} min={r.start_date} max={r.end_date} onChange={setDay} label={mode === "dia" ? "Día del cambio" : "Desde"} />
           </Field>
           <Field label="Tipo de destino">
             <Select value={kind} onChange={(e) => setKind(e.target.value as SpaceKind)}><option value="carpa">Carpa</option><option value="sombrilla">Sombrilla</option><option value="cochera">Cochera</option></Select>

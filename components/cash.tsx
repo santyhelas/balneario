@@ -6,7 +6,7 @@ import { formatDate, formatMoney, parseMoney } from "@/lib/format";
 import { newKey } from "@/lib/data";
 import { PAYMENT_METHODS } from "@/lib/methods";
 import { useWorkspace } from "@/components/workspace";
-import { Alert, Button, Field, Input, Modal, Select, Textarea, TextField } from "@/components/ui";
+import { Alert, Button, Field, Input, Modal, Select, Textarea, TextField, DateInput } from "@/components/ui";
 
 export type CashSummary = {
   session_id: string;
@@ -199,7 +199,7 @@ export function ExpenseModal({ open, categories, today, onClose, onDone }: { ope
         </Field>
         <MethodSelect value={method} onChange={setMethod} />
         <Field label="Fecha del gasto">
-          <Input type="date" value={spentOn} max={today} onChange={(e) => setSpentOn(e.target.value)} required />
+          <DateInput value={spentOn} max={today} onChange={setSpentOn} label="Fecha del gasto" />
         </Field>
         <TextField label="Proveedor (opcional)" value={supplier} onChange={(e) => setSupplier(e.target.value)} maxLength={120} />
         <Field label="Observaciones (opcional)"><Textarea value={notes} onChange={(e) => setNotes(e.target.value)} maxLength={1000} /></Field>

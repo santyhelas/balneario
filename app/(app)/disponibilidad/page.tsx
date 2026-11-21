@@ -7,7 +7,7 @@ import { addDays, formatDate, todayISO } from "@/lib/format";
 import { daysOf } from "@/lib/stay";
 import { useWorkspace } from "@/components/workspace";
 import { PageHeader, SyncNotice } from "@/components/shell";
-import { Button, Field, Input, Spinner, cx } from "@/components/ui";
+import { Button, Field, Input, Spinner, cx, DateInput } from "@/components/ui";
 import { KindName, kindName, SPACE_KINDS, type SpaceKind } from "@/lib/space-kinds";
 
 type Space = { id: string; code: string; kind: SpaceKind; active: boolean };
@@ -79,8 +79,8 @@ export default function DisponibilidadPage() {
     <>
       <PageHeader title="Disponibilidad" subtitle="Planificación por espacio y por día. Tocá un día libre para reservar desde esa fecha." actions={<Link href="/reservas/nueva"><Button>Nueva reserva</Button></Link>} />
       <div data-tour="disp-filtros" className="mb-3 flex flex-wrap items-end gap-2">
-        <Field label="Desde"><Input type="date" value={from} onChange={(e) => e.target.value && setFrom(e.target.value)} className="w-auto" /></Field>
-        <Field label="Hasta"><Input type="date" value={to} min={from} onChange={(e) => e.target.value && setToInput(e.target.value)} className="w-auto" /></Field>
+        <Field label="Desde"><DateInput value={from} onChange={setFrom} label="Desde" /></Field>
+        <Field label="Hasta"><DateInput value={to} min={from} onChange={setToInput} label="Hasta" /></Field>
         <span className="pb-2 text-sm text-muted">{span} {span === 1 ? "día" : "días"}</span>
         <Field label="Mostrar">
           <div className="flex overflow-hidden rounded-lg border border-line" role="group" aria-label="Tipo de espacio">

@@ -9,7 +9,7 @@ import { METHOD_LABEL } from "@/lib/methods";
 import { useWorkspace } from "@/components/workspace";
 import { useStatus } from "@/components/status";
 import { PageHeader, SyncNotice } from "@/components/shell";
-import { Alert, Button, Card, ConfirmDialog, EmptyState, Field, Input, Select, Spinner, TextField, cx } from "@/components/ui";
+import { Alert, Button, Card, ConfirmDialog, EmptyState, Field, Input, Select, Spinner, TextField, cx, DateInput } from "@/components/ui";
 import { ExpenseModal, type ExpenseCategory } from "@/components/cash";
 import { downloadXlsx } from "@/lib/xlsx";
 
@@ -114,8 +114,8 @@ export default function GastosPage() {
       {!cajaAbierta && status.summary && <Alert tone="warn" className="mb-3">Para registrar o anular gastos la caja del día tiene que estar abierta. <Link href="/caja" className="underline">Ir a caja</Link></Alert>}
 
       <div className="mb-4 flex flex-wrap items-end gap-2">
-        <Field label="Desde"><Input type="date" value={from} max={to} onChange={(e) => e.target.value && setFrom(e.target.value)} className="w-auto" /></Field>
-        <Field label="Hasta"><Input type="date" value={to} min={from} onChange={(e) => e.target.value && setTo(e.target.value)} className="w-auto" /></Field>
+        <Field label="Desde"><DateInput value={from} max={to} onChange={setFrom} label="Desde" /></Field>
+        <Field label="Hasta"><DateInput value={to} min={from} onChange={setTo} label="Hasta" /></Field>
         <Field label="Categoría">
           <Select value={cat} onChange={(e) => setCat(e.target.value)} className="w-auto">
             <option value="">Todas</option>

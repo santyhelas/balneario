@@ -9,7 +9,7 @@ import { downloadCsv } from "@/lib/csv";
 import { useWorkspace } from "@/components/workspace";
 import { SeasonCompare } from "@/components/season-compare";
 import { PageHeader, SyncNotice } from "@/components/shell";
-import { Button, Card, EmptyState, Field, Input, Spinner, cx } from "@/components/ui";
+import { Button, Card, EmptyState, Field, Input, Spinner, cx, DateInput } from "@/components/ui";
 
 type Report = {
   ocupacion: { dia: string; carpas: number; sombrillas: number; cortesias: number }[];
@@ -112,8 +112,8 @@ export default function ReportesPage() {
         }
       />
       <div className="mb-4 flex flex-wrap items-end gap-2 print:hidden">
-        <Field label="Desde"><Input type="date" value={from} onChange={(e) => e.target.value && setFrom(e.target.value)} className="w-auto" /></Field>
-        <Field label="Hasta"><Input type="date" value={to} onChange={(e) => e.target.value && setTo(e.target.value)} className="w-auto" /></Field>
+        <Field label="Desde"><DateInput value={from} onChange={setFrom} label="Desde" /></Field>
+        <Field label="Hasta"><DateInput value={to} onChange={setTo} label="Hasta" /></Field>
         {presets.map(([l, f]) => <Button key={l} variant="secondary" onClick={f}>{l}</Button>)}
       </div>
       <p className="mb-3 hidden text-sm print:block">{ws.name} · Período {formatDate(from)} al {formatDate(to)}</p>

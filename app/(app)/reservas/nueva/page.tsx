@@ -14,7 +14,7 @@ import { useWorkspace } from "@/components/workspace";
 import { useStatus } from "@/components/status";
 import { OpenCashModal } from "@/components/cash";
 import { PageHeader } from "@/components/shell";
-import { Alert, Badge, Button, Card, Field, Input, Modal, Select, Spinner, Textarea, TextField, cx } from "@/components/ui";
+import { Alert, Badge, Button, Card, Field, Input, Modal, Select, Spinner, Textarea, TextField, cx, DateInput } from "@/components/ui";
 import { CustomerForm, searchCustomers, type Customer } from "@/components/customers";
 import { whatsappLink } from "@/lib/reservations";
 import { quoteMessage, welcomeMessage } from "@/lib/whatsapp-messages";
@@ -82,6 +82,7 @@ export default function NuevaReservaPage() {
   // Por defecto se eligen entrada y salida; las duraciones (1, 5, 7, 15, 30 días) son un atajo que completa la salida.
   const [start, setStartRaw] = useState(today);
   const [end, setEnd] = useState(addDays(today, 6));
+  const [pastOk, setPastOk] = useState(false);
   const nDays = end >= start ? inclusiveDays(start, end) : 0;
   /** Al mover la entrada se conserva la cantidad de días elegida. */
   function setStart(v: string) {
@@ -525,7 +526,9 @@ export default function NuevaReservaPage() {
     if (!d || d <= 0) problems.push("Ingresá el importe de la seña.");
     else if (total !== null && d > total) problems.push("La seña no puede superar el total.");
   }
-  if (!courtesy && payMode === "pagada" && total === 0) problems.push("El total es $0: elegí «Cobrar después» o marcá cortesía.");
+  if (!courtesy && total === 0) problems.push("El total da $0: si es un regalo, marcala como cortesía (familiar); si no, revisá el precio.");
+  // Fecha pasada: se permite (para pasar el cuaderno), pero hay que confirmarlo para que un error de año no pase de largo.
+  if (start < today && !pastOk) problems.push(`La entrada (${formatDate(start)}) ya pasó: confirmalo abajo si es correcto.`);
   const manualDiscountValue = manualType === "monto" ? parseMoney(manualValue) : Number(manualValue.replace(",", "."));
   if (isAdmin && !courtesy && manualDiscountValue && manualDiscountValue > 0 && manualReason.trim().length < 3) problems.push("El descuento manual necesita un motivo.");
   const canSave = problems.length === 0 && !!quote?.ok && !quoteLoading && !!segments && (!isGroup || !!groupQuote) && (!parking || !!parkingQuote?.ok);
@@ -705,10 +708,10 @@ export default function NuevaReservaPage() {
           <Card title="2. Fechas">
             <div className="flex flex-wrap items-end gap-3">
               <Field label="Entrada">
-                <Input type="date" value={start} onChange={(e) => e.target.value && setStart(e.target.value)} className="w-auto" />
+                <DateInput value={start} onChange={setStart} label="Entrada" />
               </Field>
               <Field label="Salida (último día)">
-                <Input type="date" value={end} min={start} onChange={(e) => e.target.value && setEnd(e.target.value)} className="w-auto" />
+                <DateInput value={end} min={start} onChange={setEnd} label="Salida (último día)" />
               </Field>
             </div>
             <div className="mt-3">
@@ -1193,6 +1196,12 @@ export default function NuevaReservaPage() {
             </Card>
           )}
 
+          {start < today && (
+            <label className="flex items-start gap-2 rounded-lg border border-warn/40 bg-warn-soft p-3 text-sm">
+              <input type="checkbox" className="mt-0.5" checked={pastOk} onChange={(e) => setPastOk(e.target.checked)} />
+              <span>La entrada es el <strong>{formatDate(start)}</strong>, una fecha que ya pasó. Sí, es correcto (por ejemplo, para pasar reservas del cuaderno).</span>
+            </label>
+          )}
           {problems.length > 0 && (
             <ul className="list-disc pl-5 text-sm text-muted">{problems.map((p) => <li key={p}>{p}</li>)}</ul>
           )}

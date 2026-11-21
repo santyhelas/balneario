@@ -11,7 +11,7 @@ import { MONTHS } from "@/lib/methods";
 import { useWorkspace } from "@/components/workspace";
 import { featuresOf } from "@/lib/features";
 import { PageHeader, SyncNotice } from "@/components/shell";
-import { Alert, Badge, Button, Card, EmptyState, Field, Input, Modal, Select, Spinner, Textarea, TextField } from "@/components/ui";
+import { Alert, Badge, Button, Card, EmptyState, Field, Input, Modal, Select, Spinner, Textarea, TextField, DateInput } from "@/components/ui";
 import { KindName, type SpaceKind } from "@/lib/space-kinds";
 
 type Rate = { id: string; space_kind: SpaceKind; year: number; month: number; half: 1 | 2; season: string; daily_price: number; version: number };
@@ -147,8 +147,8 @@ export default function TarifasPage() {
       <Card title="Historial de cambios de tarifas" className="mt-4">
         <p className="mb-3 text-xs text-muted">Cada precio que se cargó o cambió, con el valor anterior y el nuevo, quién lo hizo y cuándo. Las reservas ya hechas no cambian aunque cambie la tarifa.</p>
         <div className="mb-3 flex flex-wrap items-end gap-2">
-          <Field label="Desde"><Input type="date" value={histFrom} max={today} onChange={(e) => e.target.value && setHistFrom(e.target.value)} className="w-auto" /></Field>
-          <Field label="Hasta"><Input type="date" value={histTo} min={histFrom} onChange={(e) => e.target.value && setHistTo(e.target.value)} className="w-auto" /></Field>
+          <Field label="Desde"><DateInput value={histFrom} max={today} onChange={setHistFrom} label="Desde" /></Field>
+          <Field label="Hasta"><DateInput value={histTo} min={histFrom} onChange={setHistTo} label="Hasta" /></Field>
         </div>
         <HistoryFeed from={histFrom} to={histTo} tables={["rates", "package_discounts", "package_prices"]} includePayments={false} emptyText="No hubo cambios de tarifas en esas fechas." />
       </Card>

@@ -91,6 +91,48 @@ export function Textarea(props: TextareaHTMLAttributes<HTMLTextAreaElement>) {
   return <textarea rows={3} {...props} className={cx(control, props.className)} />;
 }
 
+const MESES_CORTOS = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+const pad2 = (n: number) => String(n).padStart(2, "0");
+
+/**
+ * Fecha con día, mes y año separados (AAAA-MM-DD hacia afuera).
+ * Reemplaza al selector nativo, que a veces corregía el año solo sin que se notara.
+ * min/max (AAAA-MM-DD) acotan lo que se puede elegir.
+ */
+export function DateInput({ value, onChange, min, max, label = "Fecha", className, years }: {
+  value: string; onChange: (iso: string) => void; min?: string; max?: string; label?: string; className?: string;
+  /** Años a ofrecer (por defecto: del año anterior a 3 años adelante, más los de min/max/valor). */
+  years?: number[];
+}) {
+  const [y, m, d] = (value || "").split("-").map(Number);
+  const hoy = new Date().getFullYear();
+  const lista = new Set(years ?? [hoy - 1, hoy, hoy + 1, hoy + 2, hoy + 3]);
+  if (y) lista.add(y);
+  if (min) lista.add(Number(min.slice(0, 4)));
+  if (max) lista.add(Number(max.slice(0, 4)));
+  const anios = [...lista].filter((a) => (!min || a >= Number(min.slice(0, 4))) && (!max || a <= Number(max.slice(0, 4)))).sort((a, b) => a - b);
+  const diasMes = (yy: number, mm: number) => new Date(yy, mm, 0).getDate();
+  function emitir(yy: number, mm: number, dd: number) {
+    const iso = `${yy}-${pad2(mm)}-${pad2(Math.min(dd, diasMes(yy, mm)))}`;
+    onChange(min && iso < min ? min : max && iso > max ? max : iso);
+  }
+  const yy = y || hoy, mm = m || 1, dd = d || 1;
+  const sel = cx(control, "w-auto pr-7");
+  return (
+    <div role="group" aria-label={label} className={cx("flex flex-wrap items-center gap-1.5", className)}>
+      <select aria-label={`${label}: día`} className={sel} value={dd} onChange={(e) => emitir(yy, mm, Number(e.target.value))}>
+        {Array.from({ length: diasMes(yy, mm) }, (_, i) => i + 1).map((n) => <option key={n} value={n}>{n}</option>)}
+      </select>
+      <select aria-label={`${label}: mes`} className={sel} value={mm} onChange={(e) => emitir(yy, Number(e.target.value), dd)}>
+        {MESES_CORTOS.map((n, i) => <option key={n} value={i + 1}>{n}</option>)}
+      </select>
+      <select aria-label={`${label}: año`} className={cx(sel, "font-semibold")} value={yy} onChange={(e) => emitir(Number(e.target.value), mm, dd)}>
+        {anios.map((n) => <option key={n} value={n}>{n}</option>)}
+      </select>
+    </div>
+  );
+}
+
 /** Campo de texto con etiqueta, asociado por id. */
 export function TextField({ label, hint, error, ...rest }: InputHTMLAttributes<HTMLInputElement> & { label: string; hint?: string; error?: string | null }) {
   const id = useId();

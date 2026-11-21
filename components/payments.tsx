@@ -38,7 +38,7 @@ export function useCashDue(reservationId: string, enabled: boolean, dep: unknown
 }
 
 /** Lo mínimo que necesita la ventana de cobro: la reserva y su saldo. */
-export type PayTarget = { r: { id: string; number?: number }; balance: { due_amount: number } };
+export type PayTarget = { r: { id: string; number?: number; group_id?: string | null }; balance: { due_amount: number } };
 
 export function PaymentModal({ open, full, onClose, onDone }: { open: boolean; full: PayTarget; onClose: () => void; onDone: (t: string) => void }) {
   const { ws } = useWorkspace();
@@ -47,12 +47,24 @@ export function PaymentModal({ open, full, onClose, onDone }: { open: boolean; f
   const [method, setMethod] = useState("efectivo");
   // Precio en efectivo acordado: en efectivo el saldo es el de lista menos la diferencia (lo calcula la base).
   const cashDue = useCashDue(full.r.id, open, listDue);
-  const due = method === "efectivo" && cashDue !== null ? cashDue : listDue;
+  const ownDue = method === "efectivo" && cashDue !== null ? cashDue : listDue;
   const [received, setReceived] = useState("");
   const [note, setNote] = useState("");
   const [key, setKey] = useState(newKey);
   const [usd, setUsd] = useState<DollarValue>({ usd: null, rate: null, ars: null });
   const a = useAction();
+  // Reserva de grupo: se puede cobrar el saldo de todas las carpas del grupo en un solo cobro.
+  const [allGroup, setAllGroup] = useState(false);
+  const [groupInfo, setGroupInfo] = useState<{ due: number; reservas: number } | null>(null);
+  useEffect(() => {
+    if (!open || !full.r.group_id || method === "dolares") { setGroupInfo(null); return; }
+    let alive = true;
+    getSupabase().rpc("group_due", { p_group_id: full.r.group_id, p_method: method })
+      .then(({ data, error }) => { if (alive) setGroupInfo(!error && data ? { due: Number(data.due), reservas: Number(data.reservas) } : null); });
+    return () => { alive = false; };
+  }, [open, full.r.group_id, method, listDue]);
+  const groupMode = allGroup && groupInfo !== null && groupInfo.reservas > 1 && method !== "dolares";
+  const due = groupMode ? groupInfo.due : ownDue;
   const value = amount === "" ? due : parseMoney(amount);
   const rec = parseMoney(received);
   const change = method === "efectivo" && rec !== null && value !== null ? rec - value : null;
@@ -68,7 +80,13 @@ export function PaymentModal({ open, full, onClose, onDone }: { open: boolean; f
       );
     }
     if (!value || value <= 0) return a.setError("Ingresá un importe válido.");
-    if (value > due) return a.setError(`El saldo es ${formatMoney(due)}.`);
+    if (value > due) return a.setError(`El saldo ${groupMode ? "del grupo " : ""}es ${formatMoney(due)}.`);
+    if (groupMode) {
+      return a.run(
+        () => getSupabase().rpc("register_group_payment", { p_workspace_id: ws.id, p_group_id: full.r.group_id, p_amount: value, p_method: method, p_idempotency_key: key, p_note: note || null }),
+        () => { setKey(newKey()); setAmount(""); setReceived(""); setNote(""); setAllGroup(false); onDone(`Pago de ${formatMoney(value)} registrado y repartido entre las carpas del grupo.`); },
+      );
+    }
     a.run(
       () => getSupabase().rpc("register_payment", { p_workspace_id: ws.id, p_reservation_id: full.r.id, p_amount: value, p_method: method, p_idempotency_key: key, p_note: note || null }),
       () => { setKey(newKey()); setAmount(""); setReceived(""); setNote(""); onDone(`Pago de ${formatMoney(value)} registrado.`); },
@@ -80,6 +98,12 @@ export function PaymentModal({ open, full, onClose, onDone }: { open: boolean; f
       <form onSubmit={submit} className="flex flex-col gap-3">
         {cashDue !== null && (
           <Alert tone="info">Tiene precio en efectivo: el saldo es {formatMoney(listDue)} con tarjeta o transferencia, o <strong>{formatMoney(cashDue)} en efectivo</strong>.</Alert>
+        )}
+        {groupInfo !== null && groupInfo.reservas > 1 && (
+          <label className="flex items-start gap-2 rounded-lg border border-line bg-surface-2 p-3 text-sm">
+            <input type="checkbox" className="mt-0.5" checked={allGroup} onChange={(e) => { setAllGroup(e.target.checked); setAmount(""); }} />
+            <span>Cobrar todo el grupo ({groupInfo.reservas} reservas · saldo {formatMoney(groupInfo.due)}). Se reparte en orden entre las carpas.</span>
+          </label>
         )}
         <Field label="Medio de pago">
           <Select value={method} onChange={(e) => setMethod(e.target.value)}>{COLLECT_METHODS.filter((m) => m.value !== "dolares" || featuresOf(ws).dolares || method === "dolares").map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}</Select>

@@ -7,7 +7,7 @@ import { friendlyError } from "@/lib/errors";
 import { addDays, formatDate, formatMoney, todayISO } from "@/lib/format";
 import { useWorkspace } from "@/components/workspace";
 import { PageHeader, SyncNotice } from "@/components/shell";
-import { Alert, Badge, Button, Card, ConfirmDialog, Field, Input, Modal, Select, Spinner, Textarea, TextField } from "@/components/ui";
+import { Alert, Badge, Button, Card, ConfirmDialog, Field, Input, Modal, Select, Spinner, Textarea, TextField, DateInput } from "@/components/ui";
 import { BeachMap, FEATURE_KIND_LABEL, type MapFeature, type MapItem, type MapItemPos, type MapSpace, type Selection } from "@/components/map/BeachMap";
 import { WeatherStrip, WindCompass, type CompassLayout } from "@/components/weather";
 import { RelocateModal } from "@/components/relocate";
@@ -499,7 +499,7 @@ export default function MapaPage() {
       <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
         <div className="flex flex-wrap items-end gap-2">
           <Field label="Consultar fecha">
-            <Input type="date" value={day} onChange={(e) => e.target.value && setDay(e.target.value)} className="w-auto" />
+            <DateInput value={day} onChange={setDay} label="Consultar fecha" />
           </Field>
           <Button variant="secondary" onClick={() => setDay(addDays(day, -1))} aria-label="Día anterior">←</Button>
           <Button variant="secondary" onClick={() => setDay(today)} disabled={day === today}>Hoy</Button>
@@ -989,8 +989,8 @@ function MaintenanceModal({ open, space, today, onClose, onDone }: { open: boole
     <Modal open={open} onClose={onClose} title={`Mantenimiento de ${space.code}`} busy={busy}>
       <form onSubmit={submit} className="flex flex-col gap-3">
         <div className="grid grid-cols-2 gap-3">
-          <Field label="Desde"><Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} required /></Field>
-          <Field label="Hasta (inclusive)"><Input type="date" value={to} min={from} onChange={(e) => setTo(e.target.value)} required /></Field>
+          <Field label="Desde"><DateInput value={from} onChange={setFrom} label="Desde" /></Field>
+          <Field label="Hasta (inclusive)"><DateInput value={to} min={from} onChange={setTo} label="Hasta (inclusive)" /></Field>
         </div>
         <TextField label="Motivo" value={reason} onChange={(e) => setReason(e.target.value)} required minLength={3} maxLength={300} placeholder="Ej: Lona rota" />
         <Field label="Observaciones"><Textarea value={notes} onChange={(e) => setNotes(e.target.value)} maxLength={2000} /></Field>

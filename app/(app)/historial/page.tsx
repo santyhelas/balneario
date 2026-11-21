@@ -4,7 +4,7 @@ import { addDays, todayISO } from "@/lib/format";
 import { CATEGORY_LABEL, CATEGORY_TABLES, type Category } from "@/lib/history";
 import { useWorkspace } from "@/components/workspace";
 import { PageHeader } from "@/components/shell";
-import { Field, Input, Select } from "@/components/ui";
+import { Field, Input, Select, DateInput } from "@/components/ui";
 import { HistoryFeed, useWorkspaceUsers } from "@/components/history-feed";
 
 type Filter = "todo" | Category | "cobros";
@@ -26,8 +26,8 @@ export default function HistorialPage() {
     <>
       <PageHeader title="Historial" subtitle="Todo lo que se hizo en el sistema: quién, cuándo y qué cambió. No se puede borrar." />
       <div className="mb-4 flex flex-wrap items-end gap-2">
-        <Field label="Desde"><Input type="date" value={from} max={to} onChange={(e) => e.target.value && setFrom(e.target.value)} className="w-auto" /></Field>
-        <Field label="Hasta"><Input type="date" value={to} min={from} onChange={(e) => e.target.value && setTo(e.target.value)} className="w-auto" /></Field>
+        <Field label="Desde"><DateInput value={from} max={to} onChange={setFrom} label="Desde" /></Field>
+        <Field label="Hasta"><DateInput value={to} min={from} onChange={setTo} label="Hasta" /></Field>
         <Field label="Tipo">
           <Select value={type} onChange={(e) => setType(e.target.value as Filter)} className="w-auto">
             <option value="todo">Todo</option>

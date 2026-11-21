@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { getSupabase } from "@/lib/supabase/client";
 import { friendlyError } from "@/lib/errors";
-import { cx } from "@/components/ui";
+import { cx, DateInput } from "@/components/ui";
 
 export type ArrivalState = "llego" | "no_vino" | null;
 
@@ -105,8 +105,7 @@ export function NoShowPanel({ r, today, isAdmin, releasedDays, discountedDays, n
       ) : (
         <div className="mt-2 flex flex-wrap items-center gap-2">
           <span>Día que no vino:</span>
-          <input type="date" value={day} min={r.start_date} max={lastAllowed} onChange={(e) => e.target.value && setDay(e.target.value)}
-            className="rounded-md border border-line bg-surface px-2 py-1 text-sm" aria-label="Día que no vino" />
+          <DateInput value={day} min={r.start_date} max={lastAllowed} onChange={setDay} label="Día que no vino" />
           {day !== r.start_date && day > r.start_date && <button type="button" className="text-xs text-accent hover:underline" onClick={() => setDay(addDay(day, -1))}>día anterior</button>}
         </div>
       )}

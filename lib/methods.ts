@@ -21,6 +21,7 @@ export const METHOD_LABEL: Record<string, string> = {
   tarjeta: "Tarjeta",
   dolares: "Dólares",
   voucher: "Voucher restaurante",
+  traslado: "Traslado del grupo",
 };
 
 export const MONTHS = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
