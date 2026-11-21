@@ -35,6 +35,8 @@ for (const v of VISTAS) {
         await page.goto(BASE + ruta, { waitUntil: "networkidle", timeout: 45000 });
         await page.waitForTimeout(1500);
         await page.keyboard.press("Escape").catch(() => {}); // cierra el aviso de apertura de caja si aparece
+        // Captura para revisar el diseño a ojo (celular claro y compu clara, solo el sistema).
+        if (login && v.id !== "celular-oscuro") { mkdirSync(`${OUT}/capturas`, { recursive: true }); await page.screenshot({ path: `${OUT}/capturas/${v.id}${ruta.replace(/\//g, "_").replace(/^_$/, "_panel").slice(0, 40)}.png`, fullPage: v.isMobile === true }).catch(() => {}); }
         const r = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"]).analyze();
         for (const x of r.violations) out.push({ vista: v.id, ruta, regla: x.id, impacto: x.impact, ayuda: x.help, nodos: x.nodes.slice(0, 6).map((n) => ({ selector: n.target.join(" "), html: n.html.slice(0, 220), detalle: n.failureSummary?.slice(0, 300) })), total: x.nodes.length });
         console.log(v.id, ruta, r.violations.length);
