@@ -256,7 +256,7 @@ export function Tour({ id, enabled, unseen = true, onFinish, finalLabel = "Termi
   const s = STEPS[step];
   const pad = 8;
   const hole = rect ? { top: rect.top - pad, left: rect.left - pad, width: rect.width + pad * 2, height: rect.height + pad * 2 } : null;
-  const shade = "fixed bg-slate-900/55 backdrop-blur-[3px] transition-all duration-300";
+  const shade = "fixed bg-slate-900/55 backdrop-blur-[3px] transition-[top,left,width,height] duration-300 ease-out motion-reduce:transition-none";
 
   return (
     <div className="print:hidden" role="dialog" aria-modal="true" aria-labelledby="tour-titulo">
@@ -267,7 +267,7 @@ export function Tour({ id, enabled, unseen = true, onFinish, finalLabel = "Termi
           <div className={cx(shade, "z-[90]")} style={{ top: hole.top + hole.height, left: 0, right: 0, bottom: 0 }} />
           <div className={cx(shade, "z-[90]")} style={{ top: hole.top, left: 0, width: Math.max(0, hole.left), height: hole.height }} />
           <div className={cx(shade, "z-[90]")} style={{ top: hole.top, left: hole.left + hole.width, right: 0, height: hole.height }} />
-          <div className="pointer-events-none fixed z-[91] rounded-2xl ring-4 ring-white/90 transition-all duration-300" style={hole} />
+          <div className="pointer-events-none fixed z-[91] rounded-2xl ring-4 ring-white/90 transition-[top,left,width,height] duration-300 ease-out motion-reduce:transition-none" style={hole} />
         </>
       ) : (
         <div className={cx(shade, "inset-0 z-[90]")} />
@@ -283,7 +283,7 @@ export function Tour({ id, enabled, unseen = true, onFinish, finalLabel = "Termi
           <button onClick={finish} className="text-xs font-medium text-muted hover:text-fg">{id === "demo" ? "Saltar tutorial" : "Saltear guía"}</button>
         </div>
         <div className="mb-3 h-1.5 overflow-hidden rounded-full bg-surface-2" aria-hidden>
-          <div className="h-full rounded-full bg-accent transition-all" style={{ width: `${((step + 1) / STEPS.length) * 100}%` }} />
+          <div className="h-full w-full origin-left rounded-full bg-accent transition-transform duration-300 ease-out motion-reduce:transition-none" style={{ transform: `scaleX(${(step + 1) / STEPS.length})` }} />
         </div>
         <h2 id="tour-titulo" className="text-lg font-bold">{s.title}</h2>
         <p className="mt-1 text-sm leading-relaxed text-muted">{searching ? "Cargando…" : s.text}</p>

@@ -109,13 +109,13 @@ const THEME_ICON: Record<ThemePref, string> = { claro: ICON_SUN, oscuro: ICON_MO
 /** Logo del balneario (el que se cargó en Configuración, o el ícono por defecto). */
 export function BrandLogo({ ws, className }: { ws: Workspace; className?: string }) {
   // eslint-disable-next-line @next/next/no-img-element
-  return <img src={ws.logo_data || "/logo.png"} alt="" className={cx("shrink-0 rounded-xl object-cover", className)} />;
+  return <img src={ws.logo_data || "/logo.png"} alt="" width={96} height={96} className={cx("shrink-0 rounded-xl object-cover", className)} />;
 }
 
 function Avatar({ src, name, className }: { src: string | null; name: string; className?: string }) {
   if (src) {
     // eslint-disable-next-line @next/next/no-img-element
-    return <img src={src} alt="" className={cx("shrink-0 rounded-full object-cover", className)} />;
+    return <img src={src} alt="" width={96} height={96} className={cx("shrink-0 rounded-full object-cover", className)} />;
   }
   const initials = name.split(/[\s@.]+/).filter(Boolean).slice(0, 2).map((w) => w[0]?.toUpperCase()).join("");
   return <span className={cx("flex shrink-0 items-center justify-center rounded-full bg-accent-soft text-xs font-semibold text-accent", className)}>{initials || "?"}</span>;
@@ -211,7 +211,7 @@ export function Shell({ children }: { children: ReactNode }) {
   return (
     <div className="flex min-h-dvh">
       {/* ---------------- Menú lateral (se abre con las tres rayas) ---------------- */}
-      {drawerOpen && <div className="fixed inset-0 z-50 bg-black/40 print:hidden" onClick={() => setDrawerOpen(false)} aria-hidden="true" />}
+      {drawerOpen && <div className="fixed inset-0 z-50 touch-none overscroll-contain bg-black/40 print:hidden" onClick={() => setDrawerOpen(false)} aria-hidden="true" />}
       <aside
         className={cx(
           "pt-safe-2 fixed inset-y-0 left-0 z-50 flex w-72 max-w-[85vw] flex-col border-r border-line bg-surface shadow-2xl transition-transform duration-200 print:!hidden",
@@ -452,7 +452,7 @@ export function Shell({ children }: { children: ReactNode }) {
       {/* Menú "Más" del celular: el resto de las secciones */}
       {menuOpen && (
         <div className="fixed inset-0 z-30 bg-black/40 md:hidden" onClick={() => setMenuOpen(false)}>
-          <div className="bottom-tabbar absolute inset-x-0 max-h-[75dvh] overflow-y-auto rounded-t-2xl border-t border-line bg-surface p-3" onClick={(e) => e.stopPropagation()}>
+          <div className="bottom-tabbar absolute inset-x-0 max-h-[75dvh] overflow-y-auto overscroll-contain rounded-t-2xl border-t border-line bg-surface p-3" onClick={(e) => e.stopPropagation()}>
             <Link href="/configuracion" className="mb-3 flex items-center gap-3 rounded-xl bg-surface-2 p-3">
               <BrandLogo ws={ws} className="h-10 w-10" />
               <div className="min-w-0">

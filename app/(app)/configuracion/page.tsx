@@ -123,7 +123,7 @@ function ImagePicker({ label, value, onChange, disabled, round, maxSide, maxByte
       <div className="flex items-center gap-3">
         {value
           // eslint-disable-next-line @next/next/no-img-element
-          ? <img src={value} alt="" className={`h-16 w-16 border border-line object-cover ${round ? "rounded-full" : "rounded-xl"}`} />
+          ? <img src={value} alt="" width={64} height={64} className={`h-16 w-16 border border-line object-cover ${round ? "rounded-full" : "rounded-xl"}`} />
           : <div className={`flex h-16 w-16 items-center justify-center border border-dashed border-line text-xs text-muted ${round ? "rounded-full" : "rounded-xl"}`}>Sin foto</div>}
         <div className="flex flex-wrap gap-2">
           <Button type="button" variant="secondary" disabled={disabled} loading={busy} onClick={() => input.current?.click()}>{value ? "Cambiar" : "Elegir imagen"}</Button>

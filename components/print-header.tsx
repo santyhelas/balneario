@@ -25,7 +25,7 @@ export function PrintHeader() {
     <div className="print-header mb-4 hidden items-center gap-3 border-b border-black pb-2 text-black print:flex">
       {ws.logo_data && (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={ws.logo_data} alt="" className="h-14 w-14 object-contain" />
+        <img src={ws.logo_data} alt="" width={56} height={56} className="h-14 w-14 object-contain" />
       )}
       <div className="min-w-0 flex-1">
         <div className="text-lg font-bold leading-tight">{ws.name}</div>

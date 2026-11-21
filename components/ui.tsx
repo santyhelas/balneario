@@ -1,5 +1,5 @@
 "use client";
-import { createContext, useContext, useEffect, useId, useRef, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from "react";
+import { cloneElement, createContext, isValidElement, useContext, useEffect, useId, useRef, type ReactElement, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from "react";
 
 export function cx(...c: (string | false | null | undefined)[]) {
   return c.filter(Boolean).join(" ");
@@ -49,15 +49,31 @@ export function Spinner({ small }: { small?: boolean }) {
   );
 }
 
+/** Controles que Field conecta solo con su título (tocar el título enfoca la casilla y el lector de pantalla lo anuncia). */
+const LABELABLE: unknown[] = ["input", "select", "textarea"];
+
 export function Field({ label, hint, error, children, htmlFor }: { label: string; hint?: string; error?: string | null; children: ReactNode; htmlFor?: string }) {
+  const auto = useId();
+  const id = htmlFor ?? auto;
+  const noteId = `${id}-nota`;
+  let control = children;
+  let linked = !!htmlFor;
+  // Si no vino htmlFor y adentro hay una sola casilla (Input, Select, Textarea), se le pone el id y se la conecta.
+  if (!htmlFor && isValidElement(children) && (LABELABLE.includes(children.type) || children.type === Input || children.type === Select || children.type === Textarea)) {
+    const el = children as ReactElement<{ id?: string; "aria-describedby"?: string; "aria-invalid"?: boolean }>;
+    if (!el.props.id) {
+      control = cloneElement(el, { id, "aria-describedby": el.props["aria-describedby"] ?? (error || hint ? noteId : undefined), "aria-invalid": error ? true : undefined });
+      linked = true;
+    }
+  }
   return (
     <div className="flex flex-col gap-1">
-      <label htmlFor={htmlFor} className="text-sm font-medium text-fg">
+      <label htmlFor={linked ? id : undefined} className="text-sm font-medium text-fg">
         {label}
       </label>
-      {children}
-      {hint && !error && <p className="text-xs text-muted">{hint}</p>}
-      {error && <p className="text-xs text-danger">{error}</p>}
+      {control}
+      {hint && !error && <p id={noteId} className="text-xs text-muted">{hint}</p>}
+      {error && <p id={noteId} className="text-xs text-danger" aria-live="polite">{error}</p>}
     </div>
   );
 }

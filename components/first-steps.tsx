@@ -109,7 +109,7 @@ export function FirstSteps({ onOpenCash }: { onOpenCash: () => void }) {
         <button type="button" onClick={hide} className="text-xs text-muted hover:underline">Ocultar</button>
       </div>
       <div className="mb-4 h-2 overflow-hidden rounded-full bg-surface-2">
-        <div className="h-full rounded-full bg-accent transition-all" style={{ width: `${(doneCount / required.length) * 100}%` }} />
+        <div className="h-full w-full origin-left rounded-full bg-accent transition-transform duration-300 ease-out motion-reduce:transition-none" style={{ transform: `scaleX(${doneCount / required.length})` }} />
       </div>
       <ol className="flex flex-col gap-2">
         {steps.map((s, i) => {

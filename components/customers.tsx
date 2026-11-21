@@ -152,7 +152,7 @@ export function CustomerForm({
         </div>
         <PhoneInput value={phoneParts} onChange={(p) => { setPhoneParts(p); setConfirmedDup(false); setSimilar([]); }} />
         {/* La localidad ya no se pide (se conserva la de clientes anteriores). */}
-        <TextField label="Correo (opcional)" type="email" maxLength={150} value={email} onChange={(e) => { setEmail(e.target.value); setConfirmedDup(false); setSimilar([]); }}
+        <TextField label="Correo (opcional)" type="email" autoComplete="off" spellCheck={false} maxLength={150} value={email} onChange={(e) => { setEmail(e.target.value); setConfirmedDup(false); setSimilar([]); }}
           hint="Se puede dejar vacío. Si lo cargás, se revisa que esté bien escrito." />
         <TextField label="Otro contacto (opcional)" maxLength={200} value={other} onChange={(e) => setOther(e.target.value)} placeholder="Ej: Instagram, teléfono de un familiar" />
         <Field label="Observaciones"><Textarea maxLength={2000} value={notes} onChange={(e) => setNotes(e.target.value)} /></Field>

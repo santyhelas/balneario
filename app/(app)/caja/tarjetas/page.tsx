@@ -96,7 +96,7 @@ export default function CierreTarjetasPage() {
         <div className="own-print-header text-center">
           {ws.logo_data && (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={ws.logo_data} alt="" className="mx-auto mb-1 h-12 w-12 object-contain grayscale" />
+            <img src={ws.logo_data} alt="" width={48} height={48} className="mx-auto mb-1 h-12 w-12 object-contain grayscale" />
           )}
           <div className="text-[13px] font-bold">{ws.name}</div>
           <div className="font-bold">CIERRE DE TARJETAS</div>

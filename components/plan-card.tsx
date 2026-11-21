@@ -138,7 +138,7 @@ export function PlanCard() {
                 : "Activá el débito automático: Mercado Pago te cobra la temporada cada 1 de diciembre."}{" "}
               Podés pagar con tarjeta de crédito, débito o dinero en cuenta, y cancelarlo cuando quieras.
             </p>
-            <TextField label="Correo de tu cuenta de Mercado Pago" type="email" value={payer} onChange={(e) => setPayer(e.target.value)} />
+            <TextField label="Correo de tu cuenta de Mercado Pago" type="email" autoComplete="email" spellCheck={false} value={payer} onChange={(e) => setPayer(e.target.value)} />
             <Button className="mt-2" loading={busy} onClick={subscribe}>Activar débito con Mercado Pago</Button>
             {plan.plan === "temporada" && ["12", "01", "02", "03"].includes(plan.hoy.slice(5, 7)) && (
               <p className="mt-2 text-xs text-muted">Con la temporada ya empezada, el débito arranca el próximo 1/12. Esta temporada se paga aparte: escribinos.</p>
